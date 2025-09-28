@@ -1,4 +1,4 @@
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
@@ -71,7 +71,6 @@
     .videos{ position:relative }
     .videos.split{ display:grid; grid-template-columns:1fr 1fr; gap:1rem }
     .videos.focus{ display:block }
-    .videos.mobile{ display:block }
 
     .video-shell{ position:relative; width:100%; height:100%; }
     .remote-wrap{ position:relative; width:100%; }
@@ -81,10 +80,8 @@
     .contain video{ object-fit:contain; background:#000 }
     video.mirror{ transform: scaleX(-1) }
 
-    /* PiP flotante (móvil/PC enfoque) */
-    .pip{ position:absolute; right:12px; bottom:12px; width:28%; max-width:220px; aspect-ratio:16/9; border:3px solid #fff; border-radius:12px; overflow:hidden; box-shadow:0 8px 24px rgba(0,0,0,.35); cursor:grab; touch-action:none; background:#0b1324; }
-    .pip.mirror video{ transform:scaleX(-1) }
-    .pip-lg{ width:46%; max-width:none; }
+    /* PiP (solo si activas Vista: Enfoque) */
+    .pip{ position:absolute; right:12px; bottom:12px; width:28%; max-width:220px; aspect-ratio:16/9; border:3px solid #fff; border-radius:12px; overflow:hidden; box-shadow:0 8px 24px rgba(0,0,0,.35); background:#0b1324; display:none; }
 
     /* Barra de controles inferiores (móvil) */
     .bottom-controls{
@@ -98,14 +95,7 @@
     .ctrl-btn{ border-radius:999px; border:2px solid rgba(17,24,39,.25); background:rgba(255,255,255,.92); padding:.65rem .9rem; font-size:.85rem; box-shadow:0 6px 14px rgba(0,0,0,.1) }
     .ctrl-btn:disabled{ opacity:.5 }
 
-    /* Móvil: remoto ocupa toda la pantalla */
-    @media (max-width: 640px){
-      .videos.mobile .remote-wrap{ height: 100svh; }
-      .videos.mobile .local-wrap{ display:none }
-      #videoShell.full-bleed{ margin-top: -12px; }
-    }
-
-    /* PC: 50/50 alto completo */
+    /* ======== PC: ocupar alto de pantalla en 50/50 ======== */
     .full-bleed{
       width:100vw; position:relative; left:50%; right:50%;
       margin-left:-50vw; margin-right:-50vw;
@@ -116,6 +106,14 @@
       .videos.split > .local-wrap{ height:100%; }
       .card.stretch{ height:100%; display:flex; flex-direction:column; }
       .card.stretch > video{ flex:1 1 auto; width:100%; height:100%; }
+    }
+
+    /* ======== MÓVIL: MISMO CUADRO que PC, 16:9, sin alargar ======== */
+    @media (max-width: 640px){
+      .videos.split{ grid-template-columns: 1fr; }       /* apila remoto y local */
+      .card.stretch{ height:auto; }                      /* no fuerces 100% */
+      .videos.split > .remote-wrap,
+      .videos.split > .local-wrap{ height:auto; aspect-ratio:16/9; }
     }
 
     /* Overlay de sala de espera */
@@ -133,19 +131,21 @@
     <div class="paper-holes"><div class="paper-hole"></div><div class="paper-hole"></div><div class="paper-hole"></div></div>
 
     <main class="book mx-auto max-w-5xl px-6 py-10">
-      <!-- PÁGINA 1: LANDING -->
+      <!-- PÁGINA 1: LANDING (bonita + íconos) -->
       <section id="page-landing" class="page visible">
         <div class="hero">
+          <!-- Esquina con notas -->
           <div class="corner">
             <span class="note">anal</span>
             <div class="marquee">
               <ul id="cornerMessages">
-                <li>Kristoff</li><li>Pingaydisgusto</li><li>A ochoa lo mataron a balazos</li>
-                <li>boyo</li><li>diazcanelsingao</li><li>A ochoa lo mataron a balazos</li>
+                <li>Kristoff</li><li>Astroboy</li><li>A ochoa lo mataron a balazos</li>
+                <li>Kristoff</li><li>Astroboy</li><li>A ochoa lo mataron a balazos</li>
               </ul>
             </div>
           </div>
 
+          <!-- Título animado + sparkles -->
           <h1 class="font-display font-extrabold select-none ttv" style="font-size:clamp(56px,10vw,140px); line-height:.9; text-shadow:0 1px 0 #fff, 0 10px 18px rgba(0,0,0,.15)">
             <span class="word">Tortilla</span><span class="accent text-rose-600">TV</span>
             <span class="spark s1"></span><span class="spark s2"></span><span class="spark s3"></span>
@@ -153,7 +153,7 @@
 
           <p class="mt-4 text-neutral-700 text-lg">Video chat aleatorio</p>
 
-          <!-- Género -->
+          <!-- Género con íconos -->
           <div class="mt-6 grid grid-cols-3 gap-3 max-w-md">
             <button data-gen="Hombre" class="gen card py-4 flex flex-col items-center gap-2">
               <svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor"><path d="M14 4h6v6h-2V7.41l-4.3 4.3a6 6 0 1 1-1.41-1.41L16.59 6H14V4Z"/></svg>
@@ -184,6 +184,7 @@
 
       <!-- PÁGINA 2: SALA -->
       <section id="page-chat" class="page hidden">
+        <!-- Barra superior (PC) -->
         <div class="card p-3 mb-4">
           <div class="flex flex-wrap items-center gap-2">
             <button id="btn-start" class="rounded-full border-2 border-neutral-900/30 bg-white/80 px-4 py-2 text-sm font-semibold shadow">Buscar</button>
@@ -193,7 +194,7 @@
             <div class="ml-auto flex items-center gap-2">
               <button id="btn-layout"  class="rounded-full border bg-white/80 px-3 py-2 text-xs hidden sm:inline-flex">Vista: 50/50</button>
               <button id="btn-expand"  class="rounded-full border bg-white/80 px-3 py-2 text-xs hidden sm:inline-flex">Expandir</button>
-              <button id="btn-fit"     class="rounded-full border bg-white/80 px-3 py-2 text-xs hidden sm:inline-flex">Ajuste: cover</button>
+              <button id="btn-fit"     class="rounded-full border bg-white/80 px-3 py-2 text-xs hidden sm:inline-flex">Ajuste: contain</button>
             </div>
 
             <div class="flex items-center gap-2 text-sm w-full">
@@ -204,13 +205,16 @@
           </div>
         </div>
 
-        <!-- Área de video -->
+        <!-- Área de video (full-bleed) -->
         <div id="videoShell" class="video-shell full-bleed">
           <div id="videoArea" class="videos split">
+            <!-- Remoto -->
             <div class="card remote-wrap contain stretch" id="remoteWrap">
               <video id="remoteVideo" autoplay playsinline></video>
             </div>
-            <div class="card local-wrap contain stretch hidden sm:block" id="localWrap">
+
+            <!-- Local -->
+            <div class="card local-wrap contain stretch" id="localWrap">
               <video id="localVideo" autoplay playsinline muted class="mirror"></video>
               <div class="mt-3 flex items-center gap-2 text-xs">
                 <button id="btn-mute"   class="rounded-full border px-3 py-1">Mute</button>
@@ -221,8 +225,8 @@
             </div>
           </div>
 
-          <!-- PiP flotante -->
-          <div id="pip" class="pip mirror" style="display:none;">
+          <!-- PiP (opcional en Vista: Enfoque) -->
+          <div id="pip" class="pip">
             <video id="pipVideo" autoplay playsinline muted></video>
           </div>
         </div>
@@ -253,7 +257,7 @@
 
   <!-- SCRIPTS -->
   <script>
-    /* ===== WS dinámico ===== */
+    /* ===== WS dinámico (https->wss, http->ws) + override ?ws= ===== */
     (function(){
       const p = new URLSearchParams(location.search);
       const wsOverride = p.get('ws');
@@ -283,6 +287,7 @@
     const peerLabel = qs('#peerLabel');
     const youBadge  = qs('#you-badge');
 
+    // Hero anim
     const MESSAGES=['Kristoff','Astroboy','A ochoa lo mataron a balazos'];
     (function marqueeDuplicate(){
       const ul = document.getElementById('cornerMessages');
@@ -324,7 +329,7 @@
       }catch(e){ alert('Error Google: '+e.message); }
     });
 
-    /* ===== Señalización + WebRTC ===== */
+    /* ===== Señalización + WebRTC (sala) ===== */
     const btnStart=qs('#btn-start'), btnNext=qs('#btn-next'), btnStop=qs('#btn-stop'), btnSalirChat=qs('#btn-salir-chat');
     const mStart=qs('#m-start'),   mNext=qs('#m-next'),     mStop=qs('#m-stop');
     const btnLayout=qs('#btn-layout'), btnExpand=qs('#btn-expand'), btnFit=qs('#btn-fit');
@@ -333,42 +338,41 @@
 
     const localVideo=qs('#localVideo'), remoteVideo=qs('#remoteVideo'), pip=qs('#pip'), pipVideo=qs('#pipVideo');
     const videoArea=qs('#videoArea'), remoteWrap=qs('#remoteWrap'), localWrap=qs('#localWrap'), videoShell=qs('#videoShell');
-    const mControls=qs('#m-controls');
 
     let ws=null, wsOpen=false, myId=null, roomId=null, role=null;
     let pc=null, localStream=null;
-    let mute=false, camOn=true, fitMode='cover', currentFacing='user';
-    let isQueuing=false, layoutMode='split', mobileControlsVisible=true;
+    let mute=false, camOn=true, fitMode='contain', currentFacing='user';
+    let isQueuing=false, inCall=false, autoCycle=false, userHardStop=false;
 
     const iceServers=[{urls:'stun:stun.l.google.com:19302'}];
 
     async function ensureMedia(constraints){
-      if(localStream && !constraints) return localStream;
-      const base = constraints || {
-        video:{ width:{ideal:1280}, height:{ideal:720}, frameRate:{ideal:30}, facingMode: currentFacing },
-        audio:{ echoCancellation:true, noiseSuppression:true }
-      };
-      // Comprobación de dispositivos (audio)
-      try {
-        const devs = await navigator.mediaDevices.enumerateDevices();
-        const hasMic = devs.some(d=>d.kind==='audioinput');
-        if(!hasMic) console.warn('⚠️ No se detecta micrófono (audioinput). La otra persona no te oirá.');
-      } catch {}
-      const newStream = await navigator.mediaDevices.getUserMedia(base);
-      if(!localStream){
-        localStream = newStream;
-        attachLocal(newStream);
-      }else{
-        const newV = newStream.getVideoTracks()[0];
-        const oldV = localStream.getVideoTracks()[0];
-        if(oldV) oldV.stop();
-        localStream.removeTrack(oldV);
-        localStream.addTrack(newV);
-        const sender = pc?.getSenders().find(s=>s.track && s.track.kind==='video');
-        if(sender) await sender.replaceTrack(newV);
-        attachLocal(localStream);
+      try{
+        if(localStream && !constraints) return localStream;
+        const base = constraints || {
+          video:{ width:{ideal:1280}, height:{ideal:720}, frameRate:{ideal:30}, facingMode: currentFacing },
+          audio:{ echoCancellation:true, noiseSuppression:true }
+        };
+        const newStream = await navigator.mediaDevices.getUserMedia(base);
+        if(!newStream.getAudioTracks().length){ setStatus('Advertencia: sin micrófono'); }
+        if(!localStream){
+          localStream = newStream;
+          attachLocal(newStream);
+        }else{
+          const newV = newStream.getVideoTracks()[0];
+          const oldV = localStream.getVideoTracks()[0];
+          if(oldV) oldV.stop();
+          localStream.removeTrack(oldV);
+          localStream.addTrack(newV);
+          const sender = pc?.getSenders().find(s=>s.track && s.track.kind==='video');
+          if(sender) await sender.replaceTrack(newV);
+          attachLocal(localStream);
+        }
+        return localStream;
+      }catch(e){
+        alert("Permite cámara y micrófono para continuar.\n" + (e?.message||e));
+        throw e;
       }
-      return localStream;
     }
 
     function attachLocal(stream){
@@ -379,17 +383,17 @@
     function makePC(){
       pc = new RTCPeerConnection({iceServers});
       pc.onicecandidate = (e)=>{ if(e.candidate) send({type:'ice', candidate:e.candidate}); };
-      pc.ontrack = (e)=>{
-        remoteVideo.srcObject = e.streams[0];
-        // Intentar reproducir audio por políticas de autoplay
-        remoteVideo.play().catch(()=>{});
-        // Ajuste de aspecto automático
-        setTimeout(adaptAspectToLocal, 100);
-      };
+      pc.ontrack = (e)=>{ remoteVideo.srcObject = e.streams[0]; };
       pc.onconnectionstatechange = ()=>{
         const st = pc.connectionState;
-        if(st==='connected'){ setStatus('Conectado'); overlay.classList.remove('show'); enableInCall(true); fitSplitHeight(); }
-        if(st==='disconnected' || st==='failed'){ setStatus('Conexión perdida'); enableInCall(true); }
+        if(st==='connected'){
+          inCall = true;
+          setStatus('Conectado'); overlay.classList.remove('show'); enableInCall(true); fitSplitHeight();
+        }
+        if(st==='disconnected' || st==='failed'){
+          // se terminó: auto siguiente si procede
+          handleCallEnded('conn:'+st);
+        }
         if(st==='closed'){ setStatus('Cerrado'); }
       };
       return pc;
@@ -420,12 +424,7 @@
           if(data.type==='answer'){ await pc.setRemoteDescription(new RTCSessionDescription(data.sdp)); }
           if(data.type==='ice'){ try{ await pc.addIceCandidate(data.candidate); }catch(e){} }
           if(data.type==='peer-left'){
-            // Mantener cámara y seguir buscando automáticamente
-            setStatus('La otra persona salió · buscando nueva pareja…');
-            cleanupPeer({ keepLocal:true, closeWs:false });
-            overlay.classList.add('show');
-            enableInCall(false);
-            autoFindAgain();
+            handleCallEnded('peer-left');
           }
         };
       });
@@ -444,51 +443,16 @@
       }
     }
 
-    // cleanup con opciones: no apagar cámara al reemparejar
-    function cleanupPeer({keepLocal=true, closeWs=false} = {}){
+    // Limpia peer; por defecto conserva tu cámara y deja el WS abierto
+    function cleanupPeer({ keepLocal = true, closeWsToo = false } = {}){
       if(pc){ try{pc.close()}catch{}; pc=null; }
       if(!keepLocal && localStream){
         localStream.getTracks().forEach(t=>t.stop());
         localStream=null; localVideo.srcObject=null; pipVideo.srcObject=null;
       }
-      remoteVideo.srcObject=null; roomId=null; role=null;
-      if(closeWs && ws){ try{ ws.close(); }catch{} ws=null; wsOpen=false; }
+      remoteVideo.srcObject=null; roomId=null; role=null; inCall=false;
+      if(closeWsToo && ws){ try{ ws.close(); }catch{} ws=null; wsOpen=false; }
       peerLabel.classList.add('hidden'); peerLabel.textContent='Pareja: —';
-    }
-
-    async function joinQueue(){
-      if(!currentUser){ alert('Inicia sesión con Google'); return; }
-      if(isQueuing) return;
-      isQueuing = true;
-      enableInCall(false);
-      overlay.classList.add('show');
-      try{
-        if(!chosenGender) chosenGender = localStorage.getItem('ttv_gender') || 'Hombre';
-        const displayName = currentUser.displayName || '—';
-        await connectWS();
-        await ensureMedia();
-        send({type:'find', gender: chosenGender, displayName});
-        setStatus('En cola…');
-      }catch(e){
-        console.error(e); setStatus('Error de conexión WS'); overlay.classList.remove('show'); isQueuing=false;
-      }
-    }
-
-    async function nextMatch(){
-      try{
-        send({type:'leave'});
-        cleanupPeer({ keepLocal:true, closeWs:false });
-        setStatus('Buscando siguiente…'); overlay.classList.add('show');
-        const displayName = currentUser?.displayName || '—';
-        await ensureMedia();
-        send({type:'find', gender: chosenGender || localStorage.getItem('ttv_gender') || 'Hombre', displayName});
-      }catch(e){ console.error(e); setStatus('Error WS (siguiente)'); }
-    }
-
-    function autoFindAgain(){
-      const displayName = currentUser?.displayName || '—';
-      const gender = chosenGender || localStorage.getItem('ttv_gender') || 'Hombre';
-      send({type:'find', gender, displayName});
     }
 
     function enableInCall(connected){
@@ -500,59 +464,96 @@
       mStart.disabled = connected;
       mNext.disabled  = !connected;
       mStop.disabled  = !connected;
-      // PiP visible en móvil o cuando enfoque
-      pip.style.display = (isMobile() || layoutMode==='focus') && localStream ? 'block' : 'none';
+      // PiP visible en enfoque (si lo usas)
+      pip.style.display = (layoutMode==='focus') && localStream ? 'block' : 'none';
     }
 
-    /* ===== UX: Layout / Fullscreen / Fit / Mirror / Flip ===== */
+    // ==== Auto-cycle: cuando termina una llamada, buscar otra automáticamente ====
+    function handleCallEnded(reason){
+      console.log('Call ended:', reason);
+      cleanupPeer({ keepLocal:true, closeWsToo:false });
+      if(autoCycle && !userHardStop){
+        setStatus('Buscando siguiente…'); overlay.classList.add('show'); enableInCall(false);
+        // pequeño delay para que el servidor limpie la sala
+        setTimeout(()=>{ findNext(); }, 400);
+      }else{
+        overlay.classList.remove('show'); enableInCall(false);
+      }
+    }
+
+    async function joinQueue(){
+      if(!currentUser){ alert('Inicia sesión con Google'); return; }
+      if(isQueuing) return;
+      isQueuing = true; autoCycle = true; userHardStop = false;
+      enableInCall(false);
+      overlay.classList.add('show');
+      try{
+        if(!chosenGender) chosenGender = localStorage.getItem('ttv_gender') || 'Hombre';
+        const displayName = currentUser.displayName || '—';
+        await connectWS();
+        await ensureMedia();
+        send({type:'find', gender: chosenGender, displayName});
+        setStatus('En cola…');
+      }catch(e){
+        console.error(e); setStatus('Error de conexión WS'); overlay.classList.remove('show'); isQueuing=false; autoCycle=false;
+      }
+    }
+
+    function findNext(){
+      const displayName = currentUser?.displayName || '—';
+      const gender = chosenGender || localStorage.getItem('ttv_gender') || 'Hombre';
+      if(!wsOpen){ connectWS().then(()=>send({type:'find', gender, displayName})); }
+      else { send({type:'find', gender, displayName}); }
+    }
+
+    async function nextMatch(){
+      userHardStop = false; autoCycle = true; // seguimos en modo auto
+      try{
+        send({type:'leave'});
+        cleanupPeer({ keepLocal:true, closeWsToo:false });
+        setStatus('Buscando siguiente…'); overlay.classList.add('show'); enableInCall(false);
+        await ensureMedia();
+        findNext();
+      }catch(e){ console.error(e); setStatus('Error WS (siguiente)'); }
+    }
+
+    function stopAll(){
+      userHardStop = true; autoCycle = false; isQueuing = false;
+      try{ send({type:'leave'}); }catch{}
+      cleanupPeer({ keepLocal:true, closeWsToo:false }); // mantén cámara encendida
+      overlay.classList.remove('show');
+      setStatus('Detenido'); enableInCall(false);
+    }
+
+    /* ======== UX: Layout / Fullscreen / Fit / Mirror / Flip ======== */
     function isMobile(){ return window.matchMedia('(max-width: 640px)').matches }
 
     function autoLayout(){
-      if(isMobile()){
-        layoutMode='mobile';
-        videoArea.classList.remove('split','focus'); videoArea.classList.add('mobile');
-        btnLayout.classList.add('hidden'); btnExpand.classList.add('hidden'); btnFit.classList.add('hidden');
-        localWrap.classList.add('hidden'); // PiP
-        pip.style.display = localStream ? 'block' : 'none';
-        videoShell.style.removeProperty('--vh');
-      }else{
-        layoutMode='split';
-        videoArea.classList.remove('mobile','focus'); videoArea.classList.add('split');
-        btnLayout.classList.remove('hidden'); btnExpand.classList.remove('hidden'); btnFit.classList.remove('hidden');
-        localWrap.classList.remove('hidden');
-        pip.style.display = 'none';
-        fitSplitHeight();
-      }
+      layoutMode='split';
+      videoArea.classList.remove('focus'); videoArea.classList.add('split');
+      fitSplitHeight();
       applyFit();
     }
 
     function toggleLayout(){
-      if(isMobile()) return;
       if(layoutMode==='split'){
         layoutMode='focus';
         videoArea.classList.remove('split'); videoArea.classList.add('focus');
-        btnLayout.textContent='Vista: Enfoque';
         pip.style.display = localStream ? 'block' : 'none';
-        videoShell.style.removeProperty('--vh');
       }else{
         layoutMode='split';
         videoArea.classList.remove('focus'); videoArea.classList.add('split');
-        btnLayout.textContent='Vista: 50/50';
         pip.style.display = 'none';
         fitSplitHeight();
       }
       applyFit();
+      btnLayout.textContent = (layoutMode==='split') ? 'Vista: 50/50' : 'Vista: Enfoque';
     }
 
     async function toggleFullscreen(){
       try{
-        if(document.fullscreenElement){
-          await document.exitFullscreen();
-          if(screen.orientation?.unlock) screen.orientation.unlock();
-        }else{
-          await videoShell.requestFullscreen({ navigationUI:'hide' });
-          if(isMobile() && screen.orientation?.lock){ try{ await screen.orientation.lock('landscape'); }catch{} }
-        }
+        if(document.fullscreenElement){ await document.exitFullscreen(); }
+        else{ await videoShell.requestFullscreen({ navigationUI:'hide' }); }
       }catch(e){}
     }
 
@@ -580,51 +581,11 @@
         video:{ facingMode: currentFacing, width:{ideal:1280}, height:{ideal:720}, frameRate:{ideal:30} },
         audio:{ echoCancellation:true, noiseSuppression:true }
       });
-      setTimeout(adaptAspectToLocal, 150);
     }
 
-    // Ajuste de aspecto basado en settings locales/remotos
-    function adaptAspectToLocal(){
-      try{
-        const lt = localStream?.getVideoTracks?.()[0];
-        const rt = remoteVideo.srcObject?.getVideoTracks?.()[0];
-        if(!lt || !rt) return;
-        const ls = lt.getSettings?.() || {};
-        const rs = rt.getSettings?.() || {};
-        const arLocal  = (ls.width && ls.height) ? ls.width/ls.height : (localVideo.videoWidth || 16)/(localVideo.videoHeight || 9);
-        const arRemote = (rs.width && rs.height) ? rs.width/rs.height : (remoteVideo.videoWidth || 16)/(remoteVideo.videoHeight || 9);
-        const diff = Math.abs(arLocal - arRemote) / arLocal;
-        // Si difieren mucho (ej. móvil vertical vs PC horizontal), usar contain para remoto
-        const useContain = diff > 0.2;
-        remoteWrap.classList.toggle('contain', useContain || (fitMode==='contain'));
-      }catch{}
-    }
-
-    // Mostrar/ocultar controles móviles
-    function toggleMobileControls(){
-      mobileControlsVisible = !mobileControlsVisible;
-      mControls.style.opacity = mobileControlsVisible ? '1' : '0';
-      mControls.style.pointerEvents = mobileControlsVisible ? 'auto' : 'none';
-    }
-    remoteVideo.addEventListener('click', ()=>{ if(isMobile()) toggleMobileControls(); });
-    pip.addEventListener('click', (e)=>{ if(isMobile()){ pip.classList.toggle('pip-lg'); e.stopPropagation(); } });
-
-    remoteWrap.addEventListener('dblclick', toggleFullscreen);
-
-    // PiP arrastrable
-    (function dragPip(){
-      let startX=0,startY=0, x=0,y=0, dragging=false;
-      const onDown = e=>{ dragging=true; pip.style.cursor='grabbing'; const p = getPoint(e); startX=p.x - x; startY=p.y - y; };
-      const onMove = e=>{ if(!dragging) return; const p=getPoint(e); x = p.x - startX; y = p.y - startY; pip.style.transform=`translate(${x}px,${y}px)`; };
-      const onUp   = ()=>{ dragging=false; pip.style.cursor='grab'; };
-      function getPoint(e){ if(e.touches?.[0]) return {x:e.touches[0].clientX, y:e.touches[0].clientY}; return {x:e.clientX, y:e.clientY}; }
-      pip.addEventListener('mousedown', onDown); window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
-      pip.addEventListener('touchstart', onDown, {passive:true}); window.addEventListener('touchmove', onMove, {passive:false}); window.addEventListener('touchend', onUp);
-    })();
-
-    /* ===== Alto 50/50 PC ===== */
+    /* ===== Pantalla completa 50/50 en PC: calcular alto ===== */
     function fitSplitHeight(){
-      if (isMobile() || layoutMode !== 'split') {
+      if (layoutMode !== 'split') {
         videoShell.style.removeProperty('--vh');
         return;
       }
@@ -634,13 +595,12 @@
       videoShell.style.setProperty('--vh', h + 'px');
     }
     window.addEventListener('load', fitSplitHeight);
-    window.addEventListener('resize', ()=>{ fitSplitHeight(); setTimeout(adaptAspectToLocal, 100); });
+    window.addEventListener('resize', fitSplitHeight);
     document.addEventListener('visibilitychange', fitSplitHeight);
 
     /* ===== Botones ===== */
     const startAll = ()=> joinQueue();
-    const nextAll  = ()=> nextMatch();
-    const stopAll  = ()=>{ try{ send({type:'leave'});}catch{} cleanupPeer({keepLocal:false, closeWs:true}); overlay.classList.remove('show'); setStatus('Detenido'); isQueuing=false; enableInCall(false); };
+    const stopAllAndLogout = ()=>{ stopAll(); auth.signOut(); };
 
     btnLayout?.addEventListener('click', toggleLayout);
     btnExpand?.addEventListener('click', toggleFullscreen);
@@ -661,17 +621,18 @@
     btnMirror?.addEventListener('click', toggleMirror);
     btnFlip  ?.addEventListener('click', flipCamera);
 
+    const Start = qs('#m-start'), Next = qs('#m-next'), Stop = qs('#m-stop'), Expand = qs('#m-expand'), Flip = qs('#m-flip');
     mExpand ?.addEventListener('click', toggleFullscreen);
     mFlip   ?.addEventListener('click', flipCamera);
 
     btnStart ?.addEventListener('click', startAll);
-    btnNext  ?.addEventListener('click', nextAll);
+    btnNext  ?.addEventListener('click', nextMatch);
     btnStop  ?.addEventListener('click', stopAll);
     mStart   ?.addEventListener('click', startAll);
-    mNext    ?.addEventListener('click', nextAll);
+    mNext    ?.addEventListener('click', nextMatch);
     mStop    ?.addEventListener('click', stopAll);
 
-    btnSalirChat?.addEventListener('click', ()=>{ stopAll(); auth.signOut(); });
+    btnSalirChat?.addEventListener('click', stopAllAndLogout);
 
     /* Salida limpia */
     window.addEventListener('beforeunload', ()=>{ try{ send({type:'leave'}); }catch{} });
