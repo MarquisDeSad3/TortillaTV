@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover" />
-  <title>TortillaTV — Smart Duo</title>
+  <title>TortillaTV — AR 1:1 / 4:3 / 16:9</title>
   <meta name="theme-color" content="#0b1324" />
 
   <!-- Fuentes y Tailwind -->
@@ -29,7 +29,16 @@
   <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-auth-compat.js"></script>
 
   <style>
-    :root{ --paper:#faf9f6; --rule:#93c5fd66; --margin:#ef4444aa; --hole:#e5e7eb; --ink:#111827; }
+    :root{
+      --paper:#faf9f6; --rule:#93c5fd66; --margin:#ef4444aa; --hole:#e5e7eb; --ink:#111827;
+      /* AR por defecto = 4:3 (si no hay memoria) */
+      --box-ar: 4/3;
+    }
+    /* Clases de AR (controlan TODAS las cajas de vídeo) */
+    body.ar-1-1{ --box-ar: 1/1; }
+    body.ar-4-3{ --box-ar: 4/3; }
+    body.ar-16-9{ --box-ar: 16/9; }
+
     html,body{ height:100%; background:var(--paper); color:var(--ink); -webkit-font-smoothing:antialiased; }
 
     /* Papel y adornos (estética) */
@@ -61,26 +70,28 @@
     .marquee li{ list-style:none; font-family:"Caveat"; font-size:clamp(16px,3.2vw,30px); font-weight:800; color:#111827 }
     @keyframes marquee-scroll{ 0%{ transform:translateX(0) } 100%{ transform:translateX(-50%) } }
 
-    /* ====== VIDEO ====== */
+    /* ====== VIDEO: estilo Omegle ====== */
     video{ width:100%; height:100%; object-fit:cover; background:#0b1324; display:block; }
     video.mirror{ transform: scaleX(-1) }
 
     .stage{ position:relative; width:100%; }
-    .stage .tile{ position:relative; border-radius:16px; overflow:hidden; background:#000; }
+    .stage .tile{
+      position:relative; border-radius:16px; overflow:hidden; background:#000;
+      aspect-ratio: var(--box-ar); /* controlado por clases del <body> */
+    }
 
-    /* 50/50 (PC): tamaño del cuadro constante; ajustamos object-fit dinámico por JS */
+    /* 50/50 (PC) */
     .layout-split{ display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
-    .layout-split .tile{ aspect-ratio:16/9; } /* el JS podrá cambiar este ratio según el track */
 
-    /* Duo: remoto pantalla completa; tú en PiP */
+    /* Duo (mensajería): remoto caja fija; tú en PiP */
     .layout-duo{ position:relative; }
-    .layout-duo .remote{ width:100%; height:var(--vh, 70vh); aspect-ratio:auto; border-radius:0; }
-    .layout-duo .local{ display:none !important; } /* evita duplicación en grande */
+    .layout-duo .remote{ width:100%; }
+    .layout-duo .local{ display:none !important; }    /* evita duplicado local en grande */
     .layout-duo .pip{ display:block !important; }
 
     .pip{
       position:absolute; right:12px; bottom:12px;
-      width:min(28%, 220px); aspect-ratio:16/9;
+      width:min(28%, 220px); aspect-ratio:var(--box-ar);
       border-radius:12px; overflow:hidden;
       border:3px solid #fff; box-shadow:0 8px 24px rgba(0,0,0,.35);
       background:#0b1324; touch-action:none; cursor:grab;
@@ -111,17 +122,15 @@
     /* Helpers PC */
     .full-bleed{ width:100vw; position:relative; left:50%; right:50%; margin-left:-50vw; margin-right:-50vw; }
     @media (min-width: 640px){
-      #videoShell{ height: var(--vh, 70vh); }
+      #videoShell { /* altura flexible; las cajas mantienen su AR fijo */ }
       .card.stretch{ height:100%; display:flex; flex-direction:column; }
       .card.stretch > .tile{ flex:1 1 auto; }
     }
 
-    /* MÓVIL: siempre Duo + un solo botón */
+    /* MÓVIL: siempre Duo + un solo botón; ocultamos botones extra */
     @media (max-width: 640px){
       .layout-split{ display:block; }
       .topbar{ display:none; }
-      .layout-duo .remote{ width:100vw; height:calc(100vh - 80px); aspect-ratio:auto; border-radius:0; }
-      .pip{ right:10px; bottom:86px; width:34vw; }
       .book{ padding:0 !important; }
       .hero{ min-height:72vh }
       .marquee{ width:min(34ch,88vw) }
@@ -130,7 +139,7 @@
     }
   </style>
 </head>
-<body class="font-sans">
+<body class="font-sans ar-4-3">
   <div class="paper-bg">
     <div class="paper-holes"><div class="paper-hole"></div><div class="paper-hole"></div><div class="paper-hole"></div></div>
 
@@ -178,9 +187,8 @@
 
             <div class="ml-auto flex items-center gap-2">
               <button id="btn-layout" class="btn hidden sm:inline-flex">Vista: 50/50</button>
-              <button id="btn-expand" class="btn hidden sm:inline-flex">Pantalla</button>
-              <button id="btn-fit"    class="btn hidden sm:inline-flex">Ajuste: auto</button>
-              <button id="btn-duo"    class="btn hidden sm:inline-flex">Vista: Duo</button>
+              <button id="btn-ar" class="btn hidden sm:inline-flex">AR: 4:3</button>
+              <button id="btn-duo" class="btn hidden sm:inline-flex">Vista: Duo</button>
             </div>
 
             <div class="flex items-center gap-2 text-sm w-full">
@@ -229,6 +237,11 @@
 
   <!-- SCRIPTS -->
   <script>
+    /* ===== Limpiar highlight amarillo si llegas con #hash ===== */
+    window.addEventListener('DOMContentLoaded', () => {
+      if (location.hash) history.replaceState(null, document.title, location.pathname + location.search);
+    });
+
     /* ===== WS dinámico + override ?ws= ===== */
     (function(){
       const p = new URLSearchParams(location.search);
@@ -294,7 +307,8 @@
       youBadge.textContent=`Tú: ${u.displayName||'—'} · ${chosenGender||'—'}`;
       show('chat');
       initLayoutForDevice();
-      fitVH();
+      // cargar AR preferido guardado (si existe)
+      restoreARPreference();
     });
 
     btnGoogle?.addEventListener('click', async ()=>{
@@ -308,7 +322,7 @@
 
     /* ===== Señalización + WebRTC ===== */
     const btnStart=qs('#btn-start'), btnNext=qs('#btn-next'), btnStop=qs('#btn-stop'), btnSalirChat=qs('#btn-salir-chat');
-    const btnLayout=qs('#btn-layout'), btnExpand=qs('#btn-expand'), btnFit=qs('#btn-fit'), btnDuo=qs('#btn-duo');
+    const btnLayout=qs('#btn-layout'), btnAR=qs('#btn-ar'), btnDuo=qs('#btn-duo');
 
     const localVideo=qs('#localVideo'), remoteVideo=qs('#remoteVideo'), pip=qs('#pip'), pipVideo=qs('#pipVideo');
     const stage=qs('#stage'), videoShell=qs('#videoShell'), remoteTile=qs('#remoteTile'), localTile=qs('#localTile');
@@ -316,33 +330,20 @@
     // Estado
     let ws=null, wsOpen=false, myId=null, roomId=null, role=null;
     let pc=null, localStream=null;
-    let mute=false, camOn=true, fitMode='auto', currentFacing='user';
     let isQueuing=false, inCall=false, autoCycle=false, userHardStop=false;
     let layoutMode='split'; // 'split' | 'duo'
+    // AR modes en ciclo
+    const AR_CYCLE = ['4:3','1:1','16:9'];
+    let arIdx = 0; // por defecto 4:3 (coincide con <body class="ar-4-3">)
 
     const iceServers=[{urls:'stun:stun.l.google.com:19302'}];
 
-    const TARGET={ width:1280, height:720, frameRate:30, aspectRatio:16/9 };
-
-    async function ensureMedia(constraints){
+    async function ensureMedia(){
       try{
-        const base = constraints || {
-          video:{ width:{ideal:TARGET.width}, height:{ideal:TARGET.height}, frameRate:{ideal:TARGET.frameRate}, aspectRatio:TARGET.aspectRatio, facingMode: currentFacing },
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video:{ width:{ideal:1280}, height:{ideal:720}, frameRate:{ideal:30}, facingMode:'user' },
           audio:{ echoCancellation:true, noiseSuppression:true }
-        };
-        const stream = await navigator.mediaDevices.getUserMedia(base);
-
-        const vTrack = stream.getVideoTracks()[0];
-        if(vTrack?.applyConstraints){
-          try{
-            await vTrack.applyConstraints({
-              width:{ideal:TARGET.width}, height:{ideal:TARGET.height},
-              frameRate:{ideal:TARGET.frameRate}, aspectRatio:TARGET.aspectRatio,
-              resizeMode:'none'
-            });
-          }catch(_){}
-        }
-
+        });
         if(!localStream){
           localStream = stream;
         }else{
@@ -354,7 +355,6 @@
           const sender = pc?.getSenders().find(s=>s.track && s.track.kind==='video');
           if(sender) await sender.replaceTrack(newV);
         }
-
         attachLocal(localStream);
         return localStream;
       }catch(e){
@@ -366,20 +366,12 @@
     function attachLocal(stream){
       localVideo.srcObject = stream;
       pipVideo.srcObject   = stream;
-      setSplitAspectFromTracks();
     }
 
     function makePC(){
       pc = new RTCPeerConnection({iceServers});
       pc.onicecandidate = (e)=>{ if(e.candidate) send({type:'ice', candidate:e.candidate}); };
-      pc.ontrack = (e)=>{
-        remoteVideo.srcObject = e.streams[0];
-        // Ajustes visuales cuando llega el remoto
-        setTimeout(()=>{
-          setSplitAspectFromTracks();
-          autoFitRemote(remoteVideo, remoteTile, (layoutMode==='duo')?'duo':'split');
-        }, 50);
-      };
+      pc.ontrack = (e)=>{ remoteVideo.srcObject = e.streams[0]; };
       pc.onconnectionstatechange = ()=> {
         const st = pc.connectionState;
         if(st==='connected'){
@@ -520,16 +512,50 @@
         stage.classList.add('layout-split');
         localTile.style.removeProperty('display');   // ambos mosaicos visibles
         pip.style.display = 'none';                  // PiP oculto en split
-        setSplitAspectFromTracks();
       }else{
         stage.classList.add('layout-duo');
         localTile.style.display = 'none';            // NO duplicar local
         pip.style.display = 'block';                 // PiP visible
       }
+    }
 
-      applyFitSmart();
-      fitVH();
-      setTimeout(()=>autoFitRemote(remoteVideo, remoteTile, (mode==='duo')?'duo':'split'),0);
+    /* ===== AR: 1:1 ↔ 4:3 ↔ 16:9 (ciclo) ===== */
+    function setARByLabel(label){
+      document.body.classList.remove('ar-1-1','ar-4-3','ar-16-9');
+      if(label==='1:1'){ document.body.classList.add('ar-1-1'); }
+      else if(label==='4:3'){ document.body.classList.add('ar-4-3'); }
+      else { document.body.classList.add('ar-16-9'); }
+
+      if(btnAR) btnAR.textContent = 'AR: ' + label;
+      // persistir preferencia
+      localStorage.setItem('ttv_ar', label);
+
+      // intentar ajustar la cámara
+      const track = localStream?.getVideoTracks?.()[0];
+      if(track?.applyConstraints){
+        let arNum = 4/3;
+        if(label==='1:1') arNum = 1/1;
+        if(label==='16:9') arNum = 16/9;
+        track.applyConstraints({ aspectRatio: arNum }).catch(()=>{});
+      }
+    }
+
+    function cycleAR(){
+      arIdx = (arIdx + 1) % AR_CYCLE.length;
+      setARByLabel(AR_CYCLE[arIdx]);
+    }
+
+    function restoreARPreference(){
+      const saved = localStorage.getItem('ttv_ar'); // '1:1' | '4:3' | '16:9'
+      const idx = AR_CYCLE.indexOf(saved);
+      if(idx >= 0){
+        arIdx = idx;
+        setARByLabel(AR_CYCLE[arIdx]);
+      }else{
+        // por defecto 4:3
+        arIdx = 0;
+        setARByLabel('4:3');
+      }
     }
 
     function isMobile(){ return window.matchMedia('(max-width: 640px)').matches }
@@ -539,94 +565,13 @@
         setLayout('duo');               // móvil: siempre Duo
         if(btnLayout) btnLayout.style.display='none';
         if(btnDuo)    btnDuo.style.display='none';
-        if(btnFit)    btnFit.style.display='none';
-        if(btnExpand) btnExpand.style.display='none';
+        if(btnAR)     btnAR.style.display='none';   // mantenemos UI limpia en móvil
       }else{
         setLayout('split');             // PC por defecto 50/50
       }
-      fitVH();
     }
 
-    /* ===== Auto-Fit inteligente ===== */
-    function autoFitRemote(remoteVideoEl, containerEl, prefer='duo') {
-      const stream = remoteVideoEl.srcObject;
-      const vt = stream?.getVideoTracks?.()[0];
-      const s = vt?.getSettings?.();
-      if (!s?.width || !s?.height) return;
-
-      const videoAR = s.width / s.height;
-      const rect = containerEl.getBoundingClientRect();
-      const boxAR  = rect.width / rect.height;
-
-      // 0 = idénticos; >0.1 ya se nota diferencia
-      const diff = Math.abs(Math.log(videoAR/boxAR));
-      const BIG_DIFF = 0.12;
-
-      let fit;
-      if (diff > BIG_DIFF) fit = 'contain';
-      else fit = (prefer === 'duo') ? 'cover' : 'contain';
-
-      remoteVideoEl.style.objectFit = fit;
-      remoteVideoEl.style.background = (fit==='contain') ? '#000' : '#0b1324';
-    }
-
-    function applyFitSmart(){
-      if(layoutMode === 'split'){
-        // Ver más en 50/50
-        [remoteVideo, localVideo].forEach(v=>{
-          if(!v) return;
-          v.style.objectFit = 'contain';
-          v.style.background = '#000';
-        });
-      }else{
-        // Duo estilo app de mensajería
-        [remoteVideo, pipVideo].forEach(v=>{
-          if(!v) return;
-          v.style.objectFit = 'cover';
-          v.style.background = '#0b1324';
-        });
-      }
-    }
-
-    /* ===== Ajuste dinámico del aspect-ratio en split ===== */
-    function setSplitAspectFromTracks(){
-      if(layoutMode !== 'split') return;
-
-      const setRatio = (tileEl, track) => {
-        try{
-          const s = track?.getSettings?.();
-          if(!s?.width || !s?.height) return;
-          tileEl.style.aspectRatio = (s.width / s.height);
-        }catch(e){}
-      };
-
-      const lv = localStream?.getVideoTracks?.()[0];
-      if(lv) setRatio(localTile, lv);
-
-      const rStream = remoteVideo?.srcObject;
-      const rv = rStream?.getVideoTracks?.()[0];
-      if(rv) setRatio(remoteTile, rv);
-    }
-
-    /* ===== Fullscreen y altura útil ===== */
-    async function toggleFullscreen(){
-      try{
-        if(document.fullscreenElement){ await document.exitFullscreen(); }
-        else{ await videoShell.requestFullscreen({ navigationUI:'hide' }); }
-      }catch(e){}
-    }
-
-    function fitVH(){
-      const rect = videoShell.getBoundingClientRect();
-      const margen = 16;
-      const h = Math.max(420, window.innerHeight - rect.top - margen);
-      videoShell.style.setProperty('--vh', h + 'px');
-    }
-    window.addEventListener('load', fitVH);
-    window.addEventListener('resize', fitVH);
-    document.addEventListener('visibilitychange', fitVH);
-
-    /* ===== PiP arrastrable + doble click para alternar layout ===== */
+    /* ===== PiP arrastrable ===== */
     (function makePipDraggable(){
       let dragging = false, startX=0, startY=0, origX=0, origY=0;
 
@@ -687,27 +632,10 @@
       }, 0);
     })();
 
-    // Doble click / tap para alternar layout rápidamente
-    let dblClkTimer=null;
-    function quickToggleLayout(){
-      setLayout(layoutMode==='duo' ? 'split' : 'duo');
-    }
-    remoteVideo.addEventListener('dblclick', quickToggleLayout);
-    remoteVideo.addEventListener('touchend', (e)=>{
-      if(dblClkTimer){ clearTimeout(dblClkTimer); dblClkTimer=null; quickToggleLayout(); }
-      else dblClkTimer=setTimeout(()=>{ dblClkTimer=null; }, 220);
-    }, {passive:true});
-
     /* ===== Botones (PC) ===== */
     btnLayout?.addEventListener('click', ()=> setLayout('split'));
     btnDuo   ?.addEventListener('click', ()=> setLayout('duo'));
-    btnExpand?.addEventListener('click', toggleFullscreen);
-    btnFit   ?.addEventListener('click', ()=>{
-      fitMode = (fitMode==='auto') ? 'contain' : 'auto';
-      btnFit.textContent = `Ajuste: ${fitMode}`;
-      applyFitSmart();
-      autoFitRemote(remoteVideo, remoteTile, (layoutMode==='duo')?'duo':'split');
-    });
+    btnAR    ?.addEventListener('click', cycleAR);
 
     // PC: sesión
     btnStart ?.addEventListener('click', joinQueue);
@@ -722,15 +650,8 @@
 
     btnSalirChat?.addEventListener('click', ()=>{ stopAll(); auth.signOut(); });
 
-    // Redimensionado contenedor: recalcular auto-fit
-    const ro = new ResizeObserver(()=>{
-      autoFitRemote(remoteVideo, remoteTile, (layoutMode==='duo')?'duo':'split');
-    });
-    ro.observe(remoteTile);
-
     // Salida limpia
     window.addEventListener('beforeunload', ()=>{ try{ send({type:'leave'}); }catch{} });
-
   </script>
 </body>
 </html>
