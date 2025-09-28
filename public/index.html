@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover" />
   <title>TortillaTV — simple</title>
-  <meta name="theme-color" content="#faf9f6" />
+  <meta name="theme-color" content="#0b1324" />
 
   <!-- Fuentes y Tailwind -->
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -30,18 +30,19 @@
 
   <style>
     :root{ --paper:#faf9f6; --rule:#93c5fd66; --margin:#ef4444aa; --hole:#e5e7eb; --ink:#111827; }
-    html,body{ height:100% }
-    body{ background:var(--paper); color:var(--ink); -webkit-font-smoothing:antialiased; }
-    /* Papel rayado */
+    html,body{ height:100%; background:var(--paper); color:var(--ink); -webkit-font-smoothing:antialiased; }
+    /* Papel y adornos */
     .paper-bg{ position:relative; min-height:100vh; background-image:repeating-linear-gradient(0deg, transparent, transparent 32px, var(--rule) 33px, var(--rule) 34px); }
     .paper-bg::before{ content:""; position:absolute; inset:0; background:linear-gradient(90deg, transparent 56px, var(--margin) 59px, transparent 62px); pointer-events:none }
     .paper-holes{ position:absolute; left:18px; top:96px; display:flex; flex-direction:column; gap:96px; pointer-events:none }
     .paper-hole{ width:18px; height:18px; border-radius:999px; background:var(--hole); box-shadow:inset 0 2px 4px rgba(0,0,0,.2) }
     .book{ perspective:1200px }
-    .page{ transform-origin:left center; backface-visibility:hidden; transform-style:preserve-3d; transition:opacity .4s ease; }
+    .page{ transform-origin:left center; backface-visibility:hidden; transform-style:preserve-3d; transition:opacity .4s ease }
     .page.hidden{ opacity:0; pointer-events:none; transform:rotateY(-90deg) translateX(-20px) }
     .page.visible{ opacity:1; transform:rotateY(0); animation:pageFlipIn .6s ease both }
     .card{ background:rgba(255,255,255,.8); border:2px solid rgba(17,24,39,.1); border-radius:20px; padding:12px; box-shadow:0 12px 30px rgba(0,0,0,.07); backdrop-filter:blur(6px) }
+
+    /* HERO bonito */
     .hero{ position:relative; min-height:78vh; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center }
     .ttv{ position:relative; display:inline-block }
     .ttv .word{ display:inline-block; transform-origin:50% 70%; animation:ttv-wobble 2.4s ease-in-out infinite }
@@ -49,6 +50,7 @@
     .ttv .word:nth-child(3){ animation-delay:.3s }
     .ttv .accent{ display:inline-block; padding-inline:.15em; transform:rotate(-2deg); text-shadow:0 2px 0 #ffe4e6 }
     @keyframes ttv-wobble{ 0%,100%{ transform:translateY(0) rotate(0) } 25%{ transform:translateY(-4px) rotate(-1.2deg) } 50%{ transform:translateY(2px) rotate(.8deg) } 75%{ transform:translateY(-2px) rotate(-.6deg) } }
+
     .spark{ position:absolute; width:14px; height:14px; border-radius:3px; transform:rotate(45deg); background:linear-gradient(135deg, rgba(244,63,94,.9), rgba(59,130,246,.9)); box-shadow:0 6px 16px rgba(0,0,0,.18); animation:spark-float 4.5s ease-in-out infinite }
     .spark.s1{ top:-18px; left:-38px; animation-delay:.2s }
     .spark.s2{ top:-24px; right:-28px; animation-delay:.6s }
@@ -57,7 +59,6 @@
 
     .scribble{ width:min(920px,92vw); height:32px; margin-inline:auto }
     .scribble path{ stroke:rgba(239,68,68,.7); stroke-width:6; fill:none; stroke-linecap:round; stroke-dasharray:1400; animation:scribble 2s ease forwards }
-    @keyframes scribble{ from{ stroke-dashoffset:1400 } to{ stroke-dashoffset:0 } }
 
     .corner{ position:absolute; right:min(2rem,5vw); top:clamp(10px,4vh,40px); display:flex; gap:.5rem; align-items:center; z-index:10 }
     .corner .note{ font-family:"Caveat", ui-serif; font-weight:800; font-size:clamp(18px,3.8vw,34px); background:#fff7cc; color:#0b1324; padding:.15em .45em; border-radius:.5rem; box-shadow:0 4px 0 rgba(0,0,0,.2); transform:rotate(-2.5deg) }
@@ -66,11 +67,59 @@
     .marquee li{ list-style:none; font-family:"Caveat"; font-size:clamp(16px,3.2vw,30px); font-weight:800; color:#111827 }
     @keyframes marquee-scroll{ 0%{ transform:translateX(0) } 100%{ transform:translateX(-50%) } }
 
+    /* ====== VIDEO LAYOUTS ====== */
+    .videos{ position:relative }
     .videos.split{ display:grid; grid-template-columns:1fr 1fr; gap:1rem }
-    .fake-video{ background:linear-gradient(135deg, rgba(15,23,42,.06), rgba(100,116,139,.12)); border-radius:16px; min-height:260px }
+    .videos.focus{ display:block }
+    .videos.mobile{ display:block }
+
+    .video-shell{ position:relative; width:100%; height:100%; }
+    .remote-wrap{ position:relative; width:100%; }
+    .local-wrap{ position:relative; width:100%; }
+
+    video{ width:100%; height:100%; object-fit:cover; background:#0b1324; border-radius:16px }
+    .contain video{ object-fit:contain; background:#000 }
+    video.mirror{ transform: scaleX(-1) }
+
+    /* PiP flotante (móvil/PC enfoque) */
+    .pip{ position:absolute; right:12px; bottom:12px; width:28%; max-width:220px; aspect-ratio:16/9; border:3px solid #fff; border-radius:12px; overflow:hidden; box-shadow:0 8px 24px rgba(0,0,0,.35); cursor:grab; touch-action:none; background:#0b1324; }
+    .pip.mirror video{ transform:scaleX(-1) }
+    .pip-lg{ width:46%; max-width:none; } /* PiP más grande al tocar */
+
+    /* Barra de controles inferiores (móvil, estilo overlay tipo Telegram) */
+    .bottom-controls{
+      position:fixed; left:0; right:0;
+      bottom:env(safe-area-inset-bottom,0);
+      display:flex; gap:.5rem; justify-content:center;
+      padding:.75rem clamp(.5rem,3vw,1rem);
+      background:linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,.45) 35%);
+      z-index:40; transition:opacity .25s ease;
+    }
+    .ctrl-btn{ border-radius:999px; border:2px solid rgba(17,24,39,.25); background:rgba(255,255,255,.92); padding:.65rem .9rem; font-size:.85rem; box-shadow:0 6px 14px rgba(0,0,0,.1) }
+    .ctrl-btn:disabled{ opacity:.5 }
+
+    /* Móvil: remoto ocupa toda la pantalla */
+    @media (max-width: 640px){
+      .videos.mobile .remote-wrap{ height: 100svh; } /* full screen */
+      .videos.mobile .local-wrap{ display:none }
+      #videoShell.full-bleed{ margin-top: -12px; } /* acerca el video a tope */
+    }
+
+    /* ======== Full-bleed + Split a pantalla completa (PC) ======== */
+    .full-bleed{
+      width:100vw; position:relative; left:50%; right:50%;
+      margin-left:-50vw; margin-right:-50vw;
+    }
+    @media (min-width: 640px){
+      #videoShell, #videoArea{ height: var(--vh, 70vh); }
+      .videos.split > .remote-wrap,
+      .videos.split > .local-wrap{ height:100%; }
+      .card.stretch{ height:100%; display:flex; flex-direction:column; }
+      .card.stretch > video{ flex:1 1 auto; width:100%; height:100%; }
+    }
 
     /* Overlay de sala de espera */
-    .overlay{ position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(255,255,255,.7); z-index:50 }
+    .overlay{ position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.25); z-index:50 }
     .overlay.show{ display:flex }
     .dot{ width:10px; height:10px; border-radius:999px; background:#ef4444; margin:0 4px; animation:b .9s infinite alternate }
     .dot:nth-child(2){ animation-delay:.15s } .dot:nth-child(3){ animation-delay:.3s }
@@ -84,19 +133,21 @@
     <div class="paper-holes"><div class="paper-hole"></div><div class="paper-hole"></div><div class="paper-hole"></div></div>
 
     <main class="book mx-auto max-w-5xl px-6 py-10">
-      <!-- PÁGINA 1: LANDING -->
+      <!-- PÁGINA 1: LANDING (bonita + íconos) -->
       <section id="page-landing" class="page visible">
         <div class="hero">
+          <!-- Esquina con notas -->
           <div class="corner">
-            <span class="note">a mano</span>
+            <span class="note">anal</span>
             <div class="marquee">
               <ul id="cornerMessages">
-                <li>Kristoff</li><li>Astroboy</li><li>A ochoa lo mataron a balazos</li>
-                <li>Kristoff</li><li>Astroboy</li><li>A ochoa lo mataron a balazos</li>
+                <li>Kristoff</li><li>Pingaydisgusto</li><li>A ochoa lo mataron a balazos</li>
+                <li>boyo</li><li>diazcanelsingao</li><li>A ochoa lo mataron a balazos</li>
               </ul>
             </div>
           </div>
 
+          <!-- Título animado + sparkles -->
           <h1 class="font-display font-extrabold select-none ttv" style="font-size:clamp(56px,10vw,140px); line-height:.9; text-shadow:0 1px 0 #fff, 0 10px 18px rgba(0,0,0,.15)">
             <span class="word">Tortilla</span><span class="accent text-rose-600">TV</span>
             <span class="spark s1"></span><span class="spark s2"></span><span class="spark s3"></span>
@@ -104,18 +155,18 @@
 
           <p class="mt-4 text-neutral-700 text-lg">Video chat aleatorio</p>
 
-          <!-- Género -->
+          <!-- Género con íconos -->
           <div class="mt-6 grid grid-cols-3 gap-3 max-w-md">
             <button data-gen="Hombre" class="gen card py-4 flex flex-col items-center gap-2">
-              <svg width="32" height="32" viewBox="0 0 24 24"><path d="M14 4h6v6h-2V7.41l-4.3 4.3a6 6 0 1 1-1.41-1.41L16.59 6H14V4Z"/></svg>
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor"><path d="M14 4h6v6h-2V7.41l-4.3 4.3a6 6 0 1 1-1.41-1.41L16.59 6H14V4Z"/></svg>
               <span class="font-semibold">Hombre</span>
             </button>
             <button data-gen="Mujer" class="gen card py-4 flex flex-col items-center gap-2">
-              <svg width="32" height="32" viewBox="0 0 24 24"><path d="M12 2a6 6 0 0 0 0 12 6 6 0 0 0 0-12Zm1 13.9A8 8 0 1 1 10 2.1V6H8v2h2v2H8v2h2v2.1Z"/></svg>
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12Zm1 13.9A8 8 0 1 1 10 2.1V6H8v2h2v2H8v2h2v2.1Z"/></svg>
               <span class="font-semibold">Mujer</span>
             </button>
             <button data-gen="Lada" class="gen card py-4 flex flex-col items-center gap-2">
-              <svg width="32" height="32" viewBox="0 0 24 24"><path d="M3 13l1.5-4.5A3 3 0 0 1 7.4 6H16.6a3 3 0 0 1 2.9 2.5L21 13v5a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2H8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5Zm3 .5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Zm12 0a1.5 1.5 0 1 0-.001 3.001A1.5 1.5 0 0 0 18 13.5Z"/></svg>
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor"><path d="M3 13l1.5-4.5A3 3 0 0 1 7.4 6H16.6a3 3 0 0 1 2.9 2.5L21 13v5a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2H8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5Zm3 .5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Zm12 0a1.5 1.5 0 1 0-.001 3.001A1.5 1.5 0 0 0 18 13.5Z"/></svg>
               <span class="font-semibold">Lada</span>
             </button>
           </div>
@@ -135,32 +186,60 @@
 
       <!-- PÁGINA 2: SALA -->
       <section id="page-chat" class="page hidden">
+        <!-- Barra superior (PC) -->
         <div class="card p-3 mb-4">
           <div class="flex flex-wrap items-center gap-2">
             <button id="btn-start" class="rounded-full border-2 border-neutral-900/30 bg-white/80 px-4 py-2 text-sm font-semibold shadow">Buscar</button>
             <button id="btn-next"  class="rounded-full border-2 border-neutral-900/30 bg-white/80 px-4 py-2 text-sm font-semibold shadow" disabled>Siguiente</button>
             <button id="btn-stop"  class="rounded-full border-2 border-neutral-900/30 bg-white/80 px-4 py-2 text-sm font-semibold shadow" disabled>Detener</button>
-            <div class="ml-auto flex items-center gap-3 text-sm">
+
+            <div class="ml-auto flex items-center gap-2">
+              <button id="btn-layout"  class="rounded-full border bg-white/80 px-3 py-2 text-xs hidden sm:inline-flex">Vista: 50/50</button>
+              <button id="btn-expand"  class="rounded-full border bg-white/80 px-3 py-2 text-xs hidden sm:inline-flex">Expandir</button>
+              <button id="btn-fit"     class="rounded-full border bg-white/80 px-3 py-2 text-xs hidden sm:inline-flex">Ajuste: cover</button>
+            </div>
+
+            <div class="flex items-center gap-2 text-sm w-full">
               <span id="status" class="text-neutral-700">Listo</span>
               <span id="peerLabel" class="text-neutral-700 hidden">Pareja: —</span>
-              <span id="you-badge" class="hidden text-xs px-2 py-1 rounded-full border border-black/20 bg-white/70">Tú: —</span>
+              <span id="you-badge" class="ml-auto text-xs px-2 py-1 rounded-full border border-black/20 bg-white/70 hidden">Tú: —</span>
             </div>
           </div>
         </div>
 
-        <div class="videos split" id="videoArea">
-          <div class="card">
-            <div class="-mt-4 -ml-4 inline-block rotate-[-4deg] bg-yellow-200 px-2 py-1 text-[10px] font-bold text-neutral-800 shadow">Pareja</div>
-            <video id="remoteVideo" autoplay playsinline class="fake-video h-[340px] w-full"></video>
-          </div>
-          <div class="card">
-            <div class="-mt-4 -ml-4 inline-block rotate-[-4deg] bg-yellow-200 px-2 py-1 text-[10px] font-bold text-neutral-800 shadow">Tú</div>
-            <video id="localVideo" autoplay playsinline muted class="fake-video h-[340px] w-full"></video>
-            <div class="mt-3 flex items-center gap-2 text-xs">
-              <button id="btn-mute" class="rounded-full border px-3 py-1">Mute</button>
-              <button id="btn-cam"  class="rounded-full border px-3 py-1">Apagar cam</button>
+        <!-- Área de video (full-bleed) -->
+        <div id="videoShell" class="video-shell full-bleed">
+          <div id="videoArea" class="videos split">
+            <!-- Remoto -->
+            <div class="card remote-wrap contain stretch" id="remoteWrap">
+              <video id="remoteVideo" autoplay playsinline></video>
+            </div>
+
+            <!-- Local (PC 50/50 / focus) -->
+            <div class="card local-wrap contain stretch hidden sm:block" id="localWrap">
+              <video id="localVideo" autoplay playsinline muted class="mirror"></video>
+              <div class="mt-3 flex items-center gap-2 text-xs">
+                <button id="btn-mute"   class="rounded-full border px-3 py-1">Mute</button>
+                <button id="btn-cam"    class="rounded-full border px-3 py-1">Apagar cam</button>
+                <button id="btn-mirror" class="rounded-full border px-3 py-1">Espejo</button>
+                <button id="btn-flip"   class="rounded-full border px-3 py-1">Cambiar cámara</button>
+              </div>
             </div>
           </div>
+
+          <!-- PiP flotante -->
+          <div id="pip" class="pip mirror" style="display:none;">
+            <video id="pipVideo" autoplay playsinline muted></video>
+          </div>
+        </div>
+
+        <!-- Controles inferiores (móvil overlay) -->
+        <div class="bottom-controls sm:hidden" id="m-controls">
+          <button id="m-start"  class="ctrl-btn">Buscar</button>
+          <button id="m-next"   class="ctrl-btn" disabled>Siguiente</button>
+          <button id="m-stop"   class="ctrl-btn" disabled>Detener</button>
+          <button id="m-expand" class="ctrl-btn">Pantalla</button>
+          <button id="m-flip"   class="ctrl-btn">Flip</button>
         </div>
 
         <div class="mt-6 flex items-center justify-center">
@@ -172,7 +251,7 @@
 
   <!-- Overlay sala de espera -->
   <div id="overlay" class="overlay">
-    <div class="card px-5 py-4 flex items-center gap-3">
+    <div class="card px-5 py-4 flex items-center gap-3 bg-white">
       <span class="font-semibold">Buscando pareja…</span>
       <div class="flex"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
     </div>
@@ -184,8 +263,7 @@
     (function(){
       const p = new URLSearchParams(location.search);
       const wsOverride = p.get('ws');
-      window.WS_SIGNALLING_URL = wsOverride ||
-        ((location.protocol === 'https:') ? `wss://${location.host}` : `ws://${location.host}`);
+      window.WS_SIGNALLING_URL = wsOverride || ((location.protocol === 'https:') ? `wss://${location.host}` : `ws://${location.host}`);
       console.log("WS =", window.WS_SIGNALLING_URL);
     })();
 
@@ -206,9 +284,12 @@
     function qs(s,root=document){ return root.querySelector(s) }
     function show(k){ Object.values(pages).forEach(p=>{p.classList.add('hidden');p.classList.remove('visible')}); pages[k].classList.remove('hidden'); pages[k].classList.add('visible'); window.scrollTo({top:0,behavior:'smooth'}) }
     function setStatus(t){ const el=qs('#status'); if(el) el.textContent=t }
-    const overlay = qs('#overlay');
-    const peerLabel = qs('#peerLabel');
 
+    const overlay   = qs('#overlay');
+    const peerLabel = qs('#peerLabel');
+    const youBadge  = qs('#you-badge');
+
+    // Hero anim
     const MESSAGES=['Kristoff','Astroboy','A ochoa lo mataron a balazos'];
     (function marqueeDuplicate(){
       const ul = document.getElementById('cornerMessages');
@@ -221,6 +302,7 @@
     const genButtons=[...document.querySelectorAll('.gen')];
     const genElegido=qs('#genElegido');
     const btnGoogle=qs('#btn-google');
+
     genButtons.forEach(b=>{
       b.addEventListener('click', ()=>{
         genButtons.forEach(x=>x.classList.remove('ring','ring-rose-400'));
@@ -232,13 +314,12 @@
     });
 
     let currentUser=null;
-    const youBadge=qs('#you-badge');
     auth.onAuthStateChanged((u)=>{
       currentUser=u||null;
       if(!u){ show('landing'); youBadge.classList.add('hidden'); return; }
       youBadge.classList.remove('hidden');
       youBadge.textContent=`Tú: ${u.displayName||'—'} · ${chosenGender||'—'}`;
-      show('chat');
+      show('chat'); autoLayout(); fitSplitHeight();
     });
 
     btnGoogle?.addEventListener('click', async ()=>{
@@ -252,23 +333,48 @@
 
     /* ===== Señalización + WebRTC (sala) ===== */
     const btnStart=qs('#btn-start'), btnNext=qs('#btn-next'), btnStop=qs('#btn-stop'), btnSalirChat=qs('#btn-salir-chat');
-    const localVideo=qs('#localVideo'), remoteVideo=qs('#remoteVideo');
+    const mStart=qs('#m-start'),   mNext=qs('#m-next'),     mStop=qs('#m-stop');
+    const btnLayout=qs('#btn-layout'), btnExpand=qs('#btn-expand'), btnFit=qs('#btn-fit');
+    const btnMute=qs('#btn-mute'), btnCam=qs('#btn-cam'), btnMirror=qs('#btn-mirror'), btnFlip=qs('#btn-flip');
+    const mExpand=qs('#m-expand'), mFlip=qs('#m-flip');
+
+    const localVideo=qs('#localVideo'), remoteVideo=qs('#remoteVideo'), pip=qs('#pip'), pipVideo=qs('#pipVideo');
+    const videoArea=qs('#videoArea'), remoteWrap=qs('#remoteWrap'), localWrap=qs('#localWrap'), videoShell=qs('#videoShell');
+    const mControls=qs('#m-controls');
 
     let ws=null, wsOpen=false, myId=null, roomId=null, role=null;
     let pc=null, localStream=null;
-    let mute=false, camOn=true;
-    let isQueuing=false;
+    let mute=false, camOn=true, fitMode='cover', currentFacing='user';
+    let isQueuing=false, layoutMode='split', mobileControlsVisible=true;
 
     const iceServers=[{urls:'stun:stun.l.google.com:19302'}];
 
-    async function ensureMedia(){
-      if(localStream) return localStream;
-      localStream = await navigator.mediaDevices.getUserMedia({
-        video:{ width:{ideal:1280}, height:{ideal:720} },
+    async function ensureMedia(constraints){
+      if(localStream && !constraints) return localStream;
+      const base = constraints || {
+        video:{ width:{ideal:1280}, height:{ideal:720}, frameRate:{ideal:30}, facingMode: currentFacing },
         audio:{ echoCancellation:true, noiseSuppression:true }
-      });
-      localVideo.srcObject=localStream;
+      };
+      const newStream = await navigator.mediaDevices.getUserMedia(base);
+      if(!localStream){
+        localStream = newStream;
+        attachLocal(newStream);
+      }else{
+        const newV = newStream.getVideoTracks()[0];
+        const oldV = localStream.getVideoTracks()[0];
+        if(oldV) oldV.stop();
+        localStream.removeTrack(oldV);
+        localStream.addTrack(newV);
+        const sender = pc?.getSenders().find(s=>s.track && s.track.kind==='video');
+        if(sender) await sender.replaceTrack(newV);
+        attachLocal(localStream);
+      }
       return localStream;
+    }
+
+    function attachLocal(stream){
+      localVideo.srcObject = stream;
+      pipVideo.srcObject   = stream;
     }
 
     function makePC(){
@@ -277,8 +383,8 @@
       pc.ontrack = (e)=>{ remoteVideo.srcObject = e.streams[0]; };
       pc.onconnectionstatechange = ()=>{
         const st = pc.connectionState;
-        if(st==='connected'){ setStatus('Conectado'); overlay.classList.remove('show'); btnNext.disabled=false; btnStop.disabled=false; }
-        if(st==='disconnected' || st==='failed'){ setStatus('Conexión perdida'); btnNext.disabled=false; btnStop.disabled=false; }
+        if(st==='connected'){ setStatus('Conectado'); overlay.classList.remove('show'); enableInCall(true); fitSplitHeight(); }
+        if(st==='disconnected' || st==='failed'){ setStatus('Conexión perdida'); enableInCall(true); }
         if(st==='closed'){ setStatus('Cerrado'); }
       };
       return pc;
@@ -298,26 +404,20 @@
             roomId=data.roomId; role=data.role;
             setStatus('Pareja encontrada · Conectando…');
             overlay.classList.add('show');
-            // nombre de la pareja si viene
             if(data.peer && data.peer.name){ peerLabel.classList.remove('hidden'); peerLabel.textContent = 'Pareja: '+(data.peer.name||'—'); }
             try{ await startWebRTC(role); }catch(e){ setStatus('Error WebRTC: '+e.message); overlay.classList.remove('show'); }
-            btnNext.disabled=false; btnStop.disabled=false;
           }
           if(data.type==='offer'){
             await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
             const answer = await pc.createAnswer(); await pc.setLocalDescription(answer);
             send({type:'answer', sdp:answer});
           }
-          if(data.type==='answer'){
-            await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
-          }
-          if(data.type==='ice'){
-            try{ await pc.addIceCandidate(data.candidate); }catch(e){}
-          }
+          if(data.type==='answer'){ await pc.setRemoteDescription(new RTCSessionDescription(data.sdp)); }
+          if(data.type==='ice'){ try{ await pc.addIceCandidate(data.candidate); }catch(e){} }
           if(data.type==='peer-left'){
             setStatus('La otra persona salió'); cleanupPeer(false);
             overlay.classList.remove('show');
-            btnNext.disabled=true; btnStop.disabled=true; btnStart.disabled=false;
+            enableInCall(false);
           }
         };
       });
@@ -328,8 +428,7 @@
     }
 
     async function startWebRTC(role){
-      await ensureMedia();
-      makePC();
+      await ensureMedia(); makePC();
       localStream.getTracks().forEach(t=>pc.addTrack(t, localStream));
       if(role==='offer'){
         const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
@@ -339,7 +438,10 @@
 
     function cleanupPeer(closeWsToo=true){
       if(pc){ try{pc.close()}catch{}; pc=null; }
-      if(localStream){ localStream.getTracks().forEach(t=>t.stop()); localStream=null; localVideo.srcObject=null; }
+      if(localStream){
+        localStream.getTracks().forEach(t=>t.stop());
+        localStream=null; localVideo.srcObject=null; pipVideo.srcObject=null;
+      }
       remoteVideo.srcObject=null; roomId=null; role=null;
       if(closeWsToo && ws){ try{ ws.close(); }catch{} ws=null; wsOpen=false; }
       peerLabel.classList.add('hidden'); peerLabel.textContent='Pareja: —';
@@ -349,59 +451,196 @@
       if(!currentUser){ alert('Inicia sesión con Google'); return; }
       if(isQueuing) return;
       isQueuing = true;
-      btnStart.disabled = true; btnNext.disabled = true; btnStop.disabled = true;
+      enableInCall(false);
       overlay.classList.add('show');
       try{
         if(!chosenGender) chosenGender = localStorage.getItem('ttv_gender') || 'Hombre';
         const displayName = currentUser.displayName || '—';
         await connectWS();
-        await ensureMedia(); // pedir permisos antes de emparejar
+        await ensureMedia();
         send({type:'find', gender: chosenGender, displayName});
         setStatus('En cola…');
       }catch(e){
-        console.error(e); setStatus('Error de conexión WS'); overlay.classList.remove('show'); btnStart.disabled=false;
-      }finally{
-        // seguirá deshabilitado hasta que haya match o se detenga
+        console.error(e); setStatus('Error de conexión WS'); overlay.classList.remove('show'); isQueuing=false;
       }
     }
 
     async function nextMatch(){
-      btnNext.disabled = true;
       try{
         send({type:'leave'}); cleanupPeer(false);
         setStatus('Buscando siguiente…'); overlay.classList.add('show');
         const displayName = currentUser?.displayName || '—';
+        await ensureMedia();
         send({type:'find', gender: chosenGender || localStorage.getItem('ttv_gender') || 'Hombre', displayName});
-      }catch(e){
-        console.error(e); setStatus('Error WS (siguiente)');
-      }
+      }catch(e){ console.error(e); setStatus('Error WS (siguiente)'); }
     }
 
-    /* ===== Botones ===== */
-    btnStart?.addEventListener('click', ()=>{ isQueuing=false; joinQueue(); });
-    btnNext?.addEventListener('click', nextMatch);
-    btnStop?.addEventListener('click', ()=>{
-      send({type:'leave'}); cleanupPeer(); overlay.classList.remove('show');
-      setStatus('Detenido'); btnStart.disabled=false; btnNext.disabled=true; btnStop.disabled=true; isQueuing=false;
-    });
-    btnSalirChat?.addEventListener('click', ()=>{
-      send({type:'leave'}); cleanupPeer(); overlay.classList.remove('show'); auth.signOut();
-    });
+    function enableInCall(connected){
+      // Top bar
+      btnStart.disabled = connected;
+      btnNext.disabled  = !connected;
+      btnStop.disabled  = !connected;
+      // Mobile bar
+      mStart.disabled = connected;
+      mNext.disabled  = !connected;
+      mStop.disabled  = !connected;
+      // PiP visible en móvil o cuando estamos en enfoque
+      pip.style.display = (isMobile() || layoutMode==='focus') && localStream ? 'block' : 'none';
+    }
 
-    qs('#btn-mute')?.addEventListener('click', (e)=>{
+    /* ======== UX: Layout / Fullscreen / Fit / Mirror / Flip ======== */
+    function isMobile(){ return window.matchMedia('(max-width: 640px)').matches }
+
+    function autoLayout(){
+      if(isMobile()){
+        layoutMode='mobile';
+        videoArea.classList.remove('split','focus'); videoArea.classList.add('mobile');
+        btnLayout.classList.add('hidden'); btnExpand.classList.add('hidden'); btnFit.classList.add('hidden');
+        localWrap.classList.add('hidden'); // PiP
+        pip.style.display = localStream ? 'block' : 'none';
+        videoShell.style.removeProperty('--vh');
+      }else{
+        layoutMode='split';
+        videoArea.classList.remove('mobile','focus'); videoArea.classList.add('split');
+        btnLayout.classList.remove('hidden'); btnExpand.classList.remove('hidden'); btnFit.classList.remove('hidden');
+        localWrap.classList.remove('hidden');
+        pip.style.display = 'none';
+        fitSplitHeight();
+      }
+      applyFit();
+    }
+
+    function toggleLayout(){
+      if(isMobile()) return;
+      if(layoutMode==='split'){
+        layoutMode='focus';
+        videoArea.classList.remove('split'); videoArea.classList.add('focus');
+        btnLayout.textContent='Vista: Enfoque';
+        pip.style.display = localStream ? 'block' : 'none';
+        videoShell.style.removeProperty('--vh');
+      }else{
+        layoutMode='split';
+        videoArea.classList.remove('focus'); videoArea.classList.add('split');
+        btnLayout.textContent='Vista: 50/50';
+        pip.style.display = 'none';
+        fitSplitHeight();
+      }
+      applyFit();
+    }
+
+    async function toggleFullscreen(){
+      try{
+        if(document.fullscreenElement){
+          await document.exitFullscreen();
+          if(screen.orientation?.unlock) screen.orientation.unlock();
+        }else{
+          await videoShell.requestFullscreen({ navigationUI:'hide' });
+          if(isMobile() && screen.orientation?.lock){ try{ await screen.orientation.lock('landscape'); }catch{} }
+        }
+      }catch(e){}
+    }
+
+    function toggleFit(){
+      fitMode = (fitMode==='cover') ? 'contain' : 'cover';
+      btnFit.textContent = `Ajuste: ${fitMode}`;
+      applyFit();
+    }
+
+    function applyFit(){
+      [remoteWrap, localWrap].forEach(w=>{
+        if(!w) return;
+        w.classList.toggle('contain', fitMode==='contain');
+      });
+    }
+
+    function toggleMirror(){
+      localVideo.classList.toggle('mirror');
+      pip.classList.toggle('mirror');
+    }
+
+    async function flipCamera(){
+      currentFacing = (currentFacing==='user') ? 'environment' : 'user';
+      await ensureMedia({
+        video:{ facingMode: currentFacing, width:{ideal:1280}, height:{ideal:720}, frameRate:{ideal:30} },
+        audio:{ echoCancellation:true, noiseSuppression:true }
+      });
+    }
+
+    // ======== Interacciones estilo Telegram en móvil ========
+    function toggleMobileControls(){
+      mobileControlsVisible = !mobileControlsVisible;
+      mControls.style.opacity = mobileControlsVisible ? '1' : '0';
+      mControls.style.pointerEvents = mobileControlsVisible ? 'auto' : 'none';
+    }
+    remoteVideo.addEventListener('click', ()=>{ if(isMobile()) toggleMobileControls(); });
+    pip.addEventListener('click', (e)=>{ if(isMobile()){ pip.classList.toggle('pip-lg'); e.stopPropagation(); } });
+
+    // Doble clic en remoto => fullscreen (PC/también útil en móvil)
+    remoteWrap.addEventListener('dblclick', toggleFullscreen);
+
+    // PiP arrastrable
+    (function dragPip(){
+      let startX=0,startY=0, x=0,y=0, dragging=false;
+      const onDown = e=>{ dragging=true; pip.style.cursor='grabbing'; const p = getPoint(e); startX=p.x - x; startY=p.y - y; };
+      const onMove = e=>{ if(!dragging) return; const p=getPoint(e); x = p.x - startX; y = p.y - startY; pip.style.transform=`translate(${x}px,${y}px)`; };
+      const onUp   = ()=>{ dragging=false; pip.style.cursor='grab'; };
+      function getPoint(e){ if(e.touches?.[0]) return {x:e.touches[0].clientX, y:e.touches[0].clientY}; return {x:e.clientX, y:e.clientY}; }
+      pip.addEventListener('mousedown', onDown); window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
+      pip.addEventListener('touchstart', onDown, {passive:true}); window.addEventListener('touchmove', onMove, {passive:false}); window.addEventListener('touchend', onUp);
+    })();
+
+    /* ===== Pantalla completa 50/50 en PC: calcular alto ===== */
+    function fitSplitHeight(){
+      if (isMobile() || layoutMode !== 'split') {
+        videoShell.style.removeProperty('--vh');
+        return;
+      }
+      const rect = videoShell.getBoundingClientRect();
+      const margen = 16;
+      const h = Math.max(420, window.innerHeight - rect.top - margen);
+      videoShell.style.setProperty('--vh', h + 'px');
+    }
+    window.addEventListener('load', fitSplitHeight);
+    window.addEventListener('resize', fitSplitHeight);
+    document.addEventListener('visibilitychange', fitSplitHeight);
+
+    /* ===== Botones ===== */
+    const startAll = ()=> joinQueue();
+    const nextAll  = ()=> nextMatch();
+    const stopAll  = ()=>{ try{ send({type:'leave'});}catch{} cleanupPeer(); overlay.classList.remove('show'); setStatus('Detenido'); isQueuing=false; enableInCall(false); };
+
+    btnLayout?.addEventListener('click', toggleLayout);
+    btnExpand?.addEventListener('click', toggleFullscreen);
+    btnFit   ?.addEventListener('click', toggleFit);
+
+    btnMute  ?.addEventListener('click', (e)=>{
       if(!localStream) return;
       mute = !mute;
       localStream.getAudioTracks().forEach(t=>t.enabled = !mute);
       e.target.textContent = mute ? 'Unmute' : 'Mute';
     });
-    qs('#btn-cam')?.addEventListener('click', (e)=>{
+    btnCam   ?.addEventListener('click', (e)=>{
       if(!localStream) return;
       camOn = !camOn;
       localStream.getVideoTracks().forEach(t=>t.enabled = camOn);
       e.target.textContent = camOn ? 'Apagar cam' : 'Encender cam';
     });
+    btnMirror?.addEventListener('click', toggleMirror);
+    btnFlip  ?.addEventListener('click', flipCamera);
 
-    /* Salir bien si el usuario cierra la pestaña */
+    mExpand ?.addEventListener('click', toggleFullscreen);
+    mFlip   ?.addEventListener('click', flipCamera);
+
+    btnStart ?.addEventListener('click', startAll);
+    btnNext  ?.addEventListener('click', nextAll);
+    btnStop  ?.addEventListener('click', stopAll);
+    mStart   ?.addEventListener('click', startAll);
+    mNext    ?.addEventListener('click', nextAll);
+    mStop    ?.addEventListener('click', stopAll);
+
+    btnSalirChat?.addEventListener('click', ()=>{ stopAll(); auth.signOut(); });
+
+    /* Salida limpia */
     window.addEventListener('beforeunload', ()=>{ try{ send({type:'leave'}); }catch{} });
   </script>
 </body>
