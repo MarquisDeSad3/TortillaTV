@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover" />
-  <title>TortillaTV — simple (Duo)</title>
+  <title>TortillaTV — Smart Duo</title>
   <meta name="theme-color" content="#0b1324" />
 
   <!-- Fuentes y Tailwind -->
@@ -32,7 +32,7 @@
     :root{ --paper:#faf9f6; --rule:#93c5fd66; --margin:#ef4444aa; --hole:#e5e7eb; --ink:#111827; }
     html,body{ height:100%; background:var(--paper); color:var(--ink); -webkit-font-smoothing:antialiased; }
 
-    /* Papel y adornos */
+    /* Papel y adornos (estética) */
     .paper-bg{ position:relative; min-height:100vh; background-image:repeating-linear-gradient(0deg, transparent, transparent 32px, var(--rule) 33px, var(--rule) 34px); }
     .paper-bg::before{ content:""; position:absolute; inset:0; background:linear-gradient(90deg, transparent 56px, var(--margin) 59px, transparent 62px); pointer-events:none }
     .paper-holes{ position:absolute; left:18px; top:96px; display:flex; flex-direction:column; gap:96px; pointer-events:none }
@@ -43,7 +43,6 @@
     .page.visible{ opacity:1; transform:rotateY(0); animation:pageFlipIn .6s ease both }
     .card{ background:rgba(255,255,255,.8); border:2px solid rgba(17,24,39,.1); border-radius:20px; padding:12px; box-shadow:0 12px 30px rgba(0,0,0,.07); backdrop-filter:blur(6px) }
 
-    /* HERO */
     .hero{ position:relative; min-height:78vh; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center }
     .ttv{ position:relative; display:inline-block }
     .ttv .word{ display:inline-block; transform-origin:50% 70%; animation:ttv-wobble 2.4s ease-in-out infinite }
@@ -51,12 +50,6 @@
     .ttv .word:nth-child(3){ animation-delay:.3s }
     .ttv .accent{ display:inline-block; padding-inline:.15em; transform:rotate(-2deg); text-shadow:0 2px 0 #ffe4e6 }
     @keyframes ttv-wobble{ 0%,100%{ transform:translateY(0) rotate(0) } 25%{ transform:translateY(-4px) rotate(-1.2deg) } 50%{ transform:translateY(2px) rotate(.8deg) } 75%{ transform:translateY(-2px) rotate(-.6deg) } }
-
-    .spark{ position:absolute; width:14px; height:14px; border-radius:3px; transform:rotate(45deg); background:linear-gradient(135deg, rgba(244,63,94,.9), rgba(59,130,246,.9)); box-shadow:0 6px 16px rgba(0,0,0,.18); animation:spark-float 4.5s ease-in-out infinite }
-    .spark.s1{ top:-18px; left:-38px; animation-delay:.2s }
-    .spark.s2{ top:-24px; right:-28px; animation-delay:.6s }
-    .spark.s3{ bottom:-22px; left:18px; animation-delay:1s }
-    @keyframes spark-float{ 0%,100%{ transform:rotate(45deg) translateY(0) } 50%{ transform:rotate(45deg) translateY(-10px) } }
 
     .scribble{ width:min(920px,92vw); height:32px; margin-inline:auto }
     .scribble path{ stroke:rgba(239,68,68,.7); stroke-width:6; fill:none; stroke-linecap:round; stroke-dasharray:1400; animation:scribble 2s ease forwards }
@@ -68,21 +61,21 @@
     .marquee li{ list-style:none; font-family:"Caveat"; font-size:clamp(16px,3.2vw,30px); font-weight:800; color:#111827 }
     @keyframes marquee-scroll{ 0%{ transform:translateX(0) } 100%{ transform:translateX(-50%) } }
 
-    /* ====== VIDEO: reglas ====== */
+    /* ====== VIDEO ====== */
     video{ width:100%; height:100%; object-fit:cover; background:#0b1324; display:block; }
     video.mirror{ transform: scaleX(-1) }
 
     .stage{ position:relative; width:100%; }
     .stage .tile{ position:relative; border-radius:16px; overflow:hidden; background:#000; }
 
-    /* 50/50 (PC) */
+    /* 50/50 (PC): tamaño del cuadro constante; ajustamos object-fit dinámico por JS */
     .layout-split{ display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
-    .layout-split .tile{ aspect-ratio:16/9; } /* tamaño del cuadro constante */
+    .layout-split .tile{ aspect-ratio:16/9; } /* el JS podrá cambiar este ratio según el track */
 
-    /* Duo (WhatsApp/Telegram): remoto pantalla completa; tú en PiP */
+    /* Duo: remoto pantalla completa; tú en PiP */
     .layout-duo{ position:relative; }
     .layout-duo .remote{ width:100%; height:var(--vh, 70vh); aspect-ratio:auto; border-radius:0; }
-    .layout-duo .local{ display:none !important; }     /* importante: NO duplicar tu video */
+    .layout-duo .local{ display:none !important; } /* evita duplicación en grande */
     .layout-duo .pip{ display:block !important; }
 
     .pip{
@@ -152,7 +145,6 @@
 
           <h1 class="font-display font-extrabold select-none ttv" style="font-size:clamp(56px,10vw,140px); line-height:.9; text-shadow:0 1px 0 #fff, 0 10px 18px rgba(0,0,0,.15)">
             <span class="word">Tortilla</span><span class="accent text-rose-600">TV</span>
-            <span class="spark s1"></span><span class="spark s2"></span><span class="spark s3"></span>
           </h1>
           <p class="mt-4 text-neutral-700 text-lg">Video chat aleatorio</p>
 
@@ -206,7 +198,7 @@
             <div class="tile remote" id="remoteTile">
               <video id="remoteVideo" autoplay playsinline></video>
             </div>
-            <!-- Local (mosaico grande solo en split) -->
+            <!-- Local (solo visible en split) -->
             <div class="tile local" id="localTile">
               <video id="localVideo" autoplay playsinline muted class="mirror"></video>
             </div>
@@ -326,25 +318,26 @@
     let pc=null, localStream=null;
     let mute=false, camOn=true, fitMode='auto', currentFacing='user';
     let isQueuing=false, inCall=false, autoCycle=false, userHardStop=false;
+    let layoutMode='split'; // 'split' | 'duo'
 
     const iceServers=[{urls:'stun:stun.l.google.com:19302'}];
-    const TARGET_WIDTH=1280, TARGET_HEIGHT=720, TARGET_FPS=30;
+
+    const TARGET={ width:1280, height:720, frameRate:30, aspectRatio:16/9 };
 
     async function ensureMedia(constraints){
       try{
         const base = constraints || {
-          video:{ width:{exact:TARGET_WIDTH}, height:{exact:TARGET_HEIGHT}, frameRate:{exact:TARGET_FPS}, facingMode: currentFacing },
+          video:{ width:{ideal:TARGET.width}, height:{ideal:TARGET.height}, frameRate:{ideal:TARGET.frameRate}, aspectRatio:TARGET.aspectRatio, facingMode: currentFacing },
           audio:{ echoCancellation:true, noiseSuppression:true }
         };
         const stream = await navigator.mediaDevices.getUserMedia(base);
 
         const vTrack = stream.getVideoTracks()[0];
-        if(vTrack && vTrack.applyConstraints){
+        if(vTrack?.applyConstraints){
           try{
             await vTrack.applyConstraints({
-              width:{exact:TARGET_WIDTH},
-              height:{exact:TARGET_HEIGHT},
-              frameRate:{exact:TARGET_FPS},
+              width:{ideal:TARGET.width}, height:{ideal:TARGET.height},
+              frameRate:{ideal:TARGET.frameRate}, aspectRatio:TARGET.aspectRatio,
               resizeMode:'none'
             });
           }catch(_){}
@@ -381,7 +374,11 @@
       pc.onicecandidate = (e)=>{ if(e.candidate) send({type:'ice', candidate:e.candidate}); };
       pc.ontrack = (e)=>{
         remoteVideo.srcObject = e.streams[0];
-        setTimeout(setSplitAspectFromTracks, 50);
+        // Ajustes visuales cuando llega el remoto
+        setTimeout(()=>{
+          setSplitAspectFromTracks();
+          autoFitRemote(remoteVideo, remoteTile, (layoutMode==='duo')?'duo':'split');
+        }, 50);
       };
       pc.onconnectionstatechange = ()=> {
         const st = pc.connectionState;
@@ -515,8 +512,6 @@
     }
 
     /* ===== Layout ===== */
-    let layoutMode = 'split'; // 'split' | 'duo'
-
     function setLayout(mode){
       layoutMode = mode;
       stage.classList.remove('layout-split','layout-duo');
@@ -525,15 +520,16 @@
         stage.classList.add('layout-split');
         localTile.style.removeProperty('display');   // ambos mosaicos visibles
         pip.style.display = 'none';                  // PiP oculto en split
+        setSplitAspectFromTracks();
       }else{
         stage.classList.add('layout-duo');
         localTile.style.display = 'none';            // NO duplicar local
         pip.style.display = 'block';                 // PiP visible
       }
 
-      applyFitForLayout();
+      applyFitSmart();
       fitVH();
-      setSplitAspectFromTracks(); // ajusta ratio si estamos en split
+      setTimeout(()=>autoFitRemote(remoteVideo, remoteTile, (mode==='duo')?'duo':'split'),0);
     }
 
     function isMobile(){ return window.matchMedia('(max-width: 640px)').matches }
@@ -551,17 +547,39 @@
       fitVH();
     }
 
-    /* ===== Ver más en split / cover en duo ===== */
-    function applyFitForLayout(){
+    /* ===== Auto-Fit inteligente ===== */
+    function autoFitRemote(remoteVideoEl, containerEl, prefer='duo') {
+      const stream = remoteVideoEl.srcObject;
+      const vt = stream?.getVideoTracks?.()[0];
+      const s = vt?.getSettings?.();
+      if (!s?.width || !s?.height) return;
+
+      const videoAR = s.width / s.height;
+      const rect = containerEl.getBoundingClientRect();
+      const boxAR  = rect.width / rect.height;
+
+      // 0 = idénticos; >0.1 ya se nota diferencia
+      const diff = Math.abs(Math.log(videoAR/boxAR));
+      const BIG_DIFF = 0.12;
+
+      let fit;
+      if (diff > BIG_DIFF) fit = 'contain';
+      else fit = (prefer === 'duo') ? 'cover' : 'contain';
+
+      remoteVideoEl.style.objectFit = fit;
+      remoteVideoEl.style.background = (fit==='contain') ? '#000' : '#0b1324';
+    }
+
+    function applyFitSmart(){
       if(layoutMode === 'split'){
-        // Ver más contenido del video (sin cambiar el tamaño del cuadro)
+        // Ver más en 50/50
         [remoteVideo, localVideo].forEach(v=>{
           if(!v) return;
           v.style.objectFit = 'contain';
-          v.style.background = '#000'; // barras si hace falta
+          v.style.background = '#000';
         });
       }else{
-        // Duo: estilo WhatsApp/Telegram
+        // Duo estilo app de mensajería
         [remoteVideo, pipVideo].forEach(v=>{
           if(!v) return;
           v.style.objectFit = 'cover';
@@ -570,14 +588,14 @@
       }
     }
 
-    /* ===== Ajuste dinámico de aspect-ratio en split según tracks ===== */
+    /* ===== Ajuste dinámico del aspect-ratio en split ===== */
     function setSplitAspectFromTracks(){
       if(layoutMode !== 'split') return;
 
       const setRatio = (tileEl, track) => {
         try{
           const s = track?.getSettings?.();
-          if(!s || !s.width || !s.height) return;
+          if(!s?.width || !s?.height) return;
           tileEl.style.aspectRatio = (s.width / s.height);
         }catch(e){}
       };
@@ -608,7 +626,7 @@
     window.addEventListener('resize', fitVH);
     document.addEventListener('visibilitychange', fitVH);
 
-    /* ===== PiP arrastrable ===== */
+    /* ===== PiP arrastrable + doble click para alternar layout ===== */
     (function makePipDraggable(){
       let dragging = false, startX=0, startY=0, origX=0, origY=0;
 
@@ -632,7 +650,6 @@
 
       const onDown = (clientX, clientY)=>{
         dragging = true; pip.classList.add('dragging');
-        // lee posición actual
         const m = /translate\(([-\d.]+)px,\s*([-\d.]+)px\)/.exec(pip.style.transform||"");
         origX = m ? parseFloat(m[1]) : 0;
         origY = m ? parseFloat(m[2]) : 0;
@@ -670,15 +687,26 @@
       }, 0);
     })();
 
+    // Doble click / tap para alternar layout rápidamente
+    let dblClkTimer=null;
+    function quickToggleLayout(){
+      setLayout(layoutMode==='duo' ? 'split' : 'duo');
+    }
+    remoteVideo.addEventListener('dblclick', quickToggleLayout);
+    remoteVideo.addEventListener('touchend', (e)=>{
+      if(dblClkTimer){ clearTimeout(dblClkTimer); dblClkTimer=null; quickToggleLayout(); }
+      else dblClkTimer=setTimeout(()=>{ dblClkTimer=null; }, 220);
+    }, {passive:true});
+
     /* ===== Botones (PC) ===== */
     btnLayout?.addEventListener('click', ()=> setLayout('split'));
     btnDuo   ?.addEventListener('click', ()=> setLayout('duo'));
     btnExpand?.addEventListener('click', toggleFullscreen);
     btnFit   ?.addEventListener('click', ()=>{
-      // modo manual, si quisieras alternar más adelante
       fitMode = (fitMode==='auto') ? 'contain' : 'auto';
       btnFit.textContent = `Ajuste: ${fitMode}`;
-      applyFitForLayout();
+      applyFitSmart();
+      autoFitRemote(remoteVideo, remoteTile, (layoutMode==='duo')?'duo':'split');
     });
 
     // PC: sesión
@@ -693,6 +721,12 @@
     });
 
     btnSalirChat?.addEventListener('click', ()=>{ stopAll(); auth.signOut(); });
+
+    // Redimensionado contenedor: recalcular auto-fit
+    const ro = new ResizeObserver(()=>{
+      autoFitRemote(remoteVideo, remoteTile, (layoutMode==='duo')?'duo':'split');
+    });
+    ro.observe(remoteTile);
 
     // Salida limpia
     window.addEventListener('beforeunload', ()=>{ try{ send({type:'leave'}); }catch{} });
