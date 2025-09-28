@@ -2,8 +2,9 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>TortillaTV — móvil 1:1 apilado</title>
+  <!-- Bloqueo de zoom/pinch en móvil -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+  <title>TortillaTV </title>
   <meta name="theme-color" content="#0b1324" />
 
   <!-- Fuentes y Tailwind -->
@@ -31,16 +32,21 @@
   <style>
     :root{
       --paper:#faf9f6; --rule:#93c5fd66; --margin:#ef4444aa; --hole:#e5e7eb; --ink:#111827;
-      --box-ar: 4/3;           /* PC por defecto 4:3 */
-      --tile-size: 320px;      /* se recalcula en móvil por JS para caber en pantalla */
-      --mobile-gap: 10px;
-      --mobile-reserved: 110px;/* margen para botón FAB/espacios (ajustado en JS) */
+      --box-ar: 4/3;           /* PC por defecto 4:3 (conmutable) */
+      --tile-size: 320px;      /* recalculado en móvil para caber en la mitad de pantalla */
+      --mobile-gap: 8px;
     }
     body.ar-1-1{ --box-ar: 1/1; }
     body.ar-4-3{ --box-ar: 4/3; }
     body.ar-16-9{ --box-ar: 16/9; }
 
     html,body{ height:100%; background:var(--paper); color:var(--ink); -webkit-font-smoothing:antialiased; }
+
+    /* Bloquear scroll global cuando estemos en la sala en móvil */
+    body.no-scroll{ position:fixed; inset:0; overflow:hidden; width:100%; height:100svh; }
+
+    /* Evitar gestos extra de zoom en móvil */
+    * { touch-action: manipulation; }
 
     /* Papel y adornos (estética) */
     .paper-bg{ position:relative; min-height:100vh; background-image:repeating-linear-gradient(0deg, transparent, transparent 32px, var(--rule) 33px, var(--rule) 34px); }
@@ -59,7 +65,7 @@
     .ttv .word:nth-child(2){ animation-delay:.15s }
     .ttv .word:nth-child(3){ animation-delay:.3s }
     .ttv .accent{ display:inline-block; padding-inline:.15em; transform:rotate(-2deg); text-shadow:0 2px 0 #ffe4e6 }
-    @keyframes ttv-wobble{ 0%,100%{ transform:translateY(0) rotate(0) } 25%{ transform:translateY(-4px) rotate(-1.2deg) } 50%{ transform:translateY(2px) rotate(.8deg) } 75%{ transform:translateY(-2px) rotate(-.6deg) } }
+    @keyframes ttv-wobble{ 0%,100%{ transform:translateY(0) } 25%{ transform:translateY(-4px) } 50%{ transform:translateY(2px) } 75%{ transform:translateY(-2px) } }
 
     .scribble{ width:min(920px,92vw); height:32px; margin-inline:auto }
     .scribble path{ stroke:rgba(239,68,68,.7); stroke-width:6; fill:none; stroke-linecap:round; stroke-dasharray:1400; animation:scribble 2s ease forwards }
@@ -72,51 +78,60 @@
     @keyframes marquee-scroll{ 0%{ transform:translateX(0) } 100%{ transform:translateX(-50%) } }
 
     /* ====== VIDEO ====== */
-    video{ width:100%; height:100%; object-fit:cover; background:#0b1324; display:block; }
+    /* En PC mostramos TODO el vídeo sin recortes; fondo negro rellena laterales */
+    video{ width:100%; height:100%; object-fit:contain; background:#000; display:block; }
     video.mirror{ transform: scaleX(-1) }
 
     .stage{ position:relative; width:100%; }
+
     .tile{
       position:relative; border-radius:16px; overflow:hidden; background:#000;
-      aspect-ratio: var(--box-ar);
+      aspect-ratio: var(--box-ar); /* PC utiliza el AR activo */
     }
 
-    /* PC: 50/50 */
+    /* — PC por defecto: 50/50 — */
     .layout-split{ display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
 
-    /* Móvil: apilado 1:1 (dos cuadrados que caben en la pantalla) */
-    .layout-mobile-stack{
-      display:flex; flex-direction:column; align-items:center;
-      gap:var(--mobile-gap);
-      padding:10px 10px calc(env(safe-area-inset-bottom,0) + 68px); /* deja espacio al FAB */
-      min-height:100svh; /* usa viewport seguro en móviles modernos */
+    /* ===== MÓVIL: pantalla partida fija 1:1 (sin scroll) ===== */
+    .layout-mobile-fixed{
+      position:fixed; inset:0;
+      display:grid; grid-template-rows:1fr 1fr; grid-template-columns:1fr;
+      background:#000; /* por si quedan bordes */
+      padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom) 0;
+      z-index:0; /* botones irán encima */
     }
-    .layout-mobile-stack .tile{
-      aspect-ratio: 1 / 1;               /* 1:1 fijo en móvil */
-      width: min(100%, var(--tile-size)); /* tamaño calculado por JS para caber */
-      height: min(100vw, var(--tile-size));
-      border-radius:12px;
+    .pane{
+      position:relative; display:flex; align-items:center; justify-content:center;
+      overflow:hidden; background:#000;
     }
+    /* el cuadrado 1:1 centrado dentro de cada mitad */
+    .pane .square{
+      width: min(100vw, var(--tile-size));
+      height: min(100vw, var(--tile-size)); /* cuadrado 1:1 */
+      border-radius:12px; overflow:hidden; background:#000;
+    }
+    /* en móvil queremos cubrir el cuadrado (recorta si hace falta) */
+    .pane .square video{ object-fit:cover; }
 
-    /* PiP desactivado en móvil stack */
+    /* Ocultar PiP en móvil y landing */
     .pip{ display:none !important; }
 
     /* Topbar (PC) */
     .topbar .btn{ border:2px solid rgba(17,24,39,.3); background:rgba(255,255,255,.9); padding:.5rem .9rem; border-radius:999px; font-weight:600; }
     .topbar .btn:disabled{ opacity:.55 }
 
-    /* Botón único (MÓVIL) */
-    .mobile-fab{
-      position:fixed; left:50%; transform:translateX(-50%);
-      bottom:calc(env(safe-area-inset-bottom,0) + 16px);
-      z-index:60;
-      border-radius:999px; padding:.9rem 1.25rem;
-      border:2px solid rgba(17,24,39,.2);
-      background:#fff; font-weight:700; box-shadow:0 10px 28px rgba(0,0,0,.22);
+    /* Botones fijos (MÓVIL) */
+    .mobile-btn{
+      position:fixed; bottom:calc(env(safe-area-inset-bottom,0) + 14px);
+      z-index:60; border-radius:999px; padding:.78rem 1.05rem;
+      border:2px solid rgba(255,255,255,.25); background:rgba(17,24,39,.7); color:#fff;
+      font-weight:800; backdrop-filter:blur(6px); box-shadow:0 10px 28px rgba(0,0,0,.25);
     }
+    #btn-buscar-m{ left:14px; }
+    #btn-salir-m{ right:14px; }
 
     /* Overlay sala de espera */
-    .overlay{ position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.25); z-index:50 }
+    .overlay{ position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.25); z-index:55 }
     .overlay.show{ display:flex }
     .dot{ width:10px; height:10px; border-radius:999px; background:#ef4444; margin:0 4px; animation:b .9s infinite alternate }
     .dot:nth-child(2){ animation-delay:.15s } .dot:nth-child(3){ animation-delay:.3s }
@@ -129,18 +144,16 @@
       .card.stretch > .tile{ flex:1 1 auto; }
     }
 
-    /* Móvil: oculta topbar y fuerza 1:1 apilado */
+    /* Móvil: oculta topbar y landing paddings cuando entras a sala */
     @media (max-width: 640px){
       .topbar{ display:none; }
-      .book{ padding:0 !important; }
-      .hero{ min-height:72vh }
-      .marquee{ width:min(34ch,88vw) }
-      .full-bleed{ margin:0; left:0; right:0; width:100%; }
       main{ padding:0 !important; }
+      .book{ padding:0 !important; }
+      .full-bleed{ margin:0; left:0; right:0; width:100%; }
     }
   </style>
 </head>
-<body class="font-sans ar-4-3">
+<body class="font-sans ar-1-1">
   <div class="paper-bg">
     <div class="paper-holes"><div class="paper-hole"></div><div class="paper-hole"></div><div class="paper-hole"></div></div>
 
@@ -187,9 +200,7 @@
             <button id="btn-stop"  class="btn" disabled>Detener</button>
 
             <div class="ml-auto flex items-center gap-2">
-              <button id="btn-layout" class="btn hidden sm:inline-flex">Vista: 50/50</button>
-              <button id="btn-ar" class="btn hidden sm:inline-flex">AR: 4:3</button>
-              <button id="btn-duo" class="btn hidden sm:inline-flex">Vista: Duo</button>
+              <button id="btn-ar" class="btn hidden sm:inline-flex">AR: 1:1</button>
             </div>
 
             <div class="flex items-center gap-2 text-sm w-full">
@@ -200,8 +211,9 @@
           </div>
         </div>
 
-        <!-- Video -->
+        <!-- Video PC (layout-split) y contenedor móvil (layout-mobile-fixed) -->
         <div id="videoShell" class="full-bleed">
+          <!-- PC: 50/50 (automático; no hay botón de vista) -->
           <div id="stage" class="stage layout-split">
             <!-- Remoto -->
             <div class="tile remote" id="remoteTile">
@@ -211,16 +223,32 @@
             <div class="tile local" id="localTile">
               <video id="localVideo" autoplay playsinline muted class="mirror"></video>
             </div>
-            <!-- PiP (no se usa en móvil apilado) -->
+            <!-- PiP (no se usa) -->
             <div id="pip" class="pip" style="display:none;">
               <video id="pipVideo" autoplay playsinline muted></video>
             </div>
           </div>
+
+          <!-- MÓVIL: pantalla partida fija (oculta en PC) -->
+          <div id="stageMobile" class="layout-mobile-fixed" style="display:none;">
+            <div class="pane" id="pane-remote">
+              <div class="square" id="sq-remote">
+                <video id="remoteVideoM" autoplay playsinline></video>
+              </div>
+            </div>
+            <div class="pane" id="pane-local">
+              <div class="square" id="sq-local">
+                <video id="localVideoM" autoplay playsinline muted class="mirror"></video>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <!-- Móvil: botón único -->
-        <button id="mobileFab" class="mobile-fab sm:hidden">Iniciar videochat</button>
+        <!-- Botones móviles (solo visibles <640px) -->
+        <button id="btn-buscar-m" class="mobile-btn sm:hidden">Buscar sala</button>
+        <button id="btn-salir-m"  class="mobile-btn sm:hidden">Salir</button>
 
+        <!-- Botón salir extra (PC / fallback) -->
         <div class="mt-6 flex items-center justify-center">
           <button id="btn-salir-chat" class="rounded-full border-2 border-neutral-900/30 bg-white/80 px-5 py-2 text-sm font-semibold shadow">Salir</button>
         </div>
@@ -271,7 +299,6 @@
     const overlay   = qs('#overlay');
     const peerLabel = qs('#peerLabel');
     const youBadge  = qs('#you-badge');
-    const mobileFab = qs('#mobileFab');
 
     // Marquee demo
     const MESSAGES=['Kristoff','Astroboy','A ochoa lo mataron a balazos'];
@@ -306,7 +333,7 @@
       youBadge.classList.remove('hidden');
       youBadge.textContent=`Tú: ${u.displayName||'—'} · ${chosenGender||'—'}`;
       show('chat');
-      initLayoutForDevice();
+      initLayoutForDevice(); // decide PC vs móvil
     });
 
     btnGoogle?.addEventListener('click', async ()=>{
@@ -320,15 +347,20 @@
 
     /* ===== WebRTC / Señalización ===== */
     const btnStart=qs('#btn-start'), btnNext=qs('#btn-next'), btnStop=qs('#btn-stop'), btnSalirChat=qs('#btn-salir-chat');
-    const btnLayout=qs('#btn-layout'), btnAR=qs('#btn-ar'), btnDuo=qs('#btn-duo');
 
     const localVideo=qs('#localVideo'), remoteVideo=qs('#remoteVideo'), pip=qs('#pip'), pipVideo=qs('#pipVideo');
-    const stage=qs('#stage'), videoShell=qs('#videoShell'), remoteTile=qs('#remoteTile'), localTile=qs('#localTile');
+
+    // Vídeos móviles (duplicados para layout sin recortes ni scroll)
+    const localVideoM=qs('#localVideoM'), remoteVideoM=qs('#remoteVideoM');
+
+    const stage=qs('#stage'), stageMobile=qs('#stageMobile');
+
+    const btnBuscarM=qs('#btn-buscar-m'), btnSalirM=qs('#btn-salir-m');
 
     let ws=null, wsOpen=false, myId=null, roomId=null, role=null;
     let pc=null, localStream=null;
     let isQueuing=false, inCall=false, autoCycle=false, userHardStop=false;
-    let layoutMode='split'; // 'split' | 'mobile-stack'
+    let layoutMode='split'; // 'split' | 'mobile-fixed'
     const iceServers=[{urls:'stun:stun.l.google.com:19302'}];
 
     async function ensureMedia(){
@@ -357,14 +389,23 @@
     }
 
     function attachLocal(stream){
+      // PC
       localVideo.srcObject = stream;
+      // Móvil
+      localVideoM.srcObject = stream;
+      // PiP (no usado)
       pipVideo.srcObject   = stream;
     }
 
     function makePC(){
       pc = new RTCPeerConnection({iceServers});
       pc.onicecandidate = (e)=>{ if(e.candidate) send({type:'ice', candidate:e.candidate}); };
-      pc.ontrack = (e)=>{ remoteVideo.srcObject = e.streams[0]; };
+      pc.ontrack = (e)=>{
+        // Alimenta ambos vídeos (PC y móvil) para no redirigir nodos
+        const remoteStream = e.streams[0];
+        remoteVideo.srcObject = remoteStream;
+        remoteVideoM.srcObject = remoteStream;
+      };
       pc.onconnectionstatechange = ()=> {
         const st = pc.connectionState;
         if(st==='connected'){ inCall = true; setStatus('Conectado'); overlay.classList.remove('show'); enableInCall(true); }
@@ -422,9 +463,11 @@
       if(pc){ try{pc.close()}catch{}; pc=null; }
       if(!keepLocal && localStream){
         localStream.getTracks().forEach(t=>t.stop());
-        localStream=null; localVideo.srcObject=null; pipVideo.srcObject=null;
+        localStream=null;
+        localVideo.srcObject=null; localVideoM.srcObject=null; pipVideo.srcObject=null;
       }
-      remoteVideo.srcObject=null; roomId=null; role=null; inCall=false;
+      remoteVideo.srcObject=null; remoteVideoM.srcObject=null;
+      roomId=null; role=null; inCall=false;
       if(closeWsToo && ws){ try{ ws.close(); }catch{} ws=null; wsOpen=false; }
       peerLabel.classList.add('hidden'); peerLabel.textContent='Pareja: —';
     }
@@ -433,7 +476,7 @@
       if(btnStart) btnStart.disabled = connected;
       if(btnNext)  btnNext.disabled  = !connected;
       if(btnStop)  btnStop.disabled  = !connected;
-      if(mobileFab) mobileFab.textContent = connected ? 'Detener' : 'Iniciar videochat';
+      if(btnBuscarM) btnBuscarM.textContent = connected ? 'Siguiente' : 'Buscar sala';
     }
 
     // Auto-cycle
@@ -494,17 +537,21 @@
     /* ===== Layout ===== */
     function setLayout(mode){
       layoutMode = mode;
-      stage.classList.remove('layout-split','layout-mobile-stack');
 
       if(mode==='split'){
+        // PC
+        stage.style.display = '';
         stage.classList.add('layout-split');
-        // PC: dos mosaicos lado a lado, AR según botones
-        document.body.classList.remove('ar-1-1');
+        stageMobile.style.display = 'none';
+        document.body.classList.remove('no-scroll');
+        // Asegura contain en PC
+        document.querySelectorAll('#stage video').forEach(v=>v.style.objectFit='contain');
       }else{
-        // Móvil apilado 1:1
-        stage.classList.add('layout-mobile-stack');
-        document.body.classList.add('ar-1-1'); // fuerza 1:1 global (aunque los tiles ya lo fijan)
-        fitMobileStack();
+        // Móvil fijo 1:1
+        stage.style.display = 'none';
+        stageMobile.style.display = '';
+        document.body.classList.add('no-scroll');
+        fitMobileSquares();
       }
     }
 
@@ -512,36 +559,36 @@
 
     function initLayoutForDevice(){
       if(isMobile()){
-        // Oculta controles PC
-        if(btnLayout) btnLayout.style.display='none';
-        if(btnDuo)    btnDuo.style.display='none';
-        if(btnAR)     btnAR.style.display='none';
-        setLayout('mobile-stack'); // remoto arriba, local abajo
-        fitMobileStack();
+        // Oculta botón AR en móvil
+        const btnAR=qs('#btn-ar');
+        if(btnAR) btnAR.style.display='none';
+        setLayout('mobile-fixed'); // remoto arriba, local abajo
       }else{
         setLayout('split');        // PC por defecto 50/50
       }
     }
 
-    /* ===== Móvil: ajusta tamaño de los dos cuadrados para que quepan ===== */
-    function fitMobileStack(){
-      if(layoutMode !== 'mobile-stack') return;
-      // espacio vertical disponible: alto viewport - (padding + espacio FAB)
+    /* ===== Móvil: ajusta el tamaño del cuadrado para caber en cada mitad sin scroll ===== */
+    function fitMobileSquares(){
+      if(layoutMode!=='mobile-fixed') return;
       const vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
-      // reserva aproximada para paddings/topbars/FAB
-      const reserved = 110; // px (coincide con --mobile-reserved, puede ajustar)
-      const available = Math.max(200, vh - reserved - (2 * parseInt(getComputedStyle(document.documentElement).getPropertyValue('--mobile-gap')||'10')));
-      const size = Math.floor(Math.min(window.innerWidth - 20, available / 2)); // 2 cuadrados + gaps
+      // restamos un padding mínimo entre halves y espacio de botones
+      const reserved = 24 + 56; // px aprox
+      const half = Math.max(160, Math.floor((vh - reserved) / 2));
+      const size = Math.min(window.innerWidth, half);
       document.documentElement.style.setProperty('--tile-size', size + 'px');
     }
-
-    window.addEventListener('resize', fitMobileStack);
-    window.addEventListener('orientationchange', fitMobileStack);
+    window.addEventListener('resize', fitMobileSquares);
+    window.addEventListener('orientationchange', fitMobileSquares);
 
     /* ===== Botones (PC) ===== */
-    btnLayout?.addEventListener('click', ()=> setLayout('split'));
-    btnDuo   ?.addEventListener('click', ()=> setLayout('mobile-stack')); // por si quieres probar en PC
-    btnAR    ?.addEventListener('click', ()=>{ // ciclo rápido de AR en PC
+    btnStart ?.addEventListener('click', joinQueue);
+    btnNext  ?.addEventListener('click', nextMatch);
+    btnStop  ?.addEventListener('click', stopAll);
+
+    // Botón AR (PC)
+    const btnAR=qs('#btn-ar');
+    btnAR    ?.addEventListener('click', ()=>{
       const labels = ['4:3','1:1','16:9'];
       const cls = ['ar-4-3','ar-1-1','ar-16-9'];
       const current = cls.findIndex(c => document.body.classList.contains(c));
@@ -551,16 +598,11 @@
       if(btnAR) btnAR.textContent = 'AR: ' + labels[next];
     });
 
-    // PC: sesión
-    btnStart ?.addEventListener('click', joinQueue);
-    btnNext  ?.addEventListener('click', nextMatch);
-    btnStop  ?.addEventListener('click', stopAll);
-
-    // MÓVIL: un solo botón
-    mobileFab?.addEventListener('click', ()=>{
-      if(inCall || isQueuing){ stopAll(); }
-      else { joinQueue(); }
+    // MÓVIL: dos botones fijos
+    btnBuscarM?.addEventListener('click', ()=>{
+      if(inCall){ nextMatch(); } else { joinQueue(); }
     });
+    btnSalirM?.addEventListener('click', ()=>{ stopAll(); auth.signOut(); });
 
     btnSalirChat?.addEventListener('click', ()=>{ stopAll(); auth.signOut(); });
 
