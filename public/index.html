@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <!-- Bloqueo de zoom/pinch en móvil -->
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
-  <title>TortillaTV</title>
+  <title>TortillaTV </title>
   <meta name="theme-color" content="#0b1324" />
 
   <!-- Fuentes y Tailwind -->
@@ -32,7 +32,7 @@
   <style>
     :root{
       --paper:#faf9f6; --rule:#93c5fd66; --margin:#ef4444aa; --hole:#e5e7eb; --ink:#111827;
-      --box-ar: 4/3;           /* PC por defecto 4:3 (conmutable) */
+      --box-ar: 1/1;           /* PC por defecto 1:1 */
     }
     body.ar-1-1{ --box-ar: 1/1; }
     body.ar-4-3{ --box-ar: 4/3; }
@@ -74,32 +74,35 @@
     .marquee ul{ display:flex; gap:2.5rem; white-space:nowrap; padding:.35rem .75rem; animation:marquee-scroll 14s linear infinite }
     .marquee li{ list-style:none; font-family:"Caveat"; font-size:clamp(16px,3.2vw,30px); font-weight:800; color:#111827 }
 
-    /* ====== VIDEO ====== */
-    /* PC: mostrar TODO el vídeo sin recortes; fondo negro rellena laterales */
-    video{ width:100%; height:100%; object-fit:contain; background:#000; display:block; }
+    /* ====== VIDEO (REGLAS BASE) ====== */
+    video{ width:100%; height:100%; background:#000; display:block; }
     video.mirror{ transform: scaleX(-1) }
 
     .stage{ position:relative; width:100%; }
     .tile{
       position:relative; border-radius:16px; overflow:hidden; background:#000;
-      aspect-ratio: var(--box-ar); /* PC utiliza el AR activo */
+      aspect-ratio: var(--box-ar); /* PC usa AR activo, por defecto 1:1 */
     }
     /* PC por defecto: 50/50 */
     .layout-split{ display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
 
-    /* ===== MÓVIL: FULL-BLEED MITAD/ MITAD SIN PADDING ===== */
+    /* === Comportamiento PC pedido === */
+    /* Remoto: SIEMPRE completo (letterbox/pillarbox) */
+    #stage .tile.remote video{ object-fit: contain; }
+    /* Local: SIEMPRE cubrir (sin bandas) */
+    #stage .tile.local  video{ object-fit: cover; }
+
+    /* ===== MÓVIL: FULL-BLEED MITAD/MITAD ===== */
     .layout-mobile-fixed{
       position:fixed; inset:0; height:100dvh;
       display:grid; grid-template-rows:1fr 1fr; grid-template-columns:1fr;
       background:#000;
       z-index:0; /* botones encima */
     }
-    .pane{
-      position:relative; overflow:hidden; background:#000;
-    }
+    .pane{ position:relative; overflow:hidden; background:#000; }
     .pane video{
       position:absolute; inset:0; width:100%; height:100%;
-      object-fit:cover; /* llena toda la mitad, recorta si hace falta */
+      object-fit:cover; /* llena cada mitad */
     }
 
     /* Ocultar PiP en móvil y landing */
@@ -154,7 +157,7 @@
             <div class="marquee"><ul id="cornerMessages"></ul></div>
           </div>
 
-          <h1 class="font-display font-extrabold select-none ttv" style="font-size:clamp(56px,10vw,140px); line-height:.9; text-shadow:0 1px 0 #fff, 0 10px 18px rgba(0,0,0,.15)">
+        <h1 class="font-display font-extrabold select-none ttv" style="font-size:clamp(56px,10vw,140px); line-height:.9; text-shadow:0 1px 0 #fff, 0 10px 18px rgba(0,0,0,.15)">
             <span class="word">Tortilla</span><span class="accent text-rose-600">TV</span>
           </h1>
           <p class="mt-4 text-neutral-700 text-lg">Video chat aleatorio</p>
@@ -336,7 +339,7 @@
 
     const stage=qs('#stage'), stageMobile=qs('#stageMobile');
 
-    const btnBuscarM=qs('#btn-buscar-m'), btnSalirM=qs('#btn-salir-m');
+    const btnBuscar=qs('#btn-buscar-m'), btnSalir=qs('#btn-salir-m');
 
     let ws=null, wsOpen=false, myId=null, roomId=null, role=null;
     let pc=null, localStream=null;
@@ -525,7 +528,7 @@
         stage.classList.add('layout-split');
         stageMobile.style.display = 'none';
         document.body.classList.remove('no-scroll');
-        document.querySelectorAll('#stage video').forEach(v=>v.style.objectFit='contain');
+        // (PC) aseguramos reglas de object-fit por CSS (ya están)
       }else{
         // Móvil full-bleed mitad/mitad
         stage.style.display = 'none';
@@ -565,7 +568,7 @@
     });
 
     // MÓVIL: dos botones fijos
-    const btnBuscar=qs('#btn-buscar-m'), btnSalir=qs('#btn-salir-m');
+    const btnBuscarM=qs('#btn-buscar-m'), btnSalirM=qs('#btn-salir-m');
     btnBuscarM?.addEventListener('click', ()=>{
       if(inCall){ nextMatch(); } else { joinQueue(); }
     });
