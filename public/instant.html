@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>TortillaTV — Instant</title>
+<style>
+  body{font-family:system-ui,Inter,Arial;margin:0;padding:20px;background:#faf9f6;color:#111}
+  .wrap{max-width:900px;margin:auto}
+  video{width:100%;max-height:360px;background:#eef;border-radius:12px}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  button{padding:10px 16px;border-radius:999px;border:1px solid #222;background:#fff;cursor:pointer}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Tortilla<span style="color:#e11d48">TV</span> — instant</h1>
+  <p>Prueba rápida de emparejamiento aleatorio con WebRTC + WebSocket.</p>
+  <div>
+    <button id="btn-talk">Hablar</button>
+    <button id="btn-next" disabled>Siguiente</button>
+    <button id="btn-stop" disabled>Detener</button>
+    <span id="status" style="margin-left:10px;color:#444">Listo</span>
+  </div>
+  <div class="row" style="margin-top:16px">
+    <div><h3>Tú</h3><video id="local" autoplay muted playsinline></video></div>
+    <div><h3>Pareja</h3><video id="remote" autoplay playsinline></video></div>
+  </div>
+</div>
+
+<script>
+const WS_URL = "ws://localhost:8080";
+
+const iceServers=[{urls:'stun:stun.l.google.com:19302'}];
+
+const btnTalk=document.getElementById('btn-talk');
+const btnNext=document.getElementById('btn-next');
+const btnStop=document.getElementById('btn-stop');
+const statusEl=document.getElementById('status');
+const vLocal=document.getElementById('local');
+const vRemote=document.getElementById('remote');
+
+let ws, wsOpen=false, myId, roomId, role;
+let pc, localStream;
+
+function setStatus(t){ statusEl.textContent=t; }
+
+function connectWS(){
+  return new Promise((res,rej)=>{
+    ws = new WebSocket(WS_URL);
+    ws.onopen=()=>{wsOpen=true;res();};
+    ws.onerror=(e)=>rej(e);
+    ws.onclose=()=>{wsOpen=false;};
+    ws.onmessage=async (msg)=>{
+      const data=JSON.parse(msg.data);
+      if(data.type==='welcome'){ myId=data.id; }
+      if(data.type==='matched'){
+        roomId=data.roomId; role=data.role; setStatus('Pareja encontrada');
+        await startWebRTC(role);
+        btnNext.disabled=false; btnStop.disabled=false;
+      }
+      if(data.type==='offer'){
+        await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+        const answer=await pc.createAnswer(); await pc.setLocalDescription(answer);
+        send({type:'answer', sdp:answer});
+      }
+      if(data.type==='answer'){
+        await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+      }
+      if(data.type==='ice'){
+        try{ await pc.addIceCandidate(data.candidate); }catch(e){}
+      }
+      if(data.type==='peer-left'){
+        cleanup(false); setStatus('La otra persona salió');
+        btnNext.disabled=true; btnStop.disabled=true;
+      }
+    };
+  });
+}
+
+function send(obj){ if(wsOpen) ws.send(JSON.stringify({ ...obj, roomId, from: myId })); }
+
+async function ensureMedia(){
+  if(localStream) return localStream;
+  localStream = await navigator.mediaDevices.getUserMedia({video:true,audio:true});
+  vLocal.srcObject = localStream;
+  return localStream;
+}
+
+function makePC(){
+  pc = new RTCPeerConnection({iceServers});
+  pc.onicecandidate = (e)=>{ if(e.candidate) send({type:'ice', candidate:e.candidate}); };
+  pc.ontrack = (e)=>{ vRemote.srcObject = e.streams[0]; };
+}
+
+async function startWebRTC(r){
+  await ensureMedia();
+  makePC();
+  localStream.getTracks().forEach(t=>pc.addTrack(t, localStream));
+  if(r==='offer'){
+    const offer=await pc.createOffer(); await pc.setLocalDescription(offer);
+    send({type:'offer', sdp:offer});
+  }
+  setStatus('Conectado');
+}
+
+function cleanup(closeWs=true){
+  if(pc){ pc.onicecandidate=null; pc.ontrack=null; pc.close(); pc=null; }
+  if(localStream){ localStream.getTracks().forEach(t=>t.stop()); localStream=null; vLocal.srcObject=null; }
+  vRemote.srcObject=null; roomId=null; role=null;
+  if(closeWs && ws){ try{ws.close();}catch{} ws=null; wsOpen=false; }
+}
+
+btnTalk.onclick = async ()=>{
+  btnTalk.disabled=true;
+  if(!wsOpen){ try{ await connectWS(); }catch(e){ alert('WS error'); btnTalk.disabled=false; return; } }
+  setStatus('En cola…');
+  send({type:'find', gender:'Hombre', displayName:'Invitado'});
+  btnStop.disabled=false;
+};
+btnNext.onclick = ()=>{
+  send({type:'leave'}); cleanup(false);
+  send({type:'find', gender:'Hombre', displayName:'Invitado'});
+  setStatus('Buscando siguiente…');
+};
+btnStop.onclick = ()=>{
+  send({type:'leave'}); cleanup(); btnTalk.disabled=false; btnNext.disabled=true; btnStop.disabled=true;
+  setStatus('Detenido');
+};
+</script>
+</body>
+</html>
