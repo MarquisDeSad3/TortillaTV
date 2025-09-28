@@ -2,8 +2,8 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover" />
-  <title>TortillaTV — AR 1:1 / 4:3 / 16:9</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>TortillaTV — móvil 1:1 apilado</title>
   <meta name="theme-color" content="#0b1324" />
 
   <!-- Fuentes y Tailwind -->
@@ -31,10 +31,11 @@
   <style>
     :root{
       --paper:#faf9f6; --rule:#93c5fd66; --margin:#ef4444aa; --hole:#e5e7eb; --ink:#111827;
-      /* AR por defecto = 4:3 (si no hay memoria) */
-      --box-ar: 4/3;
+      --box-ar: 4/3;           /* PC por defecto 4:3 */
+      --tile-size: 320px;      /* se recalcula en móvil por JS para caber en pantalla */
+      --mobile-gap: 10px;
+      --mobile-reserved: 110px;/* margen para botón FAB/espacios (ajustado en JS) */
     }
-    /* Clases de AR (controlan TODAS las cajas de vídeo) */
     body.ar-1-1{ --box-ar: 1/1; }
     body.ar-4-3{ --box-ar: 4/3; }
     body.ar-16-9{ --box-ar: 16/9; }
@@ -70,33 +71,35 @@
     .marquee li{ list-style:none; font-family:"Caveat"; font-size:clamp(16px,3.2vw,30px); font-weight:800; color:#111827 }
     @keyframes marquee-scroll{ 0%{ transform:translateX(0) } 100%{ transform:translateX(-50%) } }
 
-    /* ====== VIDEO: estilo Omegle ====== */
+    /* ====== VIDEO ====== */
     video{ width:100%; height:100%; object-fit:cover; background:#0b1324; display:block; }
     video.mirror{ transform: scaleX(-1) }
 
     .stage{ position:relative; width:100%; }
-    .stage .tile{
+    .tile{
       position:relative; border-radius:16px; overflow:hidden; background:#000;
-      aspect-ratio: var(--box-ar); /* controlado por clases del <body> */
+      aspect-ratio: var(--box-ar);
     }
 
-    /* 50/50 (PC) */
+    /* PC: 50/50 */
     .layout-split{ display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
 
-    /* Duo (mensajería): remoto caja fija; tú en PiP */
-    .layout-duo{ position:relative; }
-    .layout-duo .remote{ width:100%; }
-    .layout-duo .local{ display:none !important; }    /* evita duplicado local en grande */
-    .layout-duo .pip{ display:block !important; }
-
-    .pip{
-      position:absolute; right:12px; bottom:12px;
-      width:min(28%, 220px); aspect-ratio:var(--box-ar);
-      border-radius:12px; overflow:hidden;
-      border:3px solid #fff; box-shadow:0 8px 24px rgba(0,0,0,.35);
-      background:#0b1324; touch-action:none; cursor:grab;
+    /* Móvil: apilado 1:1 (dos cuadrados que caben en la pantalla) */
+    .layout-mobile-stack{
+      display:flex; flex-direction:column; align-items:center;
+      gap:var(--mobile-gap);
+      padding:10px 10px calc(env(safe-area-inset-bottom,0) + 68px); /* deja espacio al FAB */
+      min-height:100svh; /* usa viewport seguro en móviles modernos */
     }
-    .pip.dragging{ cursor:grabbing; }
+    .layout-mobile-stack .tile{
+      aspect-ratio: 1 / 1;               /* 1:1 fijo en móvil */
+      width: min(100%, var(--tile-size)); /* tamaño calculado por JS para caber */
+      height: min(100vw, var(--tile-size));
+      border-radius:12px;
+    }
+
+    /* PiP desactivado en móvil stack */
+    .pip{ display:none !important; }
 
     /* Topbar (PC) */
     .topbar .btn{ border:2px solid rgba(17,24,39,.3); background:rgba(255,255,255,.9); padding:.5rem .9rem; border-radius:999px; font-weight:600; }
@@ -119,17 +122,15 @@
     .dot:nth-child(2){ animation-delay:.15s } .dot:nth-child(3){ animation-delay:.3s }
     @keyframes b{ from{ transform:translateY(0); opacity:.5 } to{ transform:translateY(-6px); opacity:1 } }
 
-    /* Helpers PC */
+    /* PC helpers */
     .full-bleed{ width:100vw; position:relative; left:50%; right:50%; margin-left:-50vw; margin-right:-50vw; }
     @media (min-width: 640px){
-      #videoShell { /* altura flexible; las cajas mantienen su AR fijo */ }
       .card.stretch{ height:100%; display:flex; flex-direction:column; }
       .card.stretch > .tile{ flex:1 1 auto; }
     }
 
-    /* MÓVIL: siempre Duo + un solo botón; ocultamos botones extra */
+    /* Móvil: oculta topbar y fuerza 1:1 apilado */
     @media (max-width: 640px){
-      .layout-split{ display:block; }
       .topbar{ display:none; }
       .book{ padding:0 !important; }
       .hero{ min-height:72vh }
@@ -206,11 +207,11 @@
             <div class="tile remote" id="remoteTile">
               <video id="remoteVideo" autoplay playsinline></video>
             </div>
-            <!-- Local (solo visible en split) -->
+            <!-- Local -->
             <div class="tile local" id="localTile">
               <video id="localVideo" autoplay playsinline muted class="mirror"></video>
             </div>
-            <!-- PiP -->
+            <!-- PiP (no se usa en móvil apilado) -->
             <div id="pip" class="pip" style="display:none;">
               <video id="pipVideo" autoplay playsinline muted></video>
             </div>
@@ -237,20 +238,19 @@
 
   <!-- SCRIPTS -->
   <script>
-    /* ===== Limpiar highlight amarillo si llegas con #hash ===== */
+    // Limpiar highlight por hash
     window.addEventListener('DOMContentLoaded', () => {
       if (location.hash) history.replaceState(null, document.title, location.pathname + location.search);
     });
 
-    /* ===== WS dinámico + override ?ws= ===== */
+    // WS dinámico
     (function(){
       const p = new URLSearchParams(location.search);
       const wsOverride = p.get('ws');
       window.WS_SIGNALLING_URL = wsOverride || ((location.protocol === 'https:') ? `wss://${location.host}` : `ws://${location.host}`);
-      console.log("WS =", window.WS_SIGNALLING_URL);
     })();
 
-    /* ===== Firebase Auth (Google) ===== */
+    // Firebase
     const firebaseConfig = {
       apiKey: "AIzaSyBVuvV7NOaqkN6arT3xPTBdxMZg7TTPhlM",
       authDomain: "tortillatv-bf0c6.firebaseapp.com",
@@ -273,7 +273,7 @@
     const youBadge  = qs('#you-badge');
     const mobileFab = qs('#mobileFab');
 
-    // Hero marquee
+    // Marquee demo
     const MESSAGES=['Kristoff','Astroboy','A ochoa lo mataron a balazos'];
     (function(){
       const ul = document.getElementById('cornerMessages');
@@ -307,8 +307,6 @@
       youBadge.textContent=`Tú: ${u.displayName||'—'} · ${chosenGender||'—'}`;
       show('chat');
       initLayoutForDevice();
-      // cargar AR preferido guardado (si existe)
-      restoreARPreference();
     });
 
     btnGoogle?.addEventListener('click', async ()=>{
@@ -320,22 +318,17 @@
       }catch(e){ alert('Error Google: '+e.message); }
     });
 
-    /* ===== Señalización + WebRTC ===== */
+    /* ===== WebRTC / Señalización ===== */
     const btnStart=qs('#btn-start'), btnNext=qs('#btn-next'), btnStop=qs('#btn-stop'), btnSalirChat=qs('#btn-salir-chat');
     const btnLayout=qs('#btn-layout'), btnAR=qs('#btn-ar'), btnDuo=qs('#btn-duo');
 
     const localVideo=qs('#localVideo'), remoteVideo=qs('#remoteVideo'), pip=qs('#pip'), pipVideo=qs('#pipVideo');
     const stage=qs('#stage'), videoShell=qs('#videoShell'), remoteTile=qs('#remoteTile'), localTile=qs('#localTile');
 
-    // Estado
     let ws=null, wsOpen=false, myId=null, roomId=null, role=null;
     let pc=null, localStream=null;
     let isQueuing=false, inCall=false, autoCycle=false, userHardStop=false;
-    let layoutMode='split'; // 'split' | 'duo'
-    // AR modes en ciclo
-    const AR_CYCLE = ['4:3','1:1','16:9'];
-    let arIdx = 0; // por defecto 4:3 (coincide con <body class="ar-4-3">)
-
+    let layoutMode='split'; // 'split' | 'mobile-stack'
     const iceServers=[{urls:'stun:stun.l.google.com:19302'}];
 
     async function ensureMedia(){
@@ -374,10 +367,7 @@
       pc.ontrack = (e)=>{ remoteVideo.srcObject = e.streams[0]; };
       pc.onconnectionstatechange = ()=> {
         const st = pc.connectionState;
-        if(st==='connected'){
-          inCall = true;
-          setStatus('Conectado'); overlay.classList.remove('show'); enableInCall(true);
-        }
+        if(st==='connected'){ inCall = true; setStatus('Conectado'); overlay.classList.remove('show'); enableInCall(true); }
         if(st==='disconnected' || st==='failed'){ handleCallEnded('conn:'+st); }
         if(st==='closed'){ setStatus('Cerrado'); }
       };
@@ -443,13 +433,11 @@
       if(btnStart) btnStart.disabled = connected;
       if(btnNext)  btnNext.disabled  = !connected;
       if(btnStop)  btnStop.disabled  = !connected;
-
       if(mobileFab) mobileFab.textContent = connected ? 'Detener' : 'Iniciar videochat';
     }
 
     // Auto-cycle
     function handleCallEnded(reason){
-      console.log('Call ended:', reason);
       cleanupPeer({ keepLocal:true, closeWsToo:false });
       if(autoCycle && !userHardStop){
         setStatus('Buscando siguiente…'); overlay.classList.add('show'); enableInCall(false);
@@ -473,7 +461,7 @@
         send({type:'find', gender: chosenGender, displayName});
         setStatus('En cola…');
       }catch(e){
-        console.error(e); setStatus('Error de conexión WS'); overlay.classList.remove('show'); isQueuing=false; autoCycle=false;
+        setStatus('Error de conexión WS'); overlay.classList.remove('show'); isQueuing=false; autoCycle=false;
       }
     }
 
@@ -492,7 +480,7 @@
         setStatus('Buscando siguiente…'); overlay.classList.add('show'); enableInCall(false);
         await ensureMedia();
         findNext();
-      }catch(e){ console.error(e); setStatus('Error WS (siguiente)'); }
+      }catch(e){ setStatus('Error WS (siguiente)'); }
     }
 
     function stopAll(){
@@ -506,55 +494,17 @@
     /* ===== Layout ===== */
     function setLayout(mode){
       layoutMode = mode;
-      stage.classList.remove('layout-split','layout-duo');
+      stage.classList.remove('layout-split','layout-mobile-stack');
 
       if(mode==='split'){
         stage.classList.add('layout-split');
-        localTile.style.removeProperty('display');   // ambos mosaicos visibles
-        pip.style.display = 'none';                  // PiP oculto en split
+        // PC: dos mosaicos lado a lado, AR según botones
+        document.body.classList.remove('ar-1-1');
       }else{
-        stage.classList.add('layout-duo');
-        localTile.style.display = 'none';            // NO duplicar local
-        pip.style.display = 'block';                 // PiP visible
-      }
-    }
-
-    /* ===== AR: 1:1 ↔ 4:3 ↔ 16:9 (ciclo) ===== */
-    function setARByLabel(label){
-      document.body.classList.remove('ar-1-1','ar-4-3','ar-16-9');
-      if(label==='1:1'){ document.body.classList.add('ar-1-1'); }
-      else if(label==='4:3'){ document.body.classList.add('ar-4-3'); }
-      else { document.body.classList.add('ar-16-9'); }
-
-      if(btnAR) btnAR.textContent = 'AR: ' + label;
-      // persistir preferencia
-      localStorage.setItem('ttv_ar', label);
-
-      // intentar ajustar la cámara
-      const track = localStream?.getVideoTracks?.()[0];
-      if(track?.applyConstraints){
-        let arNum = 4/3;
-        if(label==='1:1') arNum = 1/1;
-        if(label==='16:9') arNum = 16/9;
-        track.applyConstraints({ aspectRatio: arNum }).catch(()=>{});
-      }
-    }
-
-    function cycleAR(){
-      arIdx = (arIdx + 1) % AR_CYCLE.length;
-      setARByLabel(AR_CYCLE[arIdx]);
-    }
-
-    function restoreARPreference(){
-      const saved = localStorage.getItem('ttv_ar'); // '1:1' | '4:3' | '16:9'
-      const idx = AR_CYCLE.indexOf(saved);
-      if(idx >= 0){
-        arIdx = idx;
-        setARByLabel(AR_CYCLE[arIdx]);
-      }else{
-        // por defecto 4:3
-        arIdx = 0;
-        setARByLabel('4:3');
+        // Móvil apilado 1:1
+        stage.classList.add('layout-mobile-stack');
+        document.body.classList.add('ar-1-1'); // fuerza 1:1 global (aunque los tiles ya lo fijan)
+        fitMobileStack();
       }
     }
 
@@ -562,80 +512,44 @@
 
     function initLayoutForDevice(){
       if(isMobile()){
-        setLayout('duo');               // móvil: siempre Duo
+        // Oculta controles PC
         if(btnLayout) btnLayout.style.display='none';
         if(btnDuo)    btnDuo.style.display='none';
-        if(btnAR)     btnAR.style.display='none';   // mantenemos UI limpia en móvil
+        if(btnAR)     btnAR.style.display='none';
+        setLayout('mobile-stack'); // remoto arriba, local abajo
+        fitMobileStack();
       }else{
-        setLayout('split');             // PC por defecto 50/50
+        setLayout('split');        // PC por defecto 50/50
       }
     }
 
-    /* ===== PiP arrastrable ===== */
-    (function makePipDraggable(){
-      let dragging = false, startX=0, startY=0, origX=0, origY=0;
+    /* ===== Móvil: ajusta tamaño de los dos cuadrados para que quepan ===== */
+    function fitMobileStack(){
+      if(layoutMode !== 'mobile-stack') return;
+      // espacio vertical disponible: alto viewport - (padding + espacio FAB)
+      const vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+      // reserva aproximada para paddings/topbars/FAB
+      const reserved = 110; // px (coincide con --mobile-reserved, puede ajustar)
+      const available = Math.max(200, vh - reserved - (2 * parseInt(getComputedStyle(document.documentElement).getPropertyValue('--mobile-gap')||'10')));
+      const size = Math.floor(Math.min(window.innerWidth - 20, available / 2)); // 2 cuadrados + gaps
+      document.documentElement.style.setProperty('--tile-size', size + 'px');
+    }
 
-      const getBounds = ()=>{
-        const shellRect = videoShell.getBoundingClientRect();
-        const pipRect = pip.getBoundingClientRect();
-        return {
-          minX: 8,
-          minY: 8,
-          maxX: shellRect.width - pipRect.width - 8,
-          maxY: shellRect.height - pipRect.height - 8
-        };
-      };
-
-      const setPos = (x,y)=>{
-        const b = getBounds();
-        const nx = Math.max(b.minX, Math.min(x, b.maxX));
-        const ny = Math.max(b.minY, Math.min(y, b.maxY));
-        pip.style.transform = `translate(${nx}px, ${ny}px)`;
-      };
-
-      const onDown = (clientX, clientY)=>{
-        dragging = true; pip.classList.add('dragging');
-        const m = /translate\(([-\d.]+)px,\s*([-\d.]+)px\)/.exec(pip.style.transform||"");
-        origX = m ? parseFloat(m[1]) : 0;
-        origY = m ? parseFloat(m[2]) : 0;
-        startX = clientX; startY = clientY;
-      };
-
-      const onMove = (clientX, clientY)=>{
-        if(!dragging) return;
-        const dx = clientX - startX;
-        const dy = clientY - startY;
-        setPos(origX + dx, origY + dy);
-      };
-
-      const onUp = ()=>{
-        if(!dragging) return;
-        dragging = false; pip.classList.remove('dragging');
-      };
-
-      pip.addEventListener('mousedown', e=>{ e.preventDefault(); onDown(e.clientX, e.clientY); });
-      window.addEventListener('mousemove', e=> onMove(e.clientX, e.clientY));
-      window.addEventListener('mouseup', onUp);
-
-      pip.addEventListener('touchstart', e=>{
-        const t = e.touches[0]; onDown(t.clientX, t.clientY);
-      }, {passive:true});
-      window.addEventListener('touchmove', e=>{
-        const t = e.touches[0]; onMove(t.clientX, t.clientY);
-      }, {passive:true});
-      window.addEventListener('touchend', onUp);
-
-      // posición inicial (esquina inferior derecha)
-      setTimeout(()=>{
-        const b = getBounds();
-        setPos(b.maxX, b.maxY);
-      }, 0);
-    })();
+    window.addEventListener('resize', fitMobileStack);
+    window.addEventListener('orientationchange', fitMobileStack);
 
     /* ===== Botones (PC) ===== */
     btnLayout?.addEventListener('click', ()=> setLayout('split'));
-    btnDuo   ?.addEventListener('click', ()=> setLayout('duo'));
-    btnAR    ?.addEventListener('click', cycleAR);
+    btnDuo   ?.addEventListener('click', ()=> setLayout('mobile-stack')); // por si quieres probar en PC
+    btnAR    ?.addEventListener('click', ()=>{ // ciclo rápido de AR en PC
+      const labels = ['4:3','1:1','16:9'];
+      const cls = ['ar-4-3','ar-1-1','ar-16-9'];
+      const current = cls.findIndex(c => document.body.classList.contains(c));
+      const next = (current+1)%cls.length;
+      document.body.classList.remove(...cls);
+      document.body.classList.add(cls[next]);
+      if(btnAR) btnAR.textContent = 'AR: ' + labels[next];
+    });
 
     // PC: sesión
     btnStart ?.addEventListener('click', joinQueue);
