@@ -24,7 +24,7 @@
     }
   </script>
 
-  <!-- Firebase (compat) SOLO para login de Google -->
+  <!-- Firebase (compat) SOLO login Google -->
   <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-auth-compat.js"></script>
 
@@ -37,14 +37,11 @@
     .paper-bg::before{ content:""; position:absolute; inset:0; background:linear-gradient(90deg, transparent 56px, var(--margin) 59px, transparent 62px); pointer-events:none }
     .paper-holes{ position:absolute; left:18px; top:96px; display:flex; flex-direction:column; gap:96px; pointer-events:none }
     .paper-hole{ width:18px; height:18px; border-radius:999px; background:var(--hole); box-shadow:inset 0 2px 4px rgba(0,0,0,.2) }
-
     .book{ perspective:1200px }
     .page{ transform-origin:left center; backface-visibility:hidden; transform-style:preserve-3d; transition:opacity .4s ease; }
     .page.hidden{ opacity:0; pointer-events:none; transform:rotateY(-90deg) translateX(-20px) }
     .page.visible{ opacity:1; transform:rotateY(0); animation:pageFlipIn .6s ease both }
-
     .card{ background:rgba(255,255,255,.8); border:2px solid rgba(17,24,39,.1); border-radius:20px; padding:12px; box-shadow:0 12px 30px rgba(0,0,0,.07); backdrop-filter:blur(6px) }
-
     .hero{ position:relative; min-height:78vh; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center }
     .ttv{ position:relative; display:inline-block }
     .ttv .word{ display:inline-block; transform-origin:50% 70%; animation:ttv-wobble 2.4s ease-in-out infinite }
@@ -71,6 +68,14 @@
 
     .videos.split{ display:grid; grid-template-columns:1fr 1fr; gap:1rem }
     .fake-video{ background:linear-gradient(135deg, rgba(15,23,42,.06), rgba(100,116,139,.12)); border-radius:16px; min-height:260px }
+
+    /* Overlay de sala de espera */
+    .overlay{ position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(255,255,255,.7); z-index:50 }
+    .overlay.show{ display:flex }
+    .dot{ width:10px; height:10px; border-radius:999px; background:#ef4444; margin:0 4px; animation:b .9s infinite alternate }
+    .dot:nth-child(2){ animation-delay:.15s } .dot:nth-child(3){ animation-delay:.3s }
+    @keyframes b{ from{ transform:translateY(0); opacity:.5 } to{ transform:translateY(-6px); opacity:1 } }
+
     @media (max-width: 640px){ .hero{ min-height:72vh } .marquee{ width:min(34ch,88vw) } }
   </style>
 </head>
@@ -79,34 +84,27 @@
     <div class="paper-holes"><div class="paper-hole"></div><div class="paper-hole"></div><div class="paper-hole"></div></div>
 
     <main class="book mx-auto max-w-5xl px-6 py-10">
-      <!-- PÁGINA 1: LANDING (MISMO DISEÑO) -->
+      <!-- PÁGINA 1: LANDING -->
       <section id="page-landing" class="page visible">
         <div class="hero">
-          <!-- Esquinita con frases -->
           <div class="corner">
             <span class="note">a mano</span>
             <div class="marquee">
               <ul id="cornerMessages">
-                <li>Kristoff</li>
-                <li>Astroboy</li>
-                <li>A ochoa lo mataron a balazos</li>
-                <li>Kristoff</li>
-                <li>Astroboy</li>
-                <li>A ochoa lo mataron a balazos</li>
+                <li>Kristoff</li><li>Astroboy</li><li>A ochoa lo mataron a balazos</li>
+                <li>Kristoff</li><li>Astroboy</li><li>A ochoa lo mataron a balazos</li>
               </ul>
             </div>
           </div>
 
-          <!-- Título animado -->
           <h1 class="font-display font-extrabold select-none ttv" style="font-size:clamp(56px,10vw,140px); line-height:.9; text-shadow:0 1px 0 #fff, 0 10px 18px rgba(0,0,0,.15)">
             <span class="word">Tortilla</span><span class="accent text-rose-600">TV</span>
             <span class="spark s1"></span><span class="spark s2"></span><span class="spark s3"></span>
           </h1>
 
-          <!-- Subtítulo -->
           <p class="mt-4 text-neutral-700 text-lg">Video chat aleatorio</p>
 
-          <!-- Selección de género con iconos -->
+          <!-- Género -->
           <div class="mt-6 grid grid-cols-3 gap-3 max-w-md">
             <button data-gen="Hombre" class="gen card py-4 flex flex-col items-center gap-2">
               <svg width="32" height="32" viewBox="0 0 24 24"><path d="M14 4h6v6h-2V7.41l-4.3 4.3a6 6 0 1 1-1.41-1.41L16.59 6H14V4Z"/></svg>
@@ -123,27 +121,28 @@
           </div>
           <p id="genElegido" class="mt-2 text-sm text-neutral-600"></p>
 
-          <!-- Google login (igual estilo) -->
+          <!-- Google login -->
           <button id="btn-google" class="mt-6 rounded-xl border-2 border-neutral-900/40 bg-white/90 px-7 py-3.5 font-semibold shadow disabled:opacity-50" disabled>
             Iniciar con Google
           </button>
 
-          <!-- Línea manuscrita roja -->
+          <!-- Raya manuscrita -->
           <svg class="scribble mt-6" viewBox="0 0 1200 100" preserveAspectRatio="none" aria-hidden="true">
             <path d="M10,70 C200,20 400,120 600,60 C800,0 1000,120 1190,50"/>
           </svg>
         </div>
       </section>
 
-      <!-- PÁGINA 2: SALA DE VIDEO -->
+      <!-- PÁGINA 2: SALA -->
       <section id="page-chat" class="page hidden">
         <div class="card p-3 mb-4">
           <div class="flex flex-wrap items-center gap-2">
             <button id="btn-start" class="rounded-full border-2 border-neutral-900/30 bg-white/80 px-4 py-2 text-sm font-semibold shadow">Buscar</button>
-            <button id="btn-next"  class="rounded-full border-2 border-neutral-900/30 bg-white/80 px-4 py-2 text-sm font-semibold shadow">Siguiente</button>
-            <button id="btn-stop"  class="rounded-full border-2 border-neutral-900/30 bg-white/80 px-4 py-2 text-sm font-semibold shadow">Detener</button>
-            <div class="ml-auto flex items-center gap-2 text-sm">
+            <button id="btn-next"  class="rounded-full border-2 border-neutral-900/30 bg-white/80 px-4 py-2 text-sm font-semibold shadow" disabled>Siguiente</button>
+            <button id="btn-stop"  class="rounded-full border-2 border-neutral-900/30 bg-white/80 px-4 py-2 text-sm font-semibold shadow" disabled>Detener</button>
+            <div class="ml-auto flex items-center gap-3 text-sm">
               <span id="status" class="text-neutral-700">Listo</span>
+              <span id="peerLabel" class="text-neutral-700 hidden">Pareja: —</span>
               <span id="you-badge" class="hidden text-xs px-2 py-1 rounded-full border border-black/20 bg-white/70">Tú: —</span>
             </div>
           </div>
@@ -171,10 +170,26 @@
     </main>
   </div>
 
+  <!-- Overlay sala de espera -->
+  <div id="overlay" class="overlay">
+    <div class="card px-5 py-4 flex items-center gap-3">
+      <span class="font-semibold">Buscando pareja…</span>
+      <div class="flex"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+    </div>
+  </div>
+
   <!-- SCRIPTS -->
   <script>
-    // ====== CONFIGURACIÓN ======
-    const WS_SIGNALLING_URL = "ws://localhost:8080"; // Cambia a wss://tu-dominio en producción HTTPS
+    /* ===== WS dinámico (https->wss, http->ws) + override ?ws= ===== */
+    (function(){
+      const p = new URLSearchParams(location.search);
+      const wsOverride = p.get('ws');
+      window.WS_SIGNALLING_URL = wsOverride ||
+        ((location.protocol === 'https:') ? `wss://${location.host}` : `ws://${location.host}`);
+      console.log("WS =", window.WS_SIGNALLING_URL);
+    })();
+
+    /* ===== Firebase Auth (Google) ===== */
     const firebaseConfig = {
       apiKey: "AIzaSyBVuvV7NOaqkN6arT3xPTBdxMZg7TTPhlM",
       authDomain: "tortillatv-bf0c6.firebaseapp.com",
@@ -185,31 +200,27 @@
     };
     firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();
-    // ===========================
 
-    // UI helpers
+    /* ===== Helpers UI ===== */
     const pages = { landing: qs('#page-landing'), chat: qs('#page-chat') };
     function qs(s,root=document){ return root.querySelector(s) }
     function show(k){ Object.values(pages).forEach(p=>{p.classList.add('hidden');p.classList.remove('visible')}); pages[k].classList.remove('hidden'); pages[k].classList.add('visible'); window.scrollTo({top:0,behavior:'smooth'}) }
     function setStatus(t){ const el=qs('#status'); if(el) el.textContent=t }
+    const overlay = qs('#overlay');
+    const peerLabel = qs('#peerLabel');
 
-    // Mensajes de la esquina (doble para bucle)
     const MESSAGES=['Kristoff','Astroboy','A ochoa lo mataron a balazos'];
     (function marqueeDuplicate(){
       const ul = document.getElementById('cornerMessages');
       if(ul){ ul.innerHTML=''; const arr=[...MESSAGES,...MESSAGES]; for(const m of arr){ const li=document.createElement('li'); li.textContent=m; ul.appendChild(li); } }
     })();
-    setInterval(()=>{
-      const titleWords = document.querySelectorAll('.ttv .word, .ttv .accent');
-      titleWords.forEach((el)=>{ el.style.animationDelay = (Math.random()*0.6).toFixed(2)+'s'; });
-    }, 3000);
+    setInterval(()=>{ document.querySelectorAll('.ttv .word, .ttv .accent').forEach(el=>{ el.style.animationDelay=(Math.random()*0.6).toFixed(2)+'s'; }); }, 3000);
 
-    // Estado básico
+    /* ===== Estado landing + auth ===== */
     let chosenGender=null;
     const genButtons=[...document.querySelectorAll('.gen')];
     const genElegido=qs('#genElegido');
     const btnGoogle=qs('#btn-google');
-
     genButtons.forEach(b=>{
       b.addEventListener('click', ()=>{
         genButtons.forEach(x=>x.classList.remove('ring','ring-rose-400'));
@@ -220,7 +231,6 @@
       });
     });
 
-    // Autenticación Google (opcional, solo para mostrar nombre)
     let currentUser=null;
     const youBadge=qs('#you-badge');
     auth.onAuthStateChanged((u)=>{
@@ -240,47 +250,58 @@
       }catch(e){ alert('Error Google: '+e.message); }
     });
 
-    // ====== Señalización + WebRTC (como instant, integrado a la sala) ======
+    /* ===== Señalización + WebRTC (sala) ===== */
     const btnStart=qs('#btn-start'), btnNext=qs('#btn-next'), btnStop=qs('#btn-stop'), btnSalirChat=qs('#btn-salir-chat');
     const localVideo=qs('#localVideo'), remoteVideo=qs('#remoteVideo');
 
     let ws=null, wsOpen=false, myId=null, roomId=null, role=null;
     let pc=null, localStream=null;
     let mute=false, camOn=true;
+    let isQueuing=false;
 
     const iceServers=[{urls:'stun:stun.l.google.com:19302'}];
 
     async function ensureMedia(){
       if(localStream) return localStream;
-      try{
-        localStream = await navigator.mediaDevices.getUserMedia({video:true,audio:true});
-        localVideo.srcObject=localStream;
-        return localStream;
-      }catch(e){
-        alert("Permite cámara y micrófono para continuar.");
-        throw e;
-      }
+      localStream = await navigator.mediaDevices.getUserMedia({
+        video:{ width:{ideal:1280}, height:{ideal:720} },
+        audio:{ echoCancellation:true, noiseSuppression:true }
+      });
+      localVideo.srcObject=localStream;
+      return localStream;
     }
 
     function makePC(){
       pc = new RTCPeerConnection({iceServers});
       pc.onicecandidate = (e)=>{ if(e.candidate) send({type:'ice', candidate:e.candidate}); };
       pc.ontrack = (e)=>{ remoteVideo.srcObject = e.streams[0]; };
+      pc.onconnectionstatechange = ()=>{
+        const st = pc.connectionState;
+        if(st==='connected'){ setStatus('Conectado'); overlay.classList.remove('show'); btnNext.disabled=false; btnStop.disabled=false; }
+        if(st==='disconnected' || st==='failed'){ setStatus('Conexión perdida'); btnNext.disabled=false; btnStop.disabled=false; }
+        if(st==='closed'){ setStatus('Cerrado'); }
+      };
       return pc;
     }
 
     function connectWS(){
       return new Promise((resolve,reject)=>{
-        ws = new WebSocket(WS_SIGNALLING_URL);
-        ws.onopen = ()=>{ wsOpen=true; resolve(); };
-        ws.onerror = (e)=>reject(e);
+        if(ws && wsOpen) return resolve();
+        try{ ws = new WebSocket(window.WS_SIGNALLING_URL); }catch(e){ return reject(e); }
+        ws.onopen  = ()=>{ wsOpen=true; resolve(); };
+        ws.onerror = (e)=>{ console.error("WS error", e); reject(e); };
         ws.onclose = ()=>{ wsOpen=false; };
         ws.onmessage = async (msg)=>{
           const data = JSON.parse(msg.data);
           if(data.type==='welcome'){ myId=data.id; }
           if(data.type==='matched'){
-            roomId=data.roomId; role=data.role; setStatus('Pareja encontrada');
-            await startWebRTC(role);
+            roomId=data.roomId; role=data.role;
+            setStatus('Pareja encontrada · Conectando…');
+            overlay.classList.add('show');
+            // nombre de la pareja si viene
+            if(data.peer && data.peer.name){ peerLabel.classList.remove('hidden'); peerLabel.textContent = 'Pareja: '+(data.peer.name||'—'); }
+            try{ await startWebRTC(role); }catch(e){ setStatus('Error WebRTC: '+e.message); overlay.classList.remove('show'); }
+            btnNext.disabled=false; btnStop.disabled=false;
           }
           if(data.type==='offer'){
             await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
@@ -295,6 +316,8 @@
           }
           if(data.type==='peer-left'){
             setStatus('La otra persona salió'); cleanupPeer(false);
+            overlay.classList.remove('show');
+            btnNext.disabled=true; btnStop.disabled=true; btnStart.disabled=false;
           }
         };
       });
@@ -312,44 +335,74 @@
         const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
         send({type:'offer', sdp:offer});
       }
-      setStatus('Conectando…');
     }
 
     function cleanupPeer(closeWsToo=true){
-      if(pc){ pc.onicecandidate=null; pc.ontrack=null; try{pc.close()}catch{}; pc=null; }
+      if(pc){ try{pc.close()}catch{}; pc=null; }
       if(localStream){ localStream.getTracks().forEach(t=>t.stop()); localStream=null; localVideo.srcObject=null; }
       remoteVideo.srcObject=null; roomId=null; role=null;
       if(closeWsToo && ws){ try{ ws.close(); }catch{} ws=null; wsOpen=false; }
+      peerLabel.classList.add('hidden'); peerLabel.textContent='Pareja: —';
     }
 
     async function joinQueue(){
       if(!currentUser){ alert('Inicia sesión con Google'); return; }
-      if(!chosenGender) chosenGender = localStorage.getItem('ttv_gender') || 'Hombre';
-      if(!wsOpen) await connectWS();
-      send({type:'find', gender: chosenGender, displayName: currentUser.displayName || '—'});
-      setStatus('En cola…');
+      if(isQueuing) return;
+      isQueuing = true;
+      btnStart.disabled = true; btnNext.disabled = true; btnStop.disabled = true;
+      overlay.classList.add('show');
+      try{
+        if(!chosenGender) chosenGender = localStorage.getItem('ttv_gender') || 'Hombre';
+        const displayName = currentUser.displayName || '—';
+        await connectWS();
+        await ensureMedia(); // pedir permisos antes de emparejar
+        send({type:'find', gender: chosenGender, displayName});
+        setStatus('En cola…');
+      }catch(e){
+        console.error(e); setStatus('Error de conexión WS'); overlay.classList.remove('show'); btnStart.disabled=false;
+      }finally{
+        // seguirá deshabilitado hasta que haya match o se detenga
+      }
     }
+
     async function nextMatch(){
-      send({type:'leave'}); cleanupPeer(false);
-      send({type:'find', gender: chosenGender, displayName: currentUser.displayName || '—'});
-      setStatus('Buscando siguiente…');
+      btnNext.disabled = true;
+      try{
+        send({type:'leave'}); cleanupPeer(false);
+        setStatus('Buscando siguiente…'); overlay.classList.add('show');
+        const displayName = currentUser?.displayName || '—';
+        send({type:'find', gender: chosenGender || localStorage.getItem('ttv_gender') || 'Hombre', displayName});
+      }catch(e){
+        console.error(e); setStatus('Error WS (siguiente)');
+      }
     }
 
-    btnStart?.addEventListener('click', joinQueue);
+    /* ===== Botones ===== */
+    btnStart?.addEventListener('click', ()=>{ isQueuing=false; joinQueue(); });
     btnNext?.addEventListener('click', nextMatch);
-    btnStop?.addEventListener('click', ()=>{ send({type:'leave'}); cleanupPeer(); setStatus('Detenido'); });
-    btnSalirChat?.addEventListener('click', ()=>{ send({type:'leave'}); cleanupPeer(); auth.signOut(); });
+    btnStop?.addEventListener('click', ()=>{
+      send({type:'leave'}); cleanupPeer(); overlay.classList.remove('show');
+      setStatus('Detenido'); btnStart.disabled=false; btnNext.disabled=true; btnStop.disabled=true; isQueuing=false;
+    });
+    btnSalirChat?.addEventListener('click', ()=>{
+      send({type:'leave'}); cleanupPeer(); overlay.classList.remove('show'); auth.signOut();
+    });
 
-    qs('#btn-mute')?.addEventListener('click', ()=>{
+    qs('#btn-mute')?.addEventListener('click', (e)=>{
       if(!localStream) return;
       mute = !mute;
       localStream.getAudioTracks().forEach(t=>t.enabled = !mute);
+      e.target.textContent = mute ? 'Unmute' : 'Mute';
     });
-    qs('#btn-cam')?.addEventListener('click', ()=>{
+    qs('#btn-cam')?.addEventListener('click', (e)=>{
       if(!localStream) return;
       camOn = !camOn;
       localStream.getVideoTracks().forEach(t=>t.enabled = camOn);
+      e.target.textContent = camOn ? 'Apagar cam' : 'Encender cam';
     });
+
+    /* Salir bien si el usuario cierra la pestaña */
+    window.addEventListener('beforeunload', ()=>{ try{ send({type:'leave'}); }catch{} });
   </script>
 </body>
 </html>
