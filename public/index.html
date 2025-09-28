@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!DOCTYPE html> 
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
@@ -84,9 +84,9 @@
     /* PiP flotante (móvil/PC enfoque) */
     .pip{ position:absolute; right:12px; bottom:12px; width:28%; max-width:220px; aspect-ratio:16/9; border:3px solid #fff; border-radius:12px; overflow:hidden; box-shadow:0 8px 24px rgba(0,0,0,.35); cursor:grab; touch-action:none; background:#0b1324; }
     .pip.mirror video{ transform:scaleX(-1) }
-    .pip-lg{ width:46%; max-width:none; } /* PiP más grande al tocar */
+    .pip-lg{ width:46%; max-width:none; }
 
-    /* Barra de controles inferiores (móvil, estilo overlay tipo Telegram) */
+    /* Barra de controles inferiores (móvil) */
     .bottom-controls{
       position:fixed; left:0; right:0;
       bottom:env(safe-area-inset-bottom,0);
@@ -100,12 +100,12 @@
 
     /* Móvil: remoto ocupa toda la pantalla */
     @media (max-width: 640px){
-      .videos.mobile .remote-wrap{ height: 100svh; } /* full screen */
+      .videos.mobile .remote-wrap{ height: 100svh; }
       .videos.mobile .local-wrap{ display:none }
-      #videoShell.full-bleed{ margin-top: -12px; } /* acerca el video a tope */
+      #videoShell.full-bleed{ margin-top: -12px; }
     }
 
-    /* ======== Full-bleed + Split a pantalla completa (PC) ======== */
+    /* PC: 50/50 alto completo */
     .full-bleed{
       width:100vw; position:relative; left:50%; right:50%;
       margin-left:-50vw; margin-right:-50vw;
@@ -133,10 +133,9 @@
     <div class="paper-holes"><div class="paper-hole"></div><div class="paper-hole"></div><div class="paper-hole"></div></div>
 
     <main class="book mx-auto max-w-5xl px-6 py-10">
-      <!-- PÁGINA 1: LANDING (bonita + íconos) -->
+      <!-- PÁGINA 1: LANDING -->
       <section id="page-landing" class="page visible">
         <div class="hero">
-          <!-- Esquina con notas -->
           <div class="corner">
             <span class="note">anal</span>
             <div class="marquee">
@@ -147,7 +146,6 @@
             </div>
           </div>
 
-          <!-- Título animado + sparkles -->
           <h1 class="font-display font-extrabold select-none ttv" style="font-size:clamp(56px,10vw,140px); line-height:.9; text-shadow:0 1px 0 #fff, 0 10px 18px rgba(0,0,0,.15)">
             <span class="word">Tortilla</span><span class="accent text-rose-600">TV</span>
             <span class="spark s1"></span><span class="spark s2"></span><span class="spark s3"></span>
@@ -155,7 +153,7 @@
 
           <p class="mt-4 text-neutral-700 text-lg">Video chat aleatorio</p>
 
-          <!-- Género con íconos -->
+          <!-- Género -->
           <div class="mt-6 grid grid-cols-3 gap-3 max-w-md">
             <button data-gen="Hombre" class="gen card py-4 flex flex-col items-center gap-2">
               <svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor"><path d="M14 4h6v6h-2V7.41l-4.3 4.3a6 6 0 1 1-1.41-1.41L16.59 6H14V4Z"/></svg>
@@ -186,7 +184,6 @@
 
       <!-- PÁGINA 2: SALA -->
       <section id="page-chat" class="page hidden">
-        <!-- Barra superior (PC) -->
         <div class="card p-3 mb-4">
           <div class="flex flex-wrap items-center gap-2">
             <button id="btn-start" class="rounded-full border-2 border-neutral-900/30 bg-white/80 px-4 py-2 text-sm font-semibold shadow">Buscar</button>
@@ -207,15 +204,12 @@
           </div>
         </div>
 
-        <!-- Área de video (full-bleed) -->
+        <!-- Área de video -->
         <div id="videoShell" class="video-shell full-bleed">
           <div id="videoArea" class="videos split">
-            <!-- Remoto -->
             <div class="card remote-wrap contain stretch" id="remoteWrap">
               <video id="remoteVideo" autoplay playsinline></video>
             </div>
-
-            <!-- Local (PC 50/50 / focus) -->
             <div class="card local-wrap contain stretch hidden sm:block" id="localWrap">
               <video id="localVideo" autoplay playsinline muted class="mirror"></video>
               <div class="mt-3 flex items-center gap-2 text-xs">
@@ -233,7 +227,7 @@
           </div>
         </div>
 
-        <!-- Controles inferiores (móvil overlay) -->
+        <!-- Controles inferiores (móvil) -->
         <div class="bottom-controls sm:hidden" id="m-controls">
           <button id="m-start"  class="ctrl-btn">Buscar</button>
           <button id="m-next"   class="ctrl-btn" disabled>Siguiente</button>
@@ -259,7 +253,7 @@
 
   <!-- SCRIPTS -->
   <script>
-    /* ===== WS dinámico (https->wss, http->ws) + override ?ws= ===== */
+    /* ===== WS dinámico ===== */
     (function(){
       const p = new URLSearchParams(location.search);
       const wsOverride = p.get('ws');
@@ -289,7 +283,6 @@
     const peerLabel = qs('#peerLabel');
     const youBadge  = qs('#you-badge');
 
-    // Hero anim
     const MESSAGES=['Kristoff','Astroboy','A ochoa lo mataron a balazos'];
     (function marqueeDuplicate(){
       const ul = document.getElementById('cornerMessages');
@@ -331,7 +324,7 @@
       }catch(e){ alert('Error Google: '+e.message); }
     });
 
-    /* ===== Señalización + WebRTC (sala) ===== */
+    /* ===== Señalización + WebRTC ===== */
     const btnStart=qs('#btn-start'), btnNext=qs('#btn-next'), btnStop=qs('#btn-stop'), btnSalirChat=qs('#btn-salir-chat');
     const mStart=qs('#m-start'),   mNext=qs('#m-next'),     mStop=qs('#m-stop');
     const btnLayout=qs('#btn-layout'), btnExpand=qs('#btn-expand'), btnFit=qs('#btn-fit');
@@ -355,6 +348,12 @@
         video:{ width:{ideal:1280}, height:{ideal:720}, frameRate:{ideal:30}, facingMode: currentFacing },
         audio:{ echoCancellation:true, noiseSuppression:true }
       };
+      // Comprobación de dispositivos (audio)
+      try {
+        const devs = await navigator.mediaDevices.enumerateDevices();
+        const hasMic = devs.some(d=>d.kind==='audioinput');
+        if(!hasMic) console.warn('⚠️ No se detecta micrófono (audioinput). La otra persona no te oirá.');
+      } catch {}
       const newStream = await navigator.mediaDevices.getUserMedia(base);
       if(!localStream){
         localStream = newStream;
@@ -380,7 +379,13 @@
     function makePC(){
       pc = new RTCPeerConnection({iceServers});
       pc.onicecandidate = (e)=>{ if(e.candidate) send({type:'ice', candidate:e.candidate}); };
-      pc.ontrack = (e)=>{ remoteVideo.srcObject = e.streams[0]; };
+      pc.ontrack = (e)=>{
+        remoteVideo.srcObject = e.streams[0];
+        // Intentar reproducir audio por políticas de autoplay
+        remoteVideo.play().catch(()=>{});
+        // Ajuste de aspecto automático
+        setTimeout(adaptAspectToLocal, 100);
+      };
       pc.onconnectionstatechange = ()=>{
         const st = pc.connectionState;
         if(st==='connected'){ setStatus('Conectado'); overlay.classList.remove('show'); enableInCall(true); fitSplitHeight(); }
@@ -415,9 +420,12 @@
           if(data.type==='answer'){ await pc.setRemoteDescription(new RTCSessionDescription(data.sdp)); }
           if(data.type==='ice'){ try{ await pc.addIceCandidate(data.candidate); }catch(e){} }
           if(data.type==='peer-left'){
-            setStatus('La otra persona salió'); cleanupPeer(false);
-            overlay.classList.remove('show');
+            // Mantener cámara y seguir buscando automáticamente
+            setStatus('La otra persona salió · buscando nueva pareja…');
+            cleanupPeer({ keepLocal:true, closeWs:false });
+            overlay.classList.add('show');
             enableInCall(false);
+            autoFindAgain();
           }
         };
       });
@@ -436,14 +444,15 @@
       }
     }
 
-    function cleanupPeer(closeWsToo=true){
+    // cleanup con opciones: no apagar cámara al reemparejar
+    function cleanupPeer({keepLocal=true, closeWs=false} = {}){
       if(pc){ try{pc.close()}catch{}; pc=null; }
-      if(localStream){
+      if(!keepLocal && localStream){
         localStream.getTracks().forEach(t=>t.stop());
         localStream=null; localVideo.srcObject=null; pipVideo.srcObject=null;
       }
       remoteVideo.srcObject=null; roomId=null; role=null;
-      if(closeWsToo && ws){ try{ ws.close(); }catch{} ws=null; wsOpen=false; }
+      if(closeWs && ws){ try{ ws.close(); }catch{} ws=null; wsOpen=false; }
       peerLabel.classList.add('hidden'); peerLabel.textContent='Pareja: —';
     }
 
@@ -467,12 +476,19 @@
 
     async function nextMatch(){
       try{
-        send({type:'leave'}); cleanupPeer(false);
+        send({type:'leave'});
+        cleanupPeer({ keepLocal:true, closeWs:false });
         setStatus('Buscando siguiente…'); overlay.classList.add('show');
         const displayName = currentUser?.displayName || '—';
         await ensureMedia();
         send({type:'find', gender: chosenGender || localStorage.getItem('ttv_gender') || 'Hombre', displayName});
       }catch(e){ console.error(e); setStatus('Error WS (siguiente)'); }
+    }
+
+    function autoFindAgain(){
+      const displayName = currentUser?.displayName || '—';
+      const gender = chosenGender || localStorage.getItem('ttv_gender') || 'Hombre';
+      send({type:'find', gender, displayName});
     }
 
     function enableInCall(connected){
@@ -484,11 +500,11 @@
       mStart.disabled = connected;
       mNext.disabled  = !connected;
       mStop.disabled  = !connected;
-      // PiP visible en móvil o cuando estamos en enfoque
+      // PiP visible en móvil o cuando enfoque
       pip.style.display = (isMobile() || layoutMode==='focus') && localStream ? 'block' : 'none';
     }
 
-    /* ======== UX: Layout / Fullscreen / Fit / Mirror / Flip ======== */
+    /* ===== UX: Layout / Fullscreen / Fit / Mirror / Flip ===== */
     function isMobile(){ return window.matchMedia('(max-width: 640px)').matches }
 
     function autoLayout(){
@@ -564,9 +580,27 @@
         video:{ facingMode: currentFacing, width:{ideal:1280}, height:{ideal:720}, frameRate:{ideal:30} },
         audio:{ echoCancellation:true, noiseSuppression:true }
       });
+      setTimeout(adaptAspectToLocal, 150);
     }
 
-    // ======== Interacciones estilo Telegram en móvil ========
+    // Ajuste de aspecto basado en settings locales/remotos
+    function adaptAspectToLocal(){
+      try{
+        const lt = localStream?.getVideoTracks?.()[0];
+        const rt = remoteVideo.srcObject?.getVideoTracks?.()[0];
+        if(!lt || !rt) return;
+        const ls = lt.getSettings?.() || {};
+        const rs = rt.getSettings?.() || {};
+        const arLocal  = (ls.width && ls.height) ? ls.width/ls.height : (localVideo.videoWidth || 16)/(localVideo.videoHeight || 9);
+        const arRemote = (rs.width && rs.height) ? rs.width/rs.height : (remoteVideo.videoWidth || 16)/(remoteVideo.videoHeight || 9);
+        const diff = Math.abs(arLocal - arRemote) / arLocal;
+        // Si difieren mucho (ej. móvil vertical vs PC horizontal), usar contain para remoto
+        const useContain = diff > 0.2;
+        remoteWrap.classList.toggle('contain', useContain || (fitMode==='contain'));
+      }catch{}
+    }
+
+    // Mostrar/ocultar controles móviles
     function toggleMobileControls(){
       mobileControlsVisible = !mobileControlsVisible;
       mControls.style.opacity = mobileControlsVisible ? '1' : '0';
@@ -575,7 +609,6 @@
     remoteVideo.addEventListener('click', ()=>{ if(isMobile()) toggleMobileControls(); });
     pip.addEventListener('click', (e)=>{ if(isMobile()){ pip.classList.toggle('pip-lg'); e.stopPropagation(); } });
 
-    // Doble clic en remoto => fullscreen (PC/también útil en móvil)
     remoteWrap.addEventListener('dblclick', toggleFullscreen);
 
     // PiP arrastrable
@@ -589,7 +622,7 @@
       pip.addEventListener('touchstart', onDown, {passive:true}); window.addEventListener('touchmove', onMove, {passive:false}); window.addEventListener('touchend', onUp);
     })();
 
-    /* ===== Pantalla completa 50/50 en PC: calcular alto ===== */
+    /* ===== Alto 50/50 PC ===== */
     function fitSplitHeight(){
       if (isMobile() || layoutMode !== 'split') {
         videoShell.style.removeProperty('--vh');
@@ -601,13 +634,13 @@
       videoShell.style.setProperty('--vh', h + 'px');
     }
     window.addEventListener('load', fitSplitHeight);
-    window.addEventListener('resize', fitSplitHeight);
+    window.addEventListener('resize', ()=>{ fitSplitHeight(); setTimeout(adaptAspectToLocal, 100); });
     document.addEventListener('visibilitychange', fitSplitHeight);
 
     /* ===== Botones ===== */
     const startAll = ()=> joinQueue();
     const nextAll  = ()=> nextMatch();
-    const stopAll  = ()=>{ try{ send({type:'leave'});}catch{} cleanupPeer(); overlay.classList.remove('show'); setStatus('Detenido'); isQueuing=false; enableInCall(false); };
+    const stopAll  = ()=>{ try{ send({type:'leave'});}catch{} cleanupPeer({keepLocal:false, closeWs:true}); overlay.classList.remove('show'); setStatus('Detenido'); isQueuing=false; enableInCall(false); };
 
     btnLayout?.addEventListener('click', toggleLayout);
     btnExpand?.addEventListener('click', toggleFullscreen);
