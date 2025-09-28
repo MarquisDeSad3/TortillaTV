@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover" />
-  <title>TortillaTV</title>
+  <title>TortillaTV — simple (Duo)</title>
   <meta name="theme-color" content="#0b1324" />
 
   <!-- Fuentes y Tailwind -->
@@ -32,7 +32,7 @@
     :root{ --paper:#faf9f6; --rule:#93c5fd66; --margin:#ef4444aa; --hole:#e5e7eb; --ink:#111827; }
     html,body{ height:100%; background:var(--paper); color:var(--ink); -webkit-font-smoothing:antialiased; }
 
-    /* Papel y adornos (igual que antes) */
+    /* Papel y adornos */
     .paper-bg{ position:relative; min-height:100vh; background-image:repeating-linear-gradient(0deg, transparent, transparent 32px, var(--rule) 33px, var(--rule) 34px); }
     .paper-bg::before{ content:""; position:absolute; inset:0; background:linear-gradient(90deg, transparent 56px, var(--margin) 59px, transparent 62px); pointer-events:none }
     .paper-holes{ position:absolute; left:18px; top:96px; display:flex; flex-direction:column; gap:96px; pointer-events:none }
@@ -43,7 +43,7 @@
     .page.visible{ opacity:1; transform:rotateY(0); animation:pageFlipIn .6s ease both }
     .card{ background:rgba(255,255,255,.8); border:2px solid rgba(17,24,39,.1); border-radius:20px; padding:12px; box-shadow:0 12px 30px rgba(0,0,0,.07); backdrop-filter:blur(6px) }
 
-    /* HERO bonito (igual) */
+    /* HERO */
     .hero{ position:relative; min-height:78vh; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center }
     .ttv{ position:relative; display:inline-block }
     .ttv .word{ display:inline-block; transform-origin:50% 70%; animation:ttv-wobble 2.4s ease-in-out infinite }
@@ -68,36 +68,33 @@
     .marquee li{ list-style:none; font-family:"Caveat"; font-size:clamp(16px,3.2vw,30px); font-weight:800; color:#111827 }
     @keyframes marquee-scroll{ 0%{ transform:translateX(0) } 100%{ transform:translateX(-50%) } }
 
-    /* ====== VIDEO: reglas estrictas ====== */
-    /* Los videos SIEMPRE rellenan su contenedor sin deformar; nunca “cambian tamaño” del contenedor. */
+    /* ====== VIDEO: reglas ====== */
     video{ width:100%; height:100%; object-fit:cover; background:#0b1324; display:block; }
     video.mirror{ transform: scaleX(-1) }
 
-    /* Escenario común */
     .stage{ position:relative; width:100%; }
     .stage .tile{ position:relative; border-radius:16px; overflow:hidden; background:#000; }
 
     /* 50/50 (PC) */
     .layout-split{ display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
-    .layout-split .tile{ aspect-ratio:16/9; }     /* contenedores fijos 16:9 */
-    .layout-split .tile.stretch{ height:100%; }    /* por si quieres llenar alto en PC */
+    .layout-split .tile{ aspect-ratio:16/9; } /* tamaño del cuadro constante */
 
-    /* Duo/WhatsApp: remoto ocupa todo; tú en PiP */
+    /* Duo (WhatsApp/Telegram): remoto pantalla completa; tú en PiP */
     .layout-duo{ position:relative; }
-    .layout-duo .remote{ width:100%; aspect-ratio:16/9; }
-    .layout-duo.fill-screen .remote{ /* cuando queremos llenado de alto en PC */
-      width:100%; height:var(--vh, 70vh); aspect-ratio:auto;
-    }
+    .layout-duo .remote{ width:100%; height:var(--vh, 70vh); aspect-ratio:auto; border-radius:0; }
+    .layout-duo .local{ display:none !important; }     /* importante: NO duplicar tu video */
+    .layout-duo .pip{ display:block !important; }
+
     .pip{
       position:absolute; right:12px; bottom:12px;
       width:min(28%, 220px); aspect-ratio:16/9;
       border-radius:12px; overflow:hidden;
       border:3px solid #fff; box-shadow:0 8px 24px rgba(0,0,0,.35);
-      background:#0b1324;
-      touch-action:none; /* habilita arrastre táctil personalizado si luego quieres */
+      background:#0b1324; touch-action:none; cursor:grab;
     }
+    .pip.dragging{ cursor:grabbing; }
 
-    /* Controles superiores (PC) */
+    /* Topbar (PC) */
     .topbar .btn{ border:2px solid rgba(17,24,39,.3); background:rgba(255,255,255,.9); padding:.5rem .9rem; border-radius:999px; font-weight:600; }
     .topbar .btn:disabled{ opacity:.55 }
 
@@ -118,7 +115,7 @@
     .dot:nth-child(2){ animation-delay:.15s } .dot:nth-child(3){ animation-delay:.3s }
     @keyframes b{ from{ transform:translateY(0); opacity:.5 } to{ transform:translateY(-6px); opacity:1 } }
 
-    /* ======== PC helpers ======== */
+    /* Helpers PC */
     .full-bleed{ width:100vw; position:relative; left:50%; right:50%; margin-left:-50vw; margin-right:-50vw; }
     @media (min-width: 640px){
       #videoShell{ height: var(--vh, 70vh); }
@@ -126,7 +123,7 @@
       .card.stretch > .tile{ flex:1 1 auto; }
     }
 
-    /* ======== MÓVIL: SIEMPRE Duo/ + un solo botón ======== */
+    /* MÓVIL: siempre Duo + un solo botón */
     @media (max-width: 640px){
       .layout-split{ display:block; }
       .topbar{ display:none; }
@@ -145,7 +142,7 @@
     <div class="paper-holes"><div class="paper-hole"></div><div class="paper-hole"></div><div class="paper-hole"></div></div>
 
     <main class="book mx-auto max-w-5xl px-6 py-10">
-      <!-- PÁGINA 1: LANDING -->
+      <!-- LANDING -->
       <section id="page-landing" class="page visible">
         <div class="hero">
           <div class="corner">
@@ -178,9 +175,9 @@
         </div>
       </section>
 
-      <!-- PÁGINA 2: SALA -->
+      <!-- SALA -->
       <section id="page-chat" class="page hidden">
-        <!-- Topbar (PC) -->
+        <!-- Topbar PC -->
         <div class="card p-3 mb-4 topbar">
           <div class="flex flex-wrap items-center gap-2">
             <button id="btn-start" class="btn">Buscar</button>
@@ -190,8 +187,8 @@
             <div class="ml-auto flex items-center gap-2">
               <button id="btn-layout" class="btn hidden sm:inline-flex">Vista: 50/50</button>
               <button id="btn-expand" class="btn hidden sm:inline-flex">Pantalla</button>
-              <button id="btn-fit"    class="btn hidden sm:inline-flex">Ajuste: cover</button>
-              <button id="btn-duo"    class="btn hidden sm:inline-flex">Vista: Duo </button>
+              <button id="btn-fit"    class="btn hidden sm:inline-flex">Ajuste: auto</button>
+              <button id="btn-duo"    class="btn hidden sm:inline-flex">Vista: Duo</button>
             </div>
 
             <div class="flex items-center gap-2 text-sm w-full">
@@ -202,26 +199,25 @@
           </div>
         </div>
 
-        <!-- Área de video -->
+        <!-- Video -->
         <div id="videoShell" class="full-bleed">
-          <!-- por defecto en PC arrancamos en 50/50; en móvil forzamos Duo via JS -->
           <div id="stage" class="stage layout-split">
             <!-- Remoto -->
             <div class="tile remote" id="remoteTile">
               <video id="remoteVideo" autoplay playsinline></video>
             </div>
-            <!-- Local -->
+            <!-- Local (mosaico grande solo en split) -->
             <div class="tile local" id="localTile">
               <video id="localVideo" autoplay playsinline muted class="mirror"></video>
             </div>
-            <!-- PiP (solo visible en Duo) -->
+            <!-- PiP -->
             <div id="pip" class="pip" style="display:none;">
               <video id="pipVideo" autoplay playsinline muted></video>
             </div>
           </div>
         </div>
 
-        <!-- Botón ÚNICO para móvil -->
+        <!-- Móvil: botón único -->
         <button id="mobileFab" class="mobile-fab sm:hidden">Iniciar videochat</button>
 
         <div class="mt-6 flex items-center justify-center">
@@ -305,7 +301,7 @@
       youBadge.classList.remove('hidden');
       youBadge.textContent=`Tú: ${u.displayName||'—'} · ${chosenGender||'—'}`;
       show('chat');
-      initLayoutForDevice();   // <<— ajusta layout según PC/Móvil
+      initLayoutForDevice();
       fitVH();
     });
 
@@ -318,7 +314,7 @@
       }catch(e){ alert('Error Google: '+e.message); }
     });
 
-    /* ===== Señalización + WebRTC (sala) ===== */
+    /* ===== Señalización + WebRTC ===== */
     const btnStart=qs('#btn-start'), btnNext=qs('#btn-next'), btnStop=qs('#btn-stop'), btnSalirChat=qs('#btn-salir-chat');
     const btnLayout=qs('#btn-layout'), btnExpand=qs('#btn-expand'), btnFit=qs('#btn-fit'), btnDuo=qs('#btn-duo');
 
@@ -328,11 +324,10 @@
     // Estado
     let ws=null, wsOpen=false, myId=null, roomId=null, role=null;
     let pc=null, localStream=null;
-    let mute=false, camOn=true, fitMode='cover', currentFacing='user';
+    let mute=false, camOn=true, fitMode='auto', currentFacing='user';
     let isQueuing=false, inCall=false, autoCycle=false, userHardStop=false;
 
     const iceServers=[{urls:'stun:stun.l.google.com:19302'}];
-
     const TARGET_WIDTH=1280, TARGET_HEIGHT=720, TARGET_FPS=30;
 
     async function ensureMedia(constraints){
@@ -343,7 +338,6 @@
         };
         const stream = await navigator.mediaDevices.getUserMedia(base);
 
-        // aplicar constraints fuertes si el navegador lo permite (evita rescale dinámico)
         const vTrack = stream.getVideoTracks()[0];
         if(vTrack && vTrack.applyConstraints){
           try{
@@ -359,7 +353,6 @@
         if(!localStream){
           localStream = stream;
         }else{
-          // Reemplazo del video manteniendo resolución objetivo
           const newV = stream.getVideoTracks()[0];
           const oldV = localStream.getVideoTracks()[0];
           if(oldV) oldV.stop();
@@ -380,12 +373,16 @@
     function attachLocal(stream){
       localVideo.srcObject = stream;
       pipVideo.srcObject   = stream;
+      setSplitAspectFromTracks();
     }
 
     function makePC(){
       pc = new RTCPeerConnection({iceServers});
       pc.onicecandidate = (e)=>{ if(e.candidate) send({type:'ice', candidate:e.candidate}); };
-      pc.ontrack = (e)=>{ remoteVideo.srcObject = e.streams[0]; };
+      pc.ontrack = (e)=>{
+        remoteVideo.srcObject = e.streams[0];
+        setTimeout(setSplitAspectFromTracks, 50);
+      };
       pc.onconnectionstatechange = ()=> {
         const st = pc.connectionState;
         if(st==='connected'){
@@ -454,19 +451,14 @@
     }
 
     function enableInCall(connected){
-      // PC
       if(btnStart) btnStart.disabled = connected;
       if(btnNext)  btnNext.disabled  = !connected;
       if(btnStop)  btnStop.disabled  = !connected;
-      // PiP visible solo en Duo
-      updatePipVisibility();
-      // Móvil: un solo botón
-      if(mobileFab){
-        mobileFab.textContent = connected ? 'Detener' : 'Iniciar videochat';
-      }
+
+      if(mobileFab) mobileFab.textContent = connected ? 'Detener' : 'Iniciar videochat';
     }
 
-    // ==== Auto-cycle ====
+    // Auto-cycle
     function handleCallEnded(reason){
       console.log('Call ended:', reason);
       cleanupPeer({ keepLocal:true, closeWsToo:false });
@@ -522,64 +514,88 @@
       setStatus('Detenido'); enableInCall(false);
     }
 
-    /* ===== Layout logic ===== */
-    let layoutMode = 'split'; // 'split' o 'duo'
+    /* ===== Layout ===== */
+    let layoutMode = 'split'; // 'split' | 'duo'
+
     function setLayout(mode){
       layoutMode = mode;
-      stage.classList.remove('layout-split','layout-duo','fill-screen');
+      stage.classList.remove('layout-split','layout-duo');
+
       if(mode==='split'){
         stage.classList.add('layout-split');
-        pip.style.display = 'none';
+        localTile.style.removeProperty('display');   // ambos mosaicos visibles
+        pip.style.display = 'none';                  // PiP oculto en split
       }else{
-        stage.classList.add('layout-duo','fill-screen');
-        updatePipVisibility();
+        stage.classList.add('layout-duo');
+        localTile.style.display = 'none';            // NO duplicar local
+        pip.style.display = 'block';                 // PiP visible
       }
-      // Botón de PC muestra estado
-      if(btnLayout) btnLayout.textContent = 'Vista: 50/50';
-      if(btnDuo)    btnDuo.textContent    = 'Vista: Duo ';
+
+      applyFitForLayout();
+      fitVH();
+      setSplitAspectFromTracks(); // ajusta ratio si estamos en split
     }
 
-    function updatePipVisibility(){
-      pip.style.display = (layoutMode==='duo') ? 'block' : 'none';
-    }
+    function isMobile(){ return window.matchMedia('(max-width: 640px)').matches }
 
     function initLayoutForDevice(){
       if(isMobile()){
-        setLayout('duo');              // MÓVIL SIEMPRE DUO
+        setLayout('duo');               // móvil: siempre Duo
         if(btnLayout) btnLayout.style.display='none';
         if(btnDuo)    btnDuo.style.display='none';
         if(btnFit)    btnFit.style.display='none';
         if(btnExpand) btnExpand.style.display='none';
       }else{
-        setLayout('split');            // PC por defecto 50/50
+        setLayout('split');             // PC por defecto 50/50
       }
-      applyFit();                      // cover por defecto
       fitVH();
     }
 
-    function isMobile(){ return window.matchMedia('(max-width: 640px)').matches }
+    /* ===== Ver más en split / cover en duo ===== */
+    function applyFitForLayout(){
+      if(layoutMode === 'split'){
+        // Ver más contenido del video (sin cambiar el tamaño del cuadro)
+        [remoteVideo, localVideo].forEach(v=>{
+          if(!v) return;
+          v.style.objectFit = 'contain';
+          v.style.background = '#000'; // barras si hace falta
+        });
+      }else{
+        // Duo: estilo WhatsApp/Telegram
+        [remoteVideo, pipVideo].forEach(v=>{
+          if(!v) return;
+          v.style.objectFit = 'cover';
+          v.style.background = '#0b1324';
+        });
+      }
+    }
 
+    /* ===== Ajuste dinámico de aspect-ratio en split según tracks ===== */
+    function setSplitAspectFromTracks(){
+      if(layoutMode !== 'split') return;
+
+      const setRatio = (tileEl, track) => {
+        try{
+          const s = track?.getSettings?.();
+          if(!s || !s.width || !s.height) return;
+          tileEl.style.aspectRatio = (s.width / s.height);
+        }catch(e){}
+      };
+
+      const lv = localStream?.getVideoTracks?.()[0];
+      if(lv) setRatio(localTile, lv);
+
+      const rStream = remoteVideo?.srcObject;
+      const rv = rStream?.getVideoTracks?.()[0];
+      if(rv) setRatio(remoteTile, rv);
+    }
+
+    /* ===== Fullscreen y altura útil ===== */
     async function toggleFullscreen(){
       try{
         if(document.fullscreenElement){ await document.exitFullscreen(); }
         else{ await videoShell.requestFullscreen({ navigationUI:'hide' }); }
       }catch(e){}
-    }
-
-    function toggleFit(){
-      fitMode = (fitMode==='cover') ? 'contain' : 'cover';
-      if(btnFit) btnFit.textContent = `Ajuste: ${fitMode}`;
-      applyFit();
-    }
-
-    function applyFit(){
-      // En esta versión “cover” es el estándar (rellenar). “contain” dejaría barras.
-      const wantCover = (fitMode==='cover');
-      [remoteVideo, localVideo, pipVideo].forEach(v=>{
-        if(!v) return;
-        v.style.objectFit = wantCover ? 'cover' : 'contain';
-        v.style.background = wantCover ? '#0b1324' : '#000';
-      });
     }
 
     function fitVH(){
@@ -592,13 +608,80 @@
     window.addEventListener('resize', fitVH);
     document.addEventListener('visibilitychange', fitVH);
 
+    /* ===== PiP arrastrable ===== */
+    (function makePipDraggable(){
+      let dragging = false, startX=0, startY=0, origX=0, origY=0;
+
+      const getBounds = ()=>{
+        const shellRect = videoShell.getBoundingClientRect();
+        const pipRect = pip.getBoundingClientRect();
+        return {
+          minX: 8,
+          minY: 8,
+          maxX: shellRect.width - pipRect.width - 8,
+          maxY: shellRect.height - pipRect.height - 8
+        };
+      };
+
+      const setPos = (x,y)=>{
+        const b = getBounds();
+        const nx = Math.max(b.minX, Math.min(x, b.maxX));
+        const ny = Math.max(b.minY, Math.min(y, b.maxY));
+        pip.style.transform = `translate(${nx}px, ${ny}px)`;
+      };
+
+      const onDown = (clientX, clientY)=>{
+        dragging = true; pip.classList.add('dragging');
+        // lee posición actual
+        const m = /translate\(([-\d.]+)px,\s*([-\d.]+)px\)/.exec(pip.style.transform||"");
+        origX = m ? parseFloat(m[1]) : 0;
+        origY = m ? parseFloat(m[2]) : 0;
+        startX = clientX; startY = clientY;
+      };
+
+      const onMove = (clientX, clientY)=>{
+        if(!dragging) return;
+        const dx = clientX - startX;
+        const dy = clientY - startY;
+        setPos(origX + dx, origY + dy);
+      };
+
+      const onUp = ()=>{
+        if(!dragging) return;
+        dragging = false; pip.classList.remove('dragging');
+      };
+
+      pip.addEventListener('mousedown', e=>{ e.preventDefault(); onDown(e.clientX, e.clientY); });
+      window.addEventListener('mousemove', e=> onMove(e.clientX, e.clientY));
+      window.addEventListener('mouseup', onUp);
+
+      pip.addEventListener('touchstart', e=>{
+        const t = e.touches[0]; onDown(t.clientX, t.clientY);
+      }, {passive:true});
+      window.addEventListener('touchmove', e=>{
+        const t = e.touches[0]; onMove(t.clientX, t.clientY);
+      }, {passive:true});
+      window.addEventListener('touchend', onUp);
+
+      // posición inicial (esquina inferior derecha)
+      setTimeout(()=>{
+        const b = getBounds();
+        setPos(b.maxX, b.maxY);
+      }, 0);
+    })();
+
     /* ===== Botones (PC) ===== */
     btnLayout?.addEventListener('click', ()=> setLayout('split'));
     btnDuo   ?.addEventListener('click', ()=> setLayout('duo'));
     btnExpand?.addEventListener('click', toggleFullscreen);
-    btnFit   ?.addEventListener('click', toggleFit);
+    btnFit   ?.addEventListener('click', ()=>{
+      // modo manual, si quisieras alternar más adelante
+      fitMode = (fitMode==='auto') ? 'contain' : 'auto';
+      btnFit.textContent = `Ajuste: ${fitMode}`;
+      applyFitForLayout();
+    });
 
-    // PC: Controles de sesión
+    // PC: sesión
     btnStart ?.addEventListener('click', joinQueue);
     btnNext  ?.addEventListener('click', nextMatch);
     btnStop  ?.addEventListener('click', stopAll);
@@ -609,13 +692,9 @@
       else { joinQueue(); }
     });
 
-    // Mute/Cam/mirror opcionales: si quieres, añade botones PC; en móvil lo simplificamos
-    // (Se pueden añadir de nuevo si los necesitas.)
-
-    // Acciones generales
     btnSalirChat?.addEventListener('click', ()=>{ stopAll(); auth.signOut(); });
 
-    // ===== WebRTC helpers =====
+    // Salida limpia
     window.addEventListener('beforeunload', ()=>{ try{ send({type:'leave'}); }catch{} });
 
   </script>
