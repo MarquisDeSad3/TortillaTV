@@ -24,7 +24,7 @@
     }
   </script>
 
-  <!-- Firebase (compat) -->
+  <!-- Firebase (compat) SOLO para login de Google -->
   <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-auth-compat.js"></script>
 
@@ -32,15 +32,19 @@
     :root{ --paper:#faf9f6; --rule:#93c5fd66; --margin:#ef4444aa; --hole:#e5e7eb; --ink:#111827; }
     html,body{ height:100% }
     body{ background:var(--paper); color:var(--ink); -webkit-font-smoothing:antialiased; }
+    /* Papel rayado */
     .paper-bg{ position:relative; min-height:100vh; background-image:repeating-linear-gradient(0deg, transparent, transparent 32px, var(--rule) 33px, var(--rule) 34px); }
     .paper-bg::before{ content:""; position:absolute; inset:0; background:linear-gradient(90deg, transparent 56px, var(--margin) 59px, transparent 62px); pointer-events:none }
     .paper-holes{ position:absolute; left:18px; top:96px; display:flex; flex-direction:column; gap:96px; pointer-events:none }
     .paper-hole{ width:18px; height:18px; border-radius:999px; background:var(--hole); box-shadow:inset 0 2px 4px rgba(0,0,0,.2) }
+
     .book{ perspective:1200px }
     .page{ transform-origin:left center; backface-visibility:hidden; transform-style:preserve-3d; transition:opacity .4s ease; }
     .page.hidden{ opacity:0; pointer-events:none; transform:rotateY(-90deg) translateX(-20px) }
     .page.visible{ opacity:1; transform:rotateY(0); animation:pageFlipIn .6s ease both }
+
     .card{ background:rgba(255,255,255,.8); border:2px solid rgba(17,24,39,.1); border-radius:20px; padding:12px; box-shadow:0 12px 30px rgba(0,0,0,.07); backdrop-filter:blur(6px) }
+
     .hero{ position:relative; min-height:78vh; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center }
     .ttv{ position:relative; display:inline-block }
     .ttv .word{ display:inline-block; transform-origin:50% 70%; animation:ttv-wobble 2.4s ease-in-out infinite }
@@ -53,15 +57,18 @@
     .spark.s2{ top:-24px; right:-28px; animation-delay:.6s }
     .spark.s3{ bottom:-22px; left:18px; animation-delay:1s }
     @keyframes spark-float{ 0%,100%{ transform:rotate(45deg) translateY(0) } 50%{ transform:rotate(45deg) translateY(-10px) } }
+
     .scribble{ width:min(920px,92vw); height:32px; margin-inline:auto }
     .scribble path{ stroke:rgba(239,68,68,.7); stroke-width:6; fill:none; stroke-linecap:round; stroke-dasharray:1400; animation:scribble 2s ease forwards }
     @keyframes scribble{ from{ stroke-dashoffset:1400 } to{ stroke-dashoffset:0 } }
+
     .corner{ position:absolute; right:min(2rem,5vw); top:clamp(10px,4vh,40px); display:flex; gap:.5rem; align-items:center; z-index:10 }
     .corner .note{ font-family:"Caveat", ui-serif; font-weight:800; font-size:clamp(18px,3.8vw,34px); background:#fff7cc; color:#0b1324; padding:.15em .45em; border-radius:.5rem; box-shadow:0 4px 0 rgba(0,0,0,.2); transform:rotate(-2.5deg) }
     .marquee{ position:relative; width:min(42ch,70vw); overflow:hidden; border-radius:.5rem; border:2px dashed rgba(17,24,39,.2); background:rgba(255,255,255,.75) }
     .marquee ul{ display:flex; gap:2.5rem; white-space:nowrap; padding:.35rem .75rem; animation:marquee-scroll 14s linear infinite }
     .marquee li{ list-style:none; font-family:"Caveat"; font-size:clamp(16px,3.2vw,30px); font-weight:800; color:#111827 }
     @keyframes marquee-scroll{ 0%{ transform:translateX(0) } 100%{ transform:translateX(-50%) } }
+
     .videos.split{ display:grid; grid-template-columns:1fr 1fr; gap:1rem }
     .fake-video{ background:linear-gradient(135deg, rgba(15,23,42,.06), rgba(100,116,139,.12)); border-radius:16px; min-height:260px }
     @media (max-width: 640px){ .hero{ min-height:72vh } .marquee{ width:min(34ch,88vw) } }
@@ -72,11 +79,10 @@
     <div class="paper-holes"><div class="paper-hole"></div><div class="paper-hole"></div><div class="paper-hole"></div></div>
 
     <main class="book mx-auto max-w-5xl px-6 py-10">
-
-      <!-- PÁGINA 1: LANDING (misma estética) -->
+      <!-- PÁGINA 1: LANDING (MISMO DISEÑO) -->
       <section id="page-landing" class="page visible">
         <div class="hero">
-          <!-- Mensajes en esquinita -->
+          <!-- Esquinita con frases -->
           <div class="corner">
             <span class="note">a mano</span>
             <div class="marquee">
@@ -91,12 +97,10 @@
             </div>
           </div>
 
-          <!-- Título animado y adornos -->
+          <!-- Título animado -->
           <h1 class="font-display font-extrabold select-none ttv" style="font-size:clamp(56px,10vw,140px); line-height:.9; text-shadow:0 1px 0 #fff, 0 10px 18px rgba(0,0,0,.15)">
             <span class="word">Tortilla</span><span class="accent text-rose-600">TV</span>
-            <span class="spark s1"></span>
-            <span class="spark s2"></span>
-            <span class="spark s3"></span>
+            <span class="spark s1"></span><span class="spark s2"></span><span class="spark s3"></span>
           </h1>
 
           <!-- Subtítulo -->
@@ -119,19 +123,19 @@
           </div>
           <p id="genElegido" class="mt-2 text-sm text-neutral-600"></p>
 
-          <!-- CTA Google (igual estilo) -->
+          <!-- Google login (igual estilo) -->
           <button id="btn-google" class="mt-6 rounded-xl border-2 border-neutral-900/40 bg-white/90 px-7 py-3.5 font-semibold shadow disabled:opacity-50" disabled>
             Iniciar con Google
           </button>
 
-          <!-- Línea manuscrita -->
+          <!-- Línea manuscrita roja -->
           <svg class="scribble mt-6" viewBox="0 0 1200 100" preserveAspectRatio="none" aria-hidden="true">
             <path d="M10,70 C200,20 400,120 600,60 C800,0 1000,120 1190,50"/>
           </svg>
         </div>
       </section>
 
-      <!-- PÁGINA 2: SALA -->
+      <!-- PÁGINA 2: SALA DE VIDEO -->
       <section id="page-chat" class="page hidden">
         <div class="card p-3 mb-4">
           <div class="flex flex-wrap items-center gap-2">
@@ -169,8 +173,8 @@
 
   <!-- SCRIPTS -->
   <script>
-    // ====== Ajusta esto a tu despliegue ======
-    const WS_SIGNALLING_URL = "wss://tu-dominio-o-ip:8080"; // ej: "ws://localhost:8080"
+    // ====== CONFIGURACIÓN ======
+    const WS_SIGNALLING_URL = "ws://localhost:8080"; // Cambia a wss://tu-dominio en producción HTTPS
     const firebaseConfig = {
       apiKey: "AIzaSyBVuvV7NOaqkN6arT3xPTBdxMZg7TTPhlM",
       authDomain: "tortillatv-bf0c6.firebaseapp.com",
@@ -179,25 +183,33 @@
       messagingSenderId: "193994912181",
       appId: "1:193994912181:web:03464c47f30fc5ac4d69fc"
     };
-    // ==========================================
-
     firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();
+    // ===========================
 
-    // UI y helpers
+    // UI helpers
     const pages = { landing: qs('#page-landing'), chat: qs('#page-chat') };
     function qs(s,root=document){ return root.querySelector(s) }
     function show(k){ Object.values(pages).forEach(p=>{p.classList.add('hidden');p.classList.remove('visible')}); pages[k].classList.remove('hidden'); pages[k].classList.add('visible'); window.scrollTo({top:0,behavior:'smooth'}) }
     function setStatus(t){ const el=qs('#status'); if(el) el.textContent=t }
 
-    const btnGoogle=qs('#btn-google');
+    // Mensajes de la esquina (doble para bucle)
+    const MESSAGES=['Kristoff','Astroboy','A ochoa lo mataron a balazos'];
+    (function marqueeDuplicate(){
+      const ul = document.getElementById('cornerMessages');
+      if(ul){ ul.innerHTML=''; const arr=[...MESSAGES,...MESSAGES]; for(const m of arr){ const li=document.createElement('li'); li.textContent=m; ul.appendChild(li); } }
+    })();
+    setInterval(()=>{
+      const titleWords = document.querySelectorAll('.ttv .word, .ttv .accent');
+      titleWords.forEach((el)=>{ el.style.animationDelay = (Math.random()*0.6).toFixed(2)+'s'; });
+    }, 3000);
+
+    // Estado básico
+    let chosenGender=null;
     const genButtons=[...document.querySelectorAll('.gen')];
     const genElegido=qs('#genElegido');
-    const youBadge=qs('#you-badge');
-    const btnStart=qs('#btn-start'), btnNext=qs('#btn-next'), btnStop=qs('#btn-stop'), btnSalirChat=qs('#btn-salir-chat');
-    const localVideo=qs('#localVideo'), remoteVideo=qs('#remoteVideo');
+    const btnGoogle=qs('#btn-google');
 
-    let chosenGender=null;
     genButtons.forEach(b=>{
       b.addEventListener('click', ()=>{
         genButtons.forEach(x=>x.classList.remove('ring','ring-rose-400'));
@@ -208,20 +220,9 @@
       });
     });
 
-    // Esquina: duplicado simple de mensajes
-    const MESSAGES=['Kristoff','Astroboy','A ochoa lo mataron a balazos'];
-    (function marqueeDuplicate(){
-      const ul = document.getElementById('cornerMessages');
-      if(ul){ ul.innerHTML=''; const arr=[...MESSAGES,...MESSAGES]; for(const m of arr){ const li=document.createElement('li'); li.textContent=m; ul.appendChild(li); } }
-    })();
-
-    // Animación sutil de título
-    setInterval(()=>{
-      const titleWords = document.querySelectorAll('.ttv .word, .ttv .accent');
-      titleWords.forEach((el,i)=>{ el.style.animationDelay = (Math.random()*0.6).toFixed(2)+'s'; });
-    }, 3000);
-
+    // Autenticación Google (opcional, solo para mostrar nombre)
     let currentUser=null;
+    const youBadge=qs('#you-badge');
     auth.onAuthStateChanged((u)=>{
       currentUser=u||null;
       if(!u){ show('landing'); youBadge.classList.add('hidden'); return; }
@@ -239,8 +240,10 @@
       }catch(e){ alert('Error Google: '+e.message); }
     });
 
-    // ====== Señalización + WebRTC ======
-    // Estados
+    // ====== Señalización + WebRTC (como instant, integrado a la sala) ======
+    const btnStart=qs('#btn-start'), btnNext=qs('#btn-next'), btnStop=qs('#btn-stop'), btnSalirChat=qs('#btn-salir-chat');
+    const localVideo=qs('#localVideo'), remoteVideo=qs('#remoteVideo');
+
     let ws=null, wsOpen=false, myId=null, roomId=null, role=null;
     let pc=null, localStream=null;
     let mute=false, camOn=true;
@@ -249,9 +252,14 @@
 
     async function ensureMedia(){
       if(localStream) return localStream;
-      localStream = await navigator.mediaDevices.getUserMedia({video:true,audio:true});
-      localVideo.srcObject=localStream;
-      return localStream;
+      try{
+        localStream = await navigator.mediaDevices.getUserMedia({video:true,audio:true});
+        localVideo.srcObject=localStream;
+        return localStream;
+      }catch(e){
+        alert("Permite cámara y micrófono para continuar.");
+        throw e;
+      }
     }
 
     function makePC(){
@@ -304,39 +312,33 @@
         const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
         send({type:'offer', sdp:offer});
       }
-      setStatus('Conectado');
+      setStatus('Conectando…');
     }
 
     function cleanupPeer(closeWsToo=true){
-      if(pc){ pc.onicecandidate=null; pc.ontrack=null; pc.getSenders().forEach(s=>{try{s.track&&s.track.stop()}catch{}}); pc.close(); pc=null; }
+      if(pc){ pc.onicecandidate=null; pc.ontrack=null; try{pc.close()}catch{}; pc=null; }
       if(localStream){ localStream.getTracks().forEach(t=>t.stop()); localStream=null; localVideo.srcObject=null; }
       remoteVideo.srcObject=null; roomId=null; role=null;
       if(closeWsToo && ws){ try{ ws.close(); }catch{} ws=null; wsOpen=false; }
     }
 
     async function joinQueue(){
-      if(!currentUser) return alert('Primero inicia sesión con Google');
+      if(!currentUser){ alert('Inicia sesión con Google'); return; }
       if(!chosenGender) chosenGender = localStorage.getItem('ttv_gender') || 'Hombre';
       if(!wsOpen) await connectWS();
       send({type:'find', gender: chosenGender, displayName: currentUser.displayName || '—'});
       setStatus('En cola…');
     }
-
     async function nextMatch(){
       send({type:'leave'}); cleanupPeer(false);
       send({type:'find', gender: chosenGender, displayName: currentUser.displayName || '—'});
       setStatus('Buscando siguiente…');
     }
 
-    // Botones
     btnStart?.addEventListener('click', joinQueue);
     btnNext?.addEventListener('click', nextMatch);
-    btnStop?.addEventListener('click', ()=>{
-      send({type:'leave'}); cleanupPeer(); setStatus('Detenido');
-    });
-    btnSalirChat?.addEventListener('click', ()=>{
-      send({type:'leave'}); cleanupPeer(); auth.signOut();
-    });
+    btnStop?.addEventListener('click', ()=>{ send({type:'leave'}); cleanupPeer(); setStatus('Detenido'); });
+    btnSalirChat?.addEventListener('click', ()=>{ send({type:'leave'}); cleanupPeer(); auth.signOut(); });
 
     qs('#btn-mute')?.addEventListener('click', ()=>{
       if(!localStream) return;
