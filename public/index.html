@@ -32,7 +32,7 @@
   <style>
     :root{
       --paper:#faf9f6; --rule:#93c5fd66; --margin:#ef4444aa; --hole:#e5e7eb; --ink:#111827;
-      --box-ar: 1/1;           /* PC por defecto 1:1 */
+      --box-ar: 1/1;           /* PC por defecto 1:1 (captura) */
     }
     body.ar-1-1{ --box-ar: 1/1; }
     body.ar-4-3{ --box-ar: 4/3; }
@@ -81,16 +81,23 @@
     .stage{ position:relative; width:100%; }
     .tile{
       position:relative; border-radius:16px; overflow:hidden; background:#000;
-      aspect-ratio: var(--box-ar); /* PC usa AR activo, por defecto 1:1 */
+      /* El contenedor (tile) ocupa toda la celda. El llenado sin bandas depende de object-fit en el <video> */
+      height:100%;
     }
-    /* PC por defecto: 50/50 */
-    .layout-split{ display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+
+    /* PC: grid 50/50 y altura dinámica para ocupar la pantalla */
+    .layout-split{
+      display:grid; grid-template-columns:1fr 1fr; gap:1rem;
+      height: calc(100dvh - 220px); /* ocupa casi toda la pantalla bajo la topbar; ajusta si quieres más/menos */
+      min-height: 540px;
+    }
 
     /* === Comportamiento PC pedido === */
-    /* Remoto: SIEMPRE completo (letterbox/pillarbox) */
-    #stage .tile.remote video{ object-fit: contain; }
     /* Local: SIEMPRE cubrir (sin bandas) */
     #stage .tile.local  video{ object-fit: cover; }
+    /* Remoto: por defecto cubrir; si se detecta retrato (celular), se fuerza contain */
+    #stage .tile.remote video{ object-fit: cover; }
+    body.remote-portrait #stage .tile.remote video{ object-fit: contain; background:#000; }
 
     /* ===== MÓVIL: FULL-BLEED MITAD/MITAD ===== */
     .layout-mobile-fixed{
@@ -104,7 +111,7 @@
       position:absolute; inset:0; width:100%; height:100%;
       object-fit:cover; /* llena cada mitad */
     }
-    /* Ver remoto "completo" en móvil cuando se pida */
+    /* Ver remoto "completo" en móvil cuando se pida (doble toque) */
     .pane video.contain{ object-fit: contain; background:#000; }
 
     /* Ocultar PiP en móvil y landing */
@@ -320,6 +327,8 @@
       youBadge.textContent=`Tú: ${u.displayName||'—'} · ${chosenGender||'—'}`;
       show('chat');
       initLayoutForDevice(); // decide PC vs móvil
+      // Recalcular altura de stage por si el layout cambia
+      requestAnimationFrame(sizeStageForDesktop);
     });
 
     btnGoogle?.addEventListener('click', async ()=>{
@@ -404,6 +413,8 @@
       pc.ontrack = (e)=>{
         remoteStreamRef = e.streams[0];
         attachRemote();
+        // Detectar orientación/ratio del remoto cuando haya metadatos
+        setupRemoteRatioWatchers();
       };
       pc.onconnectionstatechange = ()=> {
         const st = pc.connectionState;
@@ -474,6 +485,8 @@
       roomId=null; role=null; inCall=false;
       if(closeWsToo && ws){ try{ ws.close(); }catch{} ws=null; wsOpen=false; }
       peerLabel.classList.add('hidden'); peerLabel.textContent='Pareja: —';
+      // Reset detector remoto
+      document.body.classList.remove('remote-portrait');
     }
 
     function enableInCall(connected){
@@ -552,6 +565,7 @@
         stage.classList.add('layout-split');
         stageMobile.style.display = 'none';
         document.body.classList.remove('no-scroll');
+        sizeStageForDesktop();
       }else{
         // Móvil full-bleed mitad/mitad
         stage.style.display = 'none';
@@ -575,6 +589,19 @@
         setLayout('split');        // PC por defecto 50/50
       }
     }
+
+    /* ===== Desktop: ocupar pantalla del usuario de forma agradable ===== */
+    function sizeStageForDesktop(){
+      if(layoutMode!=='split') return;
+      // Calcula altura libre para que el grid ocupe la pantalla sin dejar bloques raros
+      const shell = document.getElementById('videoShell');
+      const rect  = shell.getBoundingClientRect();
+      const top   = rect.top + window.scrollY; // posición desde el top del documento
+      const vh    = window.innerHeight;
+      const usable= Math.max(540, Math.floor(vh - rect.top - 24)); // 24px margen inferior
+      stage.style.height = usable + 'px';
+    }
+    window.addEventListener('resize', ()=>{ if(!isMobile()) sizeStageForDesktop(); });
 
     /* ===== Botones (PC) ===== */
     btnStart ?.addEventListener('click', joinQueue);
@@ -652,8 +679,45 @@
       } catch {}
     }
 
+    /* ======== DETECTOR de “stream de celular” para PC ======== */
+    function setupRemoteRatioWatchers(){
+      if(!remoteVideo) return;
+      const mark = ()=> updateRemoteFitClass();
+
+      // Cuando llegan metadatos o cambia tamaño del frame remoto
+      remoteVideo.addEventListener('loadedmetadata', mark);
+      remoteVideo.addEventListener('resize', mark);
+
+      // También intenta leer settings del track (si existe) como pista inicial
+      try{
+        const track = remoteStreamRef?.getVideoTracks?.()[0];
+        const st = track?.getSettings?.();
+        if(st?.width && st?.height){
+          updateRemoteFitClass(st.width, st.height);
+        }
+      }catch{}
+    }
+
+    function updateRemoteFitClass(wFromTrack, hFromTrack){
+      // Preferimos dimensiones reales del elemento si existen
+      const w = wFromTrack || remoteVideo.videoWidth  || 0;
+      const h = hFromTrack || remoteVideo.videoHeight || 0;
+      if(!w || !h){ return; }
+      const ar = w / h;
+
+      // Heurística: consideramos "celular/vertical" si AR < 0.9
+      const isPortraitRemote = ar < 0.9;
+
+      // Solo afecta a PC (layout split). En móvil ya gestionamos con full-bleed.
+      if(layoutMode==='split'){
+        if(isPortraitRemote) document.body.classList.add('remote-portrait');
+        else document.body.classList.remove('remote-portrait');
+      }
+    }
+
     // Salida limpia
     window.addEventListener('beforeunload', ()=>{ try{ send({type:'leave'}); }catch{} });
+
   </script>
 </body>
 </html>
