@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <!-- Bloqueo de zoom/pinch en móvil -->
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
-  <title>TortillaTV </title>
+  <title>TortillaTV</title>
   <meta name="theme-color" content="#0b1324" />
 
   <!-- Fuentes y Tailwind -->
@@ -104,6 +104,8 @@
       position:absolute; inset:0; width:100%; height:100%;
       object-fit:cover; /* llena cada mitad */
     }
+    /* Ver remoto "completo" en móvil cuando se pida */
+    .pane video.contain{ object-fit: contain; background:#000; }
 
     /* Ocultar PiP en móvil y landing */
     .pip{ display:none !important; }
@@ -157,7 +159,7 @@
             <div class="marquee"><ul id="cornerMessages"></ul></div>
           </div>
 
-        <h1 class="font-display font-extrabold select-none ttv" style="font-size:clamp(56px,10vw,140px); line-height:.9; text-shadow:0 1px 0 #fff, 0 10px 18px rgba(0,0,0,.15)">
+          <h1 class="font-display font-extrabold select-none ttv" style="font-size:clamp(56px,10vw,140px); line-height:.9; text-shadow:0 1px 0 #fff, 0 10px 18px rgba(0,0,0,.15)">
             <span class="word">Tortilla</span><span class="accent text-rose-600">TV</span>
           </h1>
           <p class="mt-4 text-neutral-700 text-lg">Video chat aleatorio</p>
@@ -339,10 +341,11 @@
 
     const stage=qs('#stage'), stageMobile=qs('#stageMobile');
 
-    const btnBuscar=qs('#btn-buscar-m'), btnSalir=qs('#btn-salir-m');
+    // Botones móviles (FIX: solo una definición)
+    const btnBuscarM=qs('#btn-buscar-m'), btnSalirM=qs('#btn-salir-m');
 
     let ws=null, wsOpen=false, myId=null, roomId=null, role=null;
-    let pc=null, localStream=null;
+    let pc=null, localStream=null, remoteStreamRef=null;
     let isQueuing=false, inCall=false, autoCycle=false, userHardStop=false;
     let layoutMode='split'; // 'split' | 'mobile-fixed'
     const iceServers=[{urls:'stun:stun.l.google.com:19302'}];
@@ -373,22 +376,34 @@
     }
 
     function attachLocal(stream){
-      // PC
-      localVideo.srcObject = stream;
-      // Móvil
-      localVideoM.srcObject = stream;
+      if(layoutMode==='split'){
+        localVideo.srcObject = stream;
+        localVideoM.srcObject = null;
+      }else{
+        localVideoM.srcObject = stream;
+        localVideo.srcObject = null;
+      }
       // PiP (no usado)
       pipVideo.srcObject   = stream;
+    }
+
+    function attachRemote(){
+      if(!remoteStreamRef) return;
+      if(layoutMode==='split'){
+        remoteVideo.srcObject = remoteStreamRef;
+        remoteVideoM.srcObject = null;
+      }else{
+        remoteVideoM.srcObject = remoteStreamRef;
+        remoteVideo.srcObject = null;
+      }
     }
 
     function makePC(){
       pc = new RTCPeerConnection({iceServers});
       pc.onicecandidate = (e)=>{ if(e.candidate) send({type:'ice', candidate:e.candidate}); };
       pc.ontrack = (e)=>{
-        const remoteStream = e.streams[0];
-        // PC y móvil a la vez
-        remoteVideo.srcObject = remoteStream;
-        remoteVideoM.srcObject = remoteStream;
+        remoteStreamRef = e.streams[0];
+        attachRemote();
       };
       pc.onconnectionstatechange = ()=> {
         const st = pc.connectionState;
@@ -434,8 +449,13 @@
 
     async function startWebRTC(role){
       await ensureMedia();
+      await applyARConstraints();
+      if(isMobile()) adaptToOrientation();
+
       makePC();
       localStream.getTracks().forEach(t=>pc.addTrack(t, localStream));
+      tuneSender();
+
       if(role==='offer'){
         const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
         send({type:'offer', sdp:offer});
@@ -450,7 +470,7 @@
         localStream=null;
         localVideo.srcObject=null; localVideoM.srcObject=null; pipVideo.srcObject=null;
       }
-      remoteVideo.srcObject=null; remoteVideoM.srcObject=null;
+      remoteVideo.srcObject=null; remoteVideoM.srcObject=null; remoteStreamRef=null;
       roomId=null; role=null; inCall=false;
       if(closeWsToo && ws){ try{ ws.close(); }catch{} ws=null; wsOpen=false; }
       peerLabel.classList.add('hidden'); peerLabel.textContent='Pareja: —';
@@ -485,6 +505,8 @@
         const displayName = currentUser.displayName || '—';
         await connectWS();
         await ensureMedia();
+        await applyARConstraints();
+        if(isMobile()) adaptToOrientation();
         send({type:'find', gender: chosenGender, displayName});
         setStatus('En cola…');
       }catch(e){
@@ -506,6 +528,8 @@
         cleanupPeer({ keepLocal:true, closeWsToo:false });
         setStatus('Buscando siguiente…'); overlay.classList.add('show'); enableInCall(false);
         await ensureMedia();
+        await applyARConstraints();
+        if(isMobile()) adaptToOrientation();
         findNext();
       }catch(e){ setStatus('Error WS (siguiente)'); }
     }
@@ -528,13 +552,15 @@
         stage.classList.add('layout-split');
         stageMobile.style.display = 'none';
         document.body.classList.remove('no-scroll');
-        // (PC) aseguramos reglas de object-fit por CSS (ya están)
       }else{
         // Móvil full-bleed mitad/mitad
         stage.style.display = 'none';
         stageMobile.style.display = '';
         document.body.classList.add('no-scroll');
       }
+      // (Re)adjuntar streams solo a los videos visibles
+      if(localStream) attachLocal(localStream);
+      attachRemote();
     }
 
     function isMobile(){ return window.matchMedia('(max-width: 640px)').matches }
@@ -555,9 +581,25 @@
     btnNext  ?.addEventListener('click', nextMatch);
     btnStop  ?.addEventListener('click', stopAll);
 
-    // Botón AR (PC)
+    // Botón AR (PC) → sincroniza con constraints reales
     const btnAR=qs('#btn-ar');
-    btnAR    ?.addEventListener('click', ()=>{
+    function currentAR(){
+      if(document.body.classList.contains('ar-4-3')) return 4/3;
+      if(document.body.classList.contains('ar-16-9')) return 16/9;
+      return 1/1; // ar-1-1 por defecto
+    }
+    async function applyARConstraints(){
+      const track = localStream?.getVideoTracks?.()[0];
+      if(!track) return;
+      try{
+        await track.applyConstraints({
+          aspectRatio: currentAR(),
+          width:  { ideal: 1280, max: 1920 },
+          height: { ideal: 720,  max: 1080 }
+        });
+      }catch(e){ /* ignorar si el dispositivo no puede */ }
+    }
+    btnAR    ?.addEventListener('click', async ()=>{
       const labels = ['4:3','1:1','16:9'];
       const cls = ['ar-4-3','ar-1-1','ar-16-9'];
       const current = cls.findIndex(c => document.body.classList.contains(c));
@@ -565,16 +607,50 @@
       document.body.classList.remove(...cls);
       document.body.classList.add(cls[next]);
       if(btnAR) btnAR.textContent = 'AR: ' + labels[next];
+      await applyARConstraints();
     });
 
     // MÓVIL: dos botones fijos
-    const btnBuscarM=qs('#btn-buscar-m'), btnSalirM=qs('#btn-salir-m');
     btnBuscarM?.addEventListener('click', ()=>{
       if(inCall){ nextMatch(); } else { joinQueue(); }
     });
     btnSalirM?.addEventListener('click', ()=>{ stopAll(); auth.signOut(); });
 
     btnSalirChat?.addEventListener('click', ()=>{ stopAll(); auth.signOut(); });
+
+    // Doble toque: ver remoto completo (contain) en móvil
+    let remoteContain = false;
+    qs('#pane-remote')?.addEventListener('dblclick', ()=>{
+      remoteContain = !remoteContain;
+      if(remoteContain) remoteVideoM.classList.add('contain');
+      else remoteVideoM.classList.remove('contain');
+    });
+
+    // Orientación: adapta AR (móvil)
+    function isPortrait(){ return window.matchMedia('(orientation: portrait)').matches; }
+    async function adaptToOrientation(){
+      const track = localStream?.getVideoTracks?.()[0];
+      if(!track) return;
+      const ar = isPortrait() ? 9/16 : 16/9;
+      try{ await track.applyConstraints({ aspectRatio: ar }); }catch(e){}
+    }
+    window.addEventListener('orientationchange', ()=>{ if(isMobile()) adaptToOrientation(); });
+    window.addEventListener('resize', ()=>{ if(isMobile()) adaptToOrientation(); });
+
+    // Prioriza fluidez en redes flojas
+    function tuneSender(){
+      const sender = pc?.getSenders?.().find(s=>s.track && s.track.kind==='video');
+      const vTrack = localStream?.getVideoTracks?.()[0];
+      if(!sender || !vTrack) return;
+      try { vTrack.contentHint = 'motion'; } catch {}
+      try {
+        const p = sender.getParameters();
+        p.encodings = p.encodings || [{}];
+        p.encodings[0].maxBitrate = isMobile() ? 900_000 : 1_800_000; // ~900kbps móvil, ~1.8Mbps PC
+        p.degradationPreference = 'maintain-framerate';
+        sender.setParameters(p);
+      } catch {}
+    }
 
     // Salida limpia
     window.addEventListener('beforeunload', ()=>{ try{ send({type:'leave'}); }catch{} });
