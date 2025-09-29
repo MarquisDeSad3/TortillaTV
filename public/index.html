@@ -87,7 +87,6 @@
     /* PC: grid 50/50 y altura dinámica para ocupar la pantalla */
     .layout-split{
       display:grid; grid-template-columns:1fr 1fr; gap:1rem;
-      /* la altura real la fija JS para evitar huecos y para respetar el AR elegido */
       min-height: 420px;
     }
 
@@ -227,6 +226,7 @@
               <video id="remoteVideo" autoplay playsinline></video>
               <!-- CONTROLES DE ZOOM (PC) REMOTO -->
               <div class="zoom-controls sm:flex hidden" aria-label="Zoom remoto">
+                <button id="fitRemote" class="zoom-btn" title="Ver completo">⤢</button>
                 <button id="zoomOutRemote" class="zoom-btn" title="Alejar">−</button>
                 <button id="zoomInRemote" class="zoom-btn" title="Acercar">+</button>
               </div>
@@ -235,6 +235,7 @@
               <video id="localVideo" autoplay playsinline muted class="mirror"></video>
               <!-- CONTROLES DE ZOOM (PC) LOCAL -->
               <div class="zoom-controls sm:flex hidden" aria-label="Zoom local">
+                <button id="resetLocal" class="zoom-btn" title="Reset">⟲</button>
                 <button id="zoomOutLocal" class="zoom-btn" title="Alejar">−</button>
                 <button id="zoomInLocal" class="zoom-btn" title="Acercar">+</button>
               </div>
@@ -379,26 +380,40 @@
 
     /* ===== ZOOM STATE (PC) ===== */
     const zoomState = { local: 1, remote: 1 };
-    const ZOOM_MIN = 1; const ZOOM_MAX = 3; const ZOOM_STEP = 0.15;
+    const ZOOM_MAX = 4; // acercar más si quieres
+    const ZOOM_STEP = 0.15;
+    const ZOOM_MIN_LOCAL  = 1;    // no más pequeño que el contenedor para tu cámara
+    const ZOOM_MIN_REMOTE = 0.35; // **permite zoom-out extra** en la pareja (vertical)
+
     function applyZoom(which){
       const v = (which==='local') ? localVideo : remoteVideo;
       if(!v) return;
+
       const z = zoomState[which];
-      v.style.transform = (v.classList.contains('mirror') ? `scaleX(-1) scale(${z})` : `scale(${z})`);
+      const mirror = v.classList.contains('mirror');
+
+      // Mantener centrado
       v.style.transformOrigin = 'center center';
+      v.style.transform = mirror
+        ? `scaleX(-1) scale(${z})`
+        : `scale(${z})`;
     }
 
     function changeZoom(which, delta){
-      const next = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, (zoomState[which] + delta)));
+      const isRemote = (which === 'remote');
+      const min = isRemote ? ZOOM_MIN_REMOTE : ZOOM_MIN_LOCAL;
+      const next = Math.min(ZOOM_MAX, Math.max(min, (zoomState[which] + delta)));
       zoomState[which] = Number(next.toFixed(2));
       applyZoom(which);
     }
 
     // Bind zoom buttons (solo PC)
-    qs('#zoomInLocal')?.addEventListener('click', ()=> changeZoom('local', +ZOOM_STEP));
-    qs('#zoomOutLocal')?.addEventListener('click',()=> changeZoom('local', -ZOOM_STEP));
-    qs('#zoomInRemote')?.addEventListener('click',()=> changeZoom('remote', +ZOOM_STEP));
+    qs('#zoomInLocal') ?.addEventListener('click', ()=> changeZoom('local', +ZOOM_STEP));
+    qs('#zoomOutLocal')?.addEventListener('click', ()=> changeZoom('local', -ZOOM_STEP));
+    qs('#zoomInRemote')?.addEventListener('click', ()=> changeZoom('remote', +ZOOM_STEP));
     qs('#zoomOutRemote')?.addEventListener('click',()=> changeZoom('remote', -ZOOM_STEP));
+    qs('#resetLocal')  ?.addEventListener('click', ()=> { zoomState.local=1; applyZoom('local'); });
+    qs('#fitRemote')  ?.addEventListener('click', ()=> { zoomState.remote=1; applyZoom('remote'); });
 
     function resetZoom(){ zoomState.local=1; zoomState.remote=1; applyZoom('local'); applyZoom('remote'); }
 
@@ -422,7 +437,7 @@
         attachLocal(localStream);
         return localStream;
       }catch(e){
-        alert("Permite cámara y micrófono para continuar." + (e?.message||e));
+        alert("Permite cámara y micrófono para continuar.\n" + (e?.message||e));
         throw e;
       }
     }
@@ -666,14 +681,13 @@
     btnNext  ?.addEventListener('click', nextMatch);
     btnStop  ?.addEventListener('click', stopAll);
 
-    // ===== Botón AR (PC) → ahora SÍ cambia la FORMA visible de las pantallas =====
+    // ===== Botón AR (PC) → cambia FORMA visible y constraints del track =====
     const btnAR = qs('#btn-ar');
 
     function setBodyAR(cls, label){
       document.body.classList.remove('ar-1-1','ar-4-3','ar-16-9');
       document.body.classList.add(cls);
       if(btnAR) btnAR.textContent = 'AR: ' + label;
-      // al cambiar AR, recalculamos altura del stage para que las tiles adopten ese AR
       if(!isMobile()) requestAnimationFrame(sizeStageForDesktop);
     }
     function currentARValue(){
@@ -724,12 +738,18 @@
     btnSalirM ?.addEventListener('click', ()=>{ stopAll(); auth.signOut(); });
     btnSalirChat?.addEventListener('click', ()=>{ stopAll(); auth.signOut(); });
 
-    // Doble toque: ver remoto completo (contain) en móvil
-    let remoteContain = false;
+    // Doble toque móvil: ver remoto completo (contain)
+    let remoteContainM = false;
     qs('#pane-remote')?.addEventListener('dblclick', ()=>{
-      remoteContain = !remoteContain;
-      if(remoteContain) remoteVideoM.classList.add('contain');
+      remoteContainM = !remoteContainM;
+      if(remoteContainM) remoteVideoM.classList.add('contain');
       else remoteVideoM.classList.remove('contain');
+    });
+
+    // Doble clic PC en el remoto: alterna contain/cover manualmente
+    qs('#remoteTile')?.addEventListener('dblclick', ()=>{
+      document.body.classList.toggle('remote-portrait');
+      applyZoom('remote');
     });
 
     // Orientación: adapta AR (móvil) -> solo afecta al *track* local en móvil
@@ -783,7 +803,7 @@
       if(layoutMode==='split'){
         if(isPortraitRemote){
           document.body.classList.add('remote-portrait');
-          // Si el remoto es vertical y estabas en 16:9, fuerzo 4:3 (o 1:1 con siguiente click)
+          // Si estabas en 16:9 y el remoto es vertical, fuerzo 4:3 para que no se vea tan aplastado
           if(document.body.classList.contains('ar-16-9')){
             setBodyAR('ar-4-3','4:3');
             applyARConstraints();
