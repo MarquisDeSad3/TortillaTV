@@ -81,21 +81,20 @@
     .stage{ position:relative; width:100%; }
     .tile{
       position:relative; border-radius:16px; overflow:hidden; background:#000;
-      /* El contenedor (tile) ocupa toda la celda. El llenado sin bandas depende de object-fit en el <video> */
       height:100%;
     }
 
     /* PC: grid 50/50 y altura dinámica para ocupar la pantalla */
     .layout-split{
       display:grid; grid-template-columns:1fr 1fr; gap:1rem;
-      height: calc(100dvh - 220px); /* ocupa casi toda la pantalla bajo la topbar; ajusta si quieres más/menos */
-      min-height: 540px;
+      /* la altura real la fija JS para evitar huecos */
+      min-height: 420px;
     }
 
     /* === Comportamiento PC pedido === */
     /* Local: SIEMPRE cubrir (sin bandas) */
     #stage .tile.local  video{ object-fit: cover; }
-    /* Remoto: por defecto cubrir; si se detecta retrato (celular), se fuerza contain */
+    /* Remoto: por defecto cubrir; si se detecta retrato (celular), se fuerza contain con bandas laterales */
     #stage .tile.remote video{ object-fit: cover; }
     body.remote-portrait #stage .tile.remote video{ object-fit: contain; background:#000; }
 
@@ -200,7 +199,8 @@
             <button id="btn-stop"  class="btn" disabled>Detener</button>
 
             <div class="ml-auto flex items-center gap-2">
-              <button id="btn-ar" class="btn hidden sm:inline-flex">AR: 1:1</button>
+              <!-- AHORA SIEMPRE VISIBLE EN PC -->
+              <button id="btn-ar" class="btn">AR: 1:1</button>
             </div>
 
             <div class="flex items-center gap-2 text-sm w-full">
@@ -350,7 +350,7 @@
 
     const stage=qs('#stage'), stageMobile=qs('#stageMobile');
 
-    // Botones móviles (FIX: solo una definición)
+    // Botones móviles
     const btnBuscarM=qs('#btn-buscar-m'), btnSalirM=qs('#btn-salir-m');
 
     let ws=null, wsOpen=false, myId=null, roomId=null, role=null;
@@ -392,8 +392,7 @@
         localVideoM.srcObject = stream;
         localVideo.srcObject = null;
       }
-      // PiP (no usado)
-      pipVideo.srcObject   = stream;
+      pipVideo.srcObject   = stream; // (no usado)
     }
 
     function attachRemote(){
@@ -572,7 +571,7 @@
         stageMobile.style.display = '';
         document.body.classList.add('no-scroll');
       }
-      // (Re)adjuntar streams solo a los videos visibles
+      // (Re)adjuntar streams
       if(localStream) attachLocal(localStream);
       attachRemote();
     }
@@ -593,56 +592,62 @@
     /* ===== Desktop: ocupar pantalla del usuario de forma agradable ===== */
     function sizeStageForDesktop(){
       if(layoutMode!=='split') return;
-      // Calcula altura libre para que el grid ocupe la pantalla sin dejar bloques raros
       const shell = document.getElementById('videoShell');
       const rect  = shell.getBoundingClientRect();
-      const top   = rect.top + window.scrollY; // posición desde el top del documento
       const vh    = window.innerHeight;
-      const usable= Math.max(540, Math.floor(vh - rect.top - 24)); // 24px margen inferior
+      // altura usable sin dejar hueco (24px margen visual)
+      const usable= Math.max(420, Math.floor(vh - rect.top - 24));
       stage.style.height = usable + 'px';
     }
     window.addEventListener('resize', ()=>{ if(!isMobile()) sizeStageForDesktop(); });
+    // Ajusta también si cambian paddings/altura por CSS
+    new ResizeObserver(()=>{ if(!isMobile()) sizeStageForDesktop(); }).observe(document.body);
 
     /* ===== Botones (PC) ===== */
     btnStart ?.addEventListener('click', joinQueue);
     btnNext  ?.addEventListener('click', nextMatch);
     btnStop  ?.addEventListener('click', stopAll);
 
-    // Botón AR (PC) → sincroniza con constraints reales
-    const btnAR=qs('#btn-ar');
-    function currentAR(){
-      if(document.body.classList.contains('ar-4-3')) return 4/3;
+    // ===== Botón AR (PC) → sincroniza con constraints reales =====
+    const btnAR = qs('#btn-ar');
+
+    function setBodyAR(cls, label){
+      document.body.classList.remove('ar-1-1','ar-4-3','ar-16-9');
+      document.body.classList.add(cls);
+      if(btnAR) btnAR.textContent = 'AR: ' + label;
+    }
+    function currentARValue(){
+      if(document.body.classList.contains('ar-4-3'))  return 4/3;
       if(document.body.classList.contains('ar-16-9')) return 16/9;
-      return 1/1; // ar-1-1 por defecto
+      return 1/1;
     }
     async function applyARConstraints(){
       const track = localStream?.getVideoTracks?.()[0];
       if(!track) return;
       try{
         await track.applyConstraints({
-          aspectRatio: currentAR(),
+          aspectRatio: currentARValue(),
           width:  { ideal: 1280, max: 1920 },
           height: { ideal: 720,  max: 1080 }
         });
-      }catch(e){ /* ignorar si el dispositivo no puede */ }
+      }catch(e){
+        // Si el dispositivo no soporta el AR exacto, no rompas nada
+        console.warn('applyConstraints fallo (ignorado):', e?.message||e);
+      }
     }
-    btnAR    ?.addEventListener('click', async ()=>{
-      const labels = ['4:3','1:1','16:9'];
-      const cls = ['ar-4-3','ar-1-1','ar-16-9'];
-      const current = cls.findIndex(c => document.body.classList.contains(c));
-      const next = (current+1)%cls.length;
-      document.body.classList.remove(...cls);
-      document.body.classList.add(cls[next]);
-      if(btnAR) btnAR.textContent = 'AR: ' + labels[next];
+    btnAR?.addEventListener('click', async ()=>{
+      // ciclo: 1:1 → 4:3 → 16:9 → 1:1
+      if(document.body.classList.contains('ar-1-1'))      setBodyAR('ar-4-3','4:3');
+      else if(document.body.classList.contains('ar-4-3')) setBodyAR('ar-16-9','16:9');
+      else                                                setBodyAR('ar-1-1','1:1');
       await applyARConstraints();
+      // Reajusta altura (por si cambia framing percibido)
+      if(!isMobile()) sizeStageForDesktop();
     });
 
     // MÓVIL: dos botones fijos
-    btnBuscarM?.addEventListener('click', ()=>{
-      if(inCall){ nextMatch(); } else { joinQueue(); }
-    });
-    btnSalirM?.addEventListener('click', ()=>{ stopAll(); auth.signOut(); });
-
+    btnBuscarM?.addEventListener('click', ()=>{ if(inCall){ nextMatch(); } else { joinQueue(); } });
+    btnSalirM ?.addEventListener('click', ()=>{ stopAll(); auth.signOut(); });
     btnSalirChat?.addEventListener('click', ()=>{ stopAll(); auth.signOut(); });
 
     // Doble toque: ver remoto completo (contain) en móvil
@@ -653,7 +658,7 @@
       else remoteVideoM.classList.remove('contain');
     });
 
-    // Orientación: adapta AR (móvil)
+    // Orientación: adapta AR (móvil) -> solo afecta al *track* local en móvil
     function isPortrait(){ return window.matchMedia('(orientation: portrait)').matches; }
     async function adaptToOrientation(){
       const track = localStream?.getVideoTracks?.()[0];
@@ -673,7 +678,7 @@
       try {
         const p = sender.getParameters();
         p.encodings = p.encodings || [{}];
-        p.encodings[0].maxBitrate = isMobile() ? 900_000 : 1_800_000; // ~900kbps móvil, ~1.8Mbps PC
+        p.encodings[0].maxBitrate = isMobile() ? 900_000 : 1_800_000;
         p.degradationPreference = 'maintain-framerate';
         sender.setParameters(p);
       } catch {}
@@ -684,31 +689,23 @@
       if(!remoteVideo) return;
       const mark = ()=> updateRemoteFitClass();
 
-      // Cuando llegan metadatos o cambia tamaño del frame remoto
       remoteVideo.addEventListener('loadedmetadata', mark);
       remoteVideo.addEventListener('resize', mark);
 
-      // También intenta leer settings del track (si existe) como pista inicial
       try{
         const track = remoteStreamRef?.getVideoTracks?.()[0];
         const st = track?.getSettings?.();
-        if(st?.width && st?.height){
-          updateRemoteFitClass(st.width, st.height);
-        }
+        if(st?.width && st?.height){ updateRemoteFitClass(st.width, st.height); }
       }catch{}
     }
 
     function updateRemoteFitClass(wFromTrack, hFromTrack){
-      // Preferimos dimensiones reales del elemento si existen
       const w = wFromTrack || remoteVideo.videoWidth  || 0;
       const h = hFromTrack || remoteVideo.videoHeight || 0;
-      if(!w || !h){ return; }
+      if(!w || !h) return;
       const ar = w / h;
+      const isPortraitRemote = ar < 0.9; // heurística vertical
 
-      // Heurística: consideramos "celular/vertical" si AR < 0.9
-      const isPortraitRemote = ar < 0.9;
-
-      // Solo afecta a PC (layout split). En móvil ya gestionamos con full-bleed.
       if(layoutMode==='split'){
         if(isPortraitRemote) document.body.classList.add('remote-portrait');
         else document.body.classList.remove('remote-portrait');
