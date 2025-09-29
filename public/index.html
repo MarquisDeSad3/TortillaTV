@@ -75,7 +75,7 @@
     .marquee li{ list-style:none; font-family:"Caveat"; font-size:clamp(16px,3.2vw,30px); font-weight:800; color:#111827 }
 
     /* ====== VIDEO (REGLAS BASE) ====== */
-    video{ width:100%; height:100%; background:#000; display:block; }
+    video{ width:100%; height:100%; background:#000; display:block; object-position:center center; }
     video.mirror{ transform: scaleX(-1) }
 
     .stage{ position:relative; width:100%; }
@@ -150,6 +150,14 @@
       .book{ padding:0 !important; }
       .full-bleed{ margin:0; left:0; right:0; width:100%; }
     }
+
+    /* ====== CONTROLES DE ZOOM (PC) ====== */
+    .zoom-controls{ position:absolute; right:10px; bottom:10px; display:flex; gap:6px; z-index:20; }
+    .zoom-btn{ width:30px; height:30px; border-radius:999px; display:grid; place-items:center; font-weight:800; background:rgba(255,255,255,.9); border:2px solid rgba(17,24,39,.35); box-shadow:0 8px 18px rgba(0,0,0,.18) }
+    .zoom-btn:active{ transform:translateY(1px) }
+
+    /* Asegura el clipping al hacer zoom */
+    .tile video{ will-change:transform; }
   </style>
 </head>
 <body class="font-sans ar-1-1">
@@ -217,9 +225,19 @@
           <div id="stage" class="stage layout-split">
             <div class="tile remote" id="remoteTile">
               <video id="remoteVideo" autoplay playsinline></video>
+              <!-- CONTROLES DE ZOOM (PC) REMOTO -->
+              <div class="zoom-controls sm:flex hidden" aria-label="Zoom remoto">
+                <button id="zoomOutRemote" class="zoom-btn" title="Alejar">−</button>
+                <button id="zoomInRemote" class="zoom-btn" title="Acercar">+</button>
+              </div>
             </div>
             <div class="tile local" id="localTile">
               <video id="localVideo" autoplay playsinline muted class="mirror"></video>
+              <!-- CONTROLES DE ZOOM (PC) LOCAL -->
+              <div class="zoom-controls sm:flex hidden" aria-label="Zoom local">
+                <button id="zoomOutLocal" class="zoom-btn" title="Alejar">−</button>
+                <button id="zoomInLocal" class="zoom-btn" title="Acercar">+</button>
+              </div>
             </div>
             <div id="pip" class="pip" style="display:none;">
               <video id="pipVideo" autoplay playsinline muted></video>
@@ -359,6 +377,31 @@
     let layoutMode='split'; // 'split' | 'mobile-fixed'
     const iceServers=[{urls:'stun:stun.l.google.com:19302'}];
 
+    /* ===== ZOOM STATE (PC) ===== */
+    const zoomState = { local: 1, remote: 1 };
+    const ZOOM_MIN = 1; const ZOOM_MAX = 3; const ZOOM_STEP = 0.15;
+    function applyZoom(which){
+      const v = (which==='local') ? localVideo : remoteVideo;
+      if(!v) return;
+      const z = zoomState[which];
+      v.style.transform = (v.classList.contains('mirror') ? `scaleX(-1) scale(${z})` : `scale(${z})`);
+      v.style.transformOrigin = 'center center';
+    }
+
+    function changeZoom(which, delta){
+      const next = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, (zoomState[which] + delta)));
+      zoomState[which] = Number(next.toFixed(2));
+      applyZoom(which);
+    }
+
+    // Bind zoom buttons (solo PC)
+    qs('#zoomInLocal')?.addEventListener('click', ()=> changeZoom('local', +ZOOM_STEP));
+    qs('#zoomOutLocal')?.addEventListener('click',()=> changeZoom('local', -ZOOM_STEP));
+    qs('#zoomInRemote')?.addEventListener('click',()=> changeZoom('remote', +ZOOM_STEP));
+    qs('#zoomOutRemote')?.addEventListener('click',()=> changeZoom('remote', -ZOOM_STEP));
+
+    function resetZoom(){ zoomState.local=1; zoomState.remote=1; applyZoom('local'); applyZoom('remote'); }
+
     async function ensureMedia(){
       try{
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -393,6 +436,7 @@
         localVideo.srcObject = null;
       }
       pipVideo.srcObject   = stream; // (no usado)
+      applyZoom('local');
     }
 
     function attachRemote(){
@@ -400,6 +444,7 @@
       if(layoutMode==='split'){
         remoteVideo.srcObject = remoteStreamRef;
         remoteVideoM.srcObject = null;
+        applyZoom('remote');
       }else{
         remoteVideoM.srcObject = remoteStreamRef;
         remoteVideo.srcObject = null;
@@ -486,6 +531,7 @@
       peerLabel.classList.add('hidden'); peerLabel.textContent='Pareja: —';
       // Reset detector remoto
       document.body.classList.remove('remote-portrait');
+      resetZoom();
     }
 
     function enableInCall(connected){
@@ -621,6 +667,23 @@
       if(document.body.classList.contains('ar-16-9')) return 16/9;
       return 1/1;
     }
+
+    // Ciclo dinámico: si el remoto es de móvil (vertical), limitamos a 1:1 ↔ 4:3
+    function nextARLabel(){
+      const portraitRemote = document.body.classList.contains('remote-portrait');
+      const is11  = document.body.classList.contains('ar-1-1');
+      const is43  = document.body.classList.contains('ar-4-3');
+      const is169 = document.body.classList.contains('ar-16-9');
+      if(portraitRemote){
+        if(is11)  return ['ar-4-3','4:3'];
+        return ['ar-1-1','1:1'];
+      }
+      // ciclo completo en PC normal: 1:1 → 4:3 → 16:9 → 1:1
+      if(is11)   return ['ar-4-3','4:3'];
+      if(is43)   return ['ar-16-9','16:9'];
+      return ['ar-1-1','1:1'];
+    }
+
     async function applyARConstraints(){
       const track = localStream?.getVideoTracks?.()[0];
       if(!track) return;
@@ -631,17 +694,14 @@
           height: { ideal: 720,  max: 1080 }
         });
       }catch(e){
-        // Si el dispositivo no soporta el AR exacto, no rompas nada
         console.warn('applyConstraints fallo (ignorado):', e?.message||e);
       }
     }
+
     btnAR?.addEventListener('click', async ()=>{
-      // ciclo: 1:1 → 4:3 → 16:9 → 1:1
-      if(document.body.classList.contains('ar-1-1'))      setBodyAR('ar-4-3','4:3');
-      else if(document.body.classList.contains('ar-4-3')) setBodyAR('ar-16-9','16:9');
-      else                                                setBodyAR('ar-1-1','1:1');
+      const [cls,label] = nextARLabel();
+      setBodyAR(cls,label);
       await applyARConstraints();
-      // Reajusta altura (por si cambia framing percibido)
       if(!isMobile()) sizeStageForDesktop();
     });
 
