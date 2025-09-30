@@ -52,10 +52,10 @@
 
     html,body{ height:100%; background:var(--paper); color:var(--ink); -webkit-font-smoothing:antialiased; }
 
-    /* (Tu ajuste para alinear el scroller) */
+    /* ( ajuste para alinear el scroller) */
     #noteScroller {
       display: flex;
-      justify-content: flex-start; /* izquierda */
+      justify-content: flex-start; 
       gap: 0.2ch;
       align-items: center;
     }
@@ -236,17 +236,17 @@
             <button data-gen="Hombre" class="gen card py-4 flex flex-col items-center gap-2">
               <!-- Icono hombre -->
               <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M14.5 3H21v6" stroke="#111827" stroke-width="1.8" stroke-linecap="round"/><path d="M21 3l-7.5 7.5" stroke="#111827" stroke-width="1.8" stroke-linecap="round"/><circle cx="9" cy="15" r="5.5" stroke="#111827" stroke-width="1.8"/></svg>
-              <span class="font-semibold">Hombre</span>
+              <span class="font-semibold">Macho</span>
             </button>
-            <button data-gen="Mujer"  class="gen card py-4 flex flex-col items-center gap-2">
+            <button data-gen="Tortillera"  class="gen card py-4 flex flex-col items-center gap-2">
               <!-- Icono mujer -->
               <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="8" r="5.5" stroke="#111827" stroke-width="1.8"/><path d="M12 13.5v6M9.5 17h5" stroke="#111827" stroke-width="1.8" stroke-linecap="round"/></svg>
-              <span class="font-semibold">Mujer</span>
+              <span class="font-semibold">Tortillera</span>
             </button>
             <button data-gen="Lada"   class="gen card py-4 flex flex-col items-center gap-2">
               <!-- Icono Lada (auto) -->
               <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 14l2-5h12l2 5v4a1 1 0 0 1-1 1h-1" stroke="#111827" stroke-width="1.8" stroke-linejoin="round"/><circle cx="8" cy="19" r="1.6" fill="#111827"/><circle cx="18" cy="19" r="1.6" fill="#111827"/><path d="M6 14h12" stroke="#111827" stroke-width="1.8" stroke-linecap="round"/></svg>
-              <span class="font-semibold">Lada</span>
+              <span class="font-semibold">Un Lada</span>
             </button>
           </div>
           <p id="genElegido" class="mt-2 text-sm text-neutral-600"></p>
@@ -351,7 +351,7 @@
   <!-- Overlay sala de espera -->
   <div id="overlay" class="overlay">
     <div class="card px-5 py-4 flex items-center gap-3 bg-white">
-      <span class="font-semibold">Buscando pareja…</span>
+      <span class="font-semibold">Buscando tortilleras!!!…</span>
       <div class="flex"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
     </div>
   </div>
