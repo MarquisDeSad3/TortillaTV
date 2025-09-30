@@ -205,6 +205,83 @@
 
     /* Asegura el clipping al hacer zoom */
     .tile video{ will-change:transform; }
+    /* ===== Dock inferior SOLO en móviles ===== */
+.mobile-dock{
+  position:fixed;
+  left:12px; right:12px;
+  bottom:calc(env(safe-area-inset-bottom,0) + 10px);
+  z-index:60;
+  display:grid; grid-template-columns:1fr 1fr; gap:10px;
+  padding:10px;
+  border-radius:18px;
+  background:rgba(17,24,39,.55);
+  backdrop-filter:blur(10px);
+  box-shadow:0 16px 36px rgba(0,0,0,.35);
+  border:1px solid rgba(255,255,255,.18);
+}
+
+.dock-btn{
+  padding:.9rem 1rem;
+  border-radius:999px;
+  font-weight:800;
+  border:2px solid transparent;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dock-btn--primary{
+  background:#fff; color:#111;
+  border-color:#ddd;
+}
+
+.dock-btn--ghost{
+  background:transparent;
+  color:#fff;
+  border-color:rgba(255,255,255,.4);
+}
+
+/* 🚫 Ocultar en pantallas grandes (Windows/PC) */
+@media (min-width: 641px){
+  .mobile-dock{ display:none }
+}
+
+/* ===== Dock inferior SOLO en móviles ===== */
+.mobile-dock{
+  position:fixed;
+  left:12px; right:12px;
+  bottom:calc(env(safe-area-inset-bottom,0) + 10px);
+  z-index:60;
+  display:grid; grid-template-columns:1fr 1fr; gap:10px;
+  padding:10px;
+  border-radius:18px;
+  background:rgba(17,24,39,.55);
+  backdrop-filter:blur(10px);
+  box-shadow:0 16px 36px rgba(0,0,0,.35);
+  border:1px solid rgba(255,255,255,.18);
+}
+
+.dock-btn{
+  padding:.9rem 1rem;
+  border-radius:999px;
+  font-weight:800;
+  border:2px solid transparent;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dock-btn--primary{
+  background:#fff; color:#111;
+  border-color:#ddd;
+}
+
+.dock-btn--ghost{
+  background:transparent;
+  color:#fff;
+  border-color:rgba(255,255,255,.4);
+}
+
+/* 🚫 Ocultar en pantallas grandes (Windows/PC) */
+@media (min-width: 641px){
+  .mobile-dock{ display:none }
+}
   </style>
 </head>
 <body class="font-sans ar-1-1">
@@ -336,10 +413,11 @@
           </div>
         </div>
 
-        <!-- Botones móviles -->
-        <button id="btn-buscar-m" class="mobile-btn sm:hidden">Buscar sala</button>
-        <button id="btn-salir-m"  class="mobile-btn sm:hidden">Salir</button>
-
+        <!-- Dock inferior SOLO en móviles -->
+<div class="mobile-dock sm:hidden" role="toolbar" aria-label="Controles de sala">
+  <button id="btn-buscar-m" class="dock-btn dock-btn--primary">Buscar sala</button>
+  <button id="btn-salir-m" class="dock-btn dock-btn--ghost">Salir</button>
+</div>
         <!-- Botón salir extra (PC / fallback) -->
         <div class="mt-6 flex items-center justify-center">
           <button id="btn-salir-chat" class="rounded-full border-2 border-neutral-900/30 bg-white/80 px-5 py-2 text-sm font-semibold shadow">Salir</button>
