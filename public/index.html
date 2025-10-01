@@ -120,8 +120,6 @@
       filter: drop-shadow(0 0 6px rgba(239,68,68,.45));
     }
 
-    /* (Las clases .corner/.marquee quedan sin uso; podrías borrarlas si quieres) */
-
     /* ====== VIDEO (REGLAS BASE) ====== */
     video{ width:100%; height:100%; background:#000; display:block; object-position:center center; }
     video.mirror{ transform: scaleX(-1) }
@@ -205,83 +203,143 @@
 
     /* Asegura el clipping al hacer zoom */
     .tile video{ will-change:transform; }
+
     /* ===== Dock inferior SOLO en móviles ===== */
-.mobile-dock{
-  position:fixed;
-  left:12px; right:12px;
-  bottom:calc(env(safe-area-inset-bottom,0) + 10px);
-  z-index:60;
-  display:grid; grid-template-columns:1fr 1fr; gap:10px;
-  padding:10px;
-  border-radius:18px;
-  background:rgba(17,24,39,.55);
-  backdrop-filter:blur(10px);
-  box-shadow:0 16px 36px rgba(0,0,0,.35);
-  border:1px solid rgba(255,255,255,.18);
-}
+    .mobile-dock{
+      position:fixed;
+      left:12px; right:12px;
+      bottom:calc(env(safe-area-inset-bottom,0) + 10px);
+      z-index:60;
+      display:grid; grid-template-columns:1fr 1fr; gap:10px;
+      padding:10px;
+      border-radius:18px;
+      background:rgba(17,24,39,.55);
+      backdrop-filter:blur(10px);
+      box-shadow:0 16px 36px rgba(0,0,0,.35);
+      border:1px solid rgba(255,255,255,.18);
+    }
 
-.dock-btn{
-  padding:.9rem 1rem;
-  border-radius:999px;
-  font-weight:800;
-  border:2px solid transparent;
-  -webkit-tap-highlight-color: transparent;
-}
+    .dock-btn{
+      padding:.9rem 1rem;
+      border-radius:999px;
+      font-weight:800;
+      border:2px solid transparent;
+      -webkit-tap-highlight-color: transparent;
+    }
 
-.dock-btn--primary{
-  background:#fff; color:#111;
-  border-color:#ddd;
-}
+    .dock-btn--primary{
+      background:#fff; color:#111;
+      border-color:#ddd;
+    }
 
-.dock-btn--ghost{
-  background:transparent;
-  color:#fff;
-  border-color:rgba(255,255,255,.4);
-}
+    .dock-btn--ghost{
+      background:transparent;
+      color:#fff;
+      border-color:rgba(255,255,255,.4);
+    }
 
-/* 🚫 Ocultar en pantallas grandes (Windows/PC) */
-@media (min-width: 641px){
-  .mobile-dock{ display:none }
-}
+    /* 🚫 Ocultar en pantallas grandes (Windows/PC) */
+    @media (min-width: 641px){
+      .mobile-dock{ display:none }
+    }
 
-/* ===== Dock inferior SOLO en móviles ===== */
-.mobile-dock{
-  position:fixed;
-  left:12px; right:12px;
-  bottom:calc(env(safe-area-inset-bottom,0) + 10px);
-  z-index:60;
-  display:grid; grid-template-columns:1fr 1fr; gap:10px;
-  padding:10px;
-  border-radius:18px;
-  background:rgba(17,24,39,.55);
-  backdrop-filter:blur(10px);
-  box-shadow:0 16px 36px rgba(0,0,0,.35);
-  border:1px solid rgba(255,255,255,.18);
-}
+    /* ===== Dock inferior SOLO en móviles (repetido original, lo dejamos igual) ===== */
+    .mobile-dock{
+      position:fixed;
+      left:12px; right:12px;
+      bottom:calc(env(safe-area-inset-bottom,0) + 10px);
+      z-index:60;
+      display:grid; grid-template-columns:1fr 1fr; gap:10px;
+      padding:10px;
+      border-radius:18px;
+      background:rgba(17,24,39,.55);
+      backdrop-filter:blur(10px);
+      box-shadow:0 16px 36px rgba(0,0,0,.35);
+      border:1px solid rgba(255,255,255,.18);
+    }
 
-.dock-btn{
-  padding:.9rem 1rem;
-  border-radius:999px;
-  font-weight:800;
-  border:2px solid transparent;
-  -webkit-tap-highlight-color: transparent;
-}
+    .dock-btn{
+      padding:.9rem 1rem;
+      border-radius:999px;
+      font-weight:800;
+      border:2px solid transparent;
+      -webkit-tap-highlight-color: transparent;
+    }
 
-.dock-btn--primary{
-  background:#fff; color:#111;
-  border-color:#ddd;
-}
+    .dock-btn--primary{
+      background:#fff; color:#111;
+      border-color:#ddd;
+    }
 
-.dock-btn--ghost{
-  background:transparent;
-  color:#fff;
-  border-color:rgba(255,255,255,.4);
-}
+    .dock-btn--ghost{
+      background:transparent;
+      color:#fff;
+      border-color:rgba(255,255,255,.4);
+    }
 
-/* 🚫 Ocultar en pantallas grandes (Windows/PC) */
-@media (min-width: 641px){
-  .mobile-dock{ display:none }
-}
+    /* 🚫 Ocultar en pantallas grandes (Windows/PC) */
+    @media (min-width: 641px){
+      .mobile-dock{ display:none }
+    }
+
+    /* ============== AÑADIDOS (móvil estilo OmeTV) ============== */
+
+    /* Ocultar dock/botones en móvil */
+    @media (max-width:640px){
+      .mobile-dock{ display:none !important; }
+      .topbar{ display:none !important; }
+    }
+
+    /* Botón mini cambiar cámara (abajo-izq) */
+    .cam-switch{
+      position:fixed; left:12px;
+      bottom:calc(env(safe-area-inset-bottom,0) + 12px);
+      z-index:70; width:42px; height:42px; border-radius:999px;
+      display:grid; place-items:center; font-size:18px; font-weight:900;
+      background:rgba(17,24,39,.75); color:#fff; border:2px solid rgba(255,255,255,.25);
+      backdrop-filter:blur(8px); box-shadow:0 10px 28px rgba(0,0,0,.28);
+    }
+    @media (min-width:641px){ .cam-switch{ display:none } } /* sólo móvil */
+
+    /* Pantalla estática (cuando no hay stream o esperando) */
+    .idle{
+      position:absolute; inset:0; display:grid; place-items:center;
+      background:#000; color:#fff; text-align:center; font-weight:800;
+      text-shadow:0 2px 10px rgba(0,0,0,.6); z-index:1;
+    }
+    .idle.hide{ display:none; }
+
+    /* “Ruido” simple para la estática */
+    .static-noise{ 
+      background:
+        repeating-linear-gradient(0deg, rgba(255,255,255,.05) 0 2px, transparent 2px 4px),
+        repeating-linear-gradient(90deg, rgba(255,255,255,.035) 0 2px, transparent 2px 3px),
+        #000;
+      animation:tvNoise 1s steps(8) infinite;
+    }
+    @keyframes tvNoise{
+      0%{ filter:contrast(140%) brightness(115%); }
+      100%{ filter:contrast(140%) brightness(115%); transform:translateY(-1px); }
+    }
+
+    /* Tip de gesto: mano que se desliza */
+    .swipe-tip{
+      position:fixed; top:14px; left:50%; transform:translateX(-50%);
+      z-index:70; color:#fff; background:rgba(17,24,39,.65);
+      border:1px solid rgba(255,255,255,.25);
+      backdrop-filter:blur(8px); border-radius:999px; padding:.45rem .9rem;
+      display:flex; align-items:center; gap:.55rem; font-weight:700; font-size:14px;
+    }
+    .swipe-hand{
+      width:22px; height:22px; border-radius:6px; background:#fff;
+      animation:handRight 1.8s ease-in-out infinite;
+    }
+    @keyframes handRight{
+      0%{ transform:translateX(-22px); opacity:.9 }
+      45%{ transform:translateX(22px); opacity:1 }
+      60%{ opacity:0 }
+      100%{ opacity:0 }
+    }
   </style>
 </head>
 <body class="font-sans ar-1-1">
@@ -292,11 +350,7 @@
       <!-- LANDING -->
       <section id="page-landing" class="page visible">
         <div class="hero">
-          <!-- Quitamos la esquina (.corner) y la marquee -->
-          <!-- El letrero ahora vive pegado al título -->
-
           <h1 class="font-display font-extrabold select-none ttv animate-wobbleIn" style="font-size:clamp(56px,10vw,140px); line-height:.9; text-shadow:0 1px 0 #fff, 0 10px 18px rgba(0,0,0,.15)">
-            <!-- Pegatina amarilla en la esquina superior izquierda del título -->
             <span class="note note-tiny note-at-title">
               <span class="scroller" id="noteScroller">
                 <span class="slide" id="noteCurr">anal</span>
@@ -311,17 +365,14 @@
           <!-- Género -->
           <div class="mt-6 grid grid-cols-3 gap-3 max-w-md">
             <button data-gen="Hombre" class="gen card py-4 flex flex-col items-center gap-2">
-              <!-- Icono hombre -->
               <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M14.5 3H21v6" stroke="#111827" stroke-width="1.8" stroke-linecap="round"/><path d="M21 3l-7.5 7.5" stroke="#111827" stroke-width="1.8" stroke-linecap="round"/><circle cx="9" cy="15" r="5.5" stroke="#111827" stroke-width="1.8"/></svg>
               <span class="font-semibold">Macho</span>
             </button>
             <button data-gen="Tortillera"  class="gen card py-4 flex flex-col items-center gap-2">
-              <!-- Icono mujer -->
               <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="8" r="5.5" stroke="#111827" stroke-width="1.8"/><path d="M12 13.5v6M9.5 17h5" stroke="#111827" stroke-width="1.8" stroke-linecap="round"/></svg>
               <span class="font-semibold">Tortillera</span>
             </button>
             <button data-gen="Lada"   class="gen card py-4 flex flex-col items-center gap-2">
-              <!-- Icono Lada (auto) -->
               <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 14l2-5h12l2 5v4a1 1 0 0 1-1 1h-1" stroke="#111827" stroke-width="1.8" stroke-linejoin="round"/><circle cx="8" cy="19" r="1.6" fill="#111827"/><circle cx="18" cy="19" r="1.6" fill="#111827"/><path d="M6 14h12" stroke="#111827" stroke-width="1.8" stroke-linecap="round"/></svg>
               <span class="font-semibold">Un Lada</span>
             </button>
@@ -330,12 +381,10 @@
 
           <!-- Form extra: nombre y edad (aparece tras elegir sexo) -->
           <div id="extraForm" class="mt-4 max-w-md w-full grid grid-cols-1 gap-3" style="display:none">
-            <!-- Nombre -->
             <label class="card flex items-center gap-3">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="8" r="4" stroke="#111827" stroke-width="1.6"/><path d="M4 20c1.6-3.2 4.7-5 8-5s6.4 1.8 8 5" stroke="#111827" stroke-width="1.6" stroke-linecap="round"/></svg>
               <input id="inpNombre" class="w-full bg-transparent outline-none" type="text" placeholder="Tu nombre" maxlength="32">
             </label>
-            <!-- Edad -->
             <label class="card flex items-center gap-3">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 7h10M7 12h10M7 17h6" stroke="#111827" stroke-width="1.6" stroke-linecap="round"/><rect x="3" y="4" width="18" height="16" rx="2" stroke="#111827" stroke-width="1.6"/></svg>
               <input id="inpEdad" class="w-full bg-transparent outline-none" type="number" inputmode="numeric" min="18" max="99" placeholder="Edad (18+)" />
@@ -405,19 +454,28 @@
           <!-- MÓVIL: pantalla partida full-bleed -->
           <div id="stageMobile" class="layout-mobile-fixed" style="display:none;">
             <div class="pane" id="pane-remote">
+              <!-- Idle remoto (arriba) -->
+              <div id="idle-remote" class="idle static-noise">
+                <div>Desliza → para empezar</div>
+              </div>
               <video id="remoteVideoM" autoplay playsinline></video>
             </div>
             <div class="pane" id="pane-local">
+              <!-- Idle local (abajo) -->
+              <div id="idle-local" class="idle static-noise">
+                <div>Preparando cámara…</div>
+              </div>
               <video id="localVideoM" autoplay playsinline muted class="mirror"></video>
             </div>
           </div>
         </div>
 
-        <!-- Dock inferior SOLO en móviles -->
-<div class="mobile-dock sm:hidden" role="toolbar" aria-label="Controles de sala">
-  <button id="btn-buscar-m" class="dock-btn dock-btn--primary">Buscar sala</button>
-  <button id="btn-salir-m" class="dock-btn dock-btn--ghost">Salir</button>
-</div>
+        <!-- Dock inferior SOLO en móviles (queda en DOM pero se oculta en móvil) -->
+        <div class="mobile-dock sm:hidden" role="toolbar" aria-label="Controles de sala">
+          <button id="btn-buscar-m" class="dock-btn dock-btn--primary">Buscar sala</button>
+          <button id="btn-salir-m" class="dock-btn dock-btn--ghost">Salir</button>
+        </div>
+
         <!-- Botón salir extra (PC / fallback) -->
         <div class="mt-6 flex items-center justify-center">
           <button id="btn-salir-chat" class="rounded-full border-2 border-neutral-900/30 bg-white/80 px-5 py-2 text-sm font-semibold shadow">Salir</button>
@@ -432,6 +490,15 @@
       <span class="font-semibold">Buscando tortilleras!!!…</span>
       <div class="flex"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
     </div>
+  </div>
+
+  <!-- Botón mini: cambiar cámara (móvil) -->
+  <button id="btn-swapcam" class="cam-switch" aria-label="Cambiar cámara">↻</button>
+
+  <!-- Pista de gesto (móvil) -->
+  <div id="swipe-tip" class="swipe-tip sm:hidden">
+    <div class="swipe-hand" aria-hidden="true"></div>
+    <span>Desliza → empezar / siguiente — ← detener</span>
   </div>
 
   <!-- SCRIPTS -->
@@ -470,9 +537,6 @@
     const peerLabel = qs('#peerLabel');
     const youBadge  = qs('#you-badge');
 
-    /* ===== (QUITADO) Marquee demo ===== */
-    // Eliminado para quitar “Kristoff / Astroboy”
-
     /* ===== Letrero con deslizamiento unísono ===== */
     const NOTE_WORDS = ["anal","beso","charla","broma","random","a ochoa lo fusilaron","aayyyy","ya se me olvido que era singar","dame promo","https://instagram.com/marquisdsad3"];
     let noteIdx = 0;
@@ -485,9 +549,8 @@
       const nextText = NOTE_WORDS[(noteIdx+1) % NOTE_WORDS.length];
       noteNext.textContent = nextText;
 
-      // Animar el contenedor para mover todo al unísono
       scroller.style.transform = 'translateX(0%)';
-      void scroller.offsetWidth; // reflow
+      void scroller.offsetWidth;
       scroller.style.transition = 'transform .7s cubic-bezier(.22,.61,.36,1)';
       scroller.style.transform = 'translateX(-100%)';
 
@@ -499,7 +562,6 @@
         scroller.style.transform = 'translateX(0%)';
       }
     }
-    // Cicla cada 2.2s
     setInterval(cycleNote, 2200);
 
     /* ===== Estado landing + auth ===== */
@@ -917,7 +979,7 @@
       await applyARConstraints();
     });
 
-    // MÓVIL: dos botones fijos
+    // MÓVIL: dos botones fijos (se ocultan por CSS en móvil para look OmeTV)
     btnBuscarM?.addEventListener('click', ()=>{ if(inCall){ nextMatch(); } else { joinQueue(); } });
     btnSalirM ?.addEventListener('click', ()=>{ stopAll(); auth.signOut(); });
     btnSalirChat?.addEventListener('click', ()=>{ stopAll(); auth.signOut(); });
@@ -997,6 +1059,97 @@
 
     // Salida limpia
     window.addEventListener('beforeunload', ()=>{ try{ send({type:'leave'}); }catch{} });
+
+    /* ================== AÑADIDOS JS (OmeTV móvil) ================== */
+
+    // Referencias extra móvil
+    const idleRemote = qs('#idle-remote');
+    const idleLocal  = qs('#idle-local');
+    const btnSwapCam = qs('#btn-swapcam');
+    const swipeTip   = qs('#swipe-tip');
+
+    let currentFacing = 'user'; // frontal por defecto
+
+    function showIdleRemote(show){ if(idleRemote) idleRemote.classList.toggle('hide', !show); }
+    function showIdleLocal(show){  if(idleLocal)  idleLocal.classList.toggle('hide',  !show); }
+    // Estado inicial
+    showIdleRemote(true); showIdleLocal(true);
+
+    // Cambiar cámara
+    async function toggleCamera(){
+      try{
+        const target = (currentFacing === 'user') ? 'environment' : 'user';
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video:{ width:{ideal:1280}, height:{ideal:720}, frameRate:{ideal:30}, facingMode:{ exact: target } },
+          audio:{ echoCancellation:true, noiseSuppression:true }
+        });
+        const newTrack = stream.getVideoTracks()[0];
+        if(localStream){
+          const old = localStream.getVideoTracks()[0]; if(old) old.stop();
+          localStream.removeTrack(old); localStream.addTrack(newTrack);
+          const sender = pc?.getSenders?.().find(s=>s.track && s.track.kind==='video');
+          if(sender) await sender.replaceTrack(newTrack);
+        }else{
+          localStream = stream;
+        }
+        currentFacing = target;
+        attachLocal(localStream);
+      }catch(e){
+        console.warn('No se pudo cambiar la cámara:', e?.message||e);
+      }
+    }
+    btnSwapCam?.addEventListener('click', toggleCamera);
+
+    // Mostrar/Ocultar idles junto a tus attach*
+    const _attachLocal_orig  = attachLocal;
+    attachLocal = function(stream){ _attachLocal_orig(stream); showIdleLocal(false); }
+
+    const _attachRemote_orig = attachRemote;
+    attachRemote = function(){ _attachRemote_orig(); showIdleRemote(false); }
+
+    // En fin de llamada -> vuelve la estática de arriba
+    const _handleCallEnded = handleCallEnded;
+    handleCallEnded = function(reason){
+      _handleCallEnded(reason);
+      showIdleRemote(true);
+    };
+
+    // En cola: mostrar “cargando” hasta conectar
+    const _joinQueue = joinQueue;
+    joinQueue = async function(){
+      showIdleRemote(true);
+      await _joinQueue();
+    };
+
+    // Limpiar: restaurar idles
+    const _cleanupPeer = cleanupPeer;
+    cleanupPeer = function(opts){
+      _cleanupPeer(opts);
+      if(opts?.keepLocal){ showIdleLocal(false); } else { showIdleLocal(true); }
+      showIdleRemote(true);
+    };
+
+    // Gestos de swipe en la pantalla superior (remoto)
+    function initSwipeGestures(){
+      const el = document.getElementById('pane-remote');
+      if(!el) return;
+      let startX=0, dx=0, active=false;
+
+      el.addEventListener('touchstart', (e)=>{ active=true; dx=0; startX=e.touches[0].clientX; }, {passive:true});
+      el.addEventListener('touchmove',  (e)=>{ if(!active) return; dx = e.touches[0].clientX - startX; }, {passive:true});
+      el.addEventListener('touchend',   ()=>{
+        if(!active) return; active=false;
+        const TH=80;
+        if(dx >  TH){  // derecha: empezar/siguiente
+          if(inCall){ nextMatch(); } else { joinQueue(); }
+          swipeTip?.remove();
+        }else if(dx < -TH){ // izquierda: detener
+          stopAll();
+          swipeTip?.remove();
+        }
+      });
+    }
+    initSwipeGestures();
   </script>
 </body>
 </html>
