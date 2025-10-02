@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!DOCTYPE html> 
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
@@ -97,6 +97,17 @@
     .scribble{ width:min(920px,92vw); height:32px; margin-inline:auto }
     .scribble path{ stroke:rgba(239,68,68,.82); stroke-width:6; fill:none; stroke-linecap:round; stroke-dasharray:1400; animation:scribble 1.8s ease forwards, scribbleFlow 5s linear 2s infinite; filter: drop-shadow(0 0 6px rgba(239,68,68,.45)); }
 
+    /* ===== Idle de ruido (video) ===== */
+    .idle-video{
+      position:absolute; inset:0;
+      width:100%; height:100%;
+      object-fit:cover;        /* ocupa todo el contenedor */
+      transform:scale(1.22);   /* más de cerca */
+      z-index:2;
+      pointer-events:none;     /* no bloquea clicks */
+    }
+    .hide{ display:none !important; }
+
     /* ====== VIDEO (REGLAS BASE) ====== */
     video{ width:100%; height:100%; background:#000; display:block; object-position:center center; -webkit-user-select:none; user-select:none; }
     video.mirror{ transform: scaleX(-1) }
@@ -111,10 +122,9 @@
     #stage .tile.local  video{ object-fit: cover; }
     
     /* Remoto: por defecto NO recortar */
-#stage .tile.remote video{ object-fit: contain; background:#000; }
+    #stage .tile.remote video{ object-fit: contain; background:#000; }
+    body.remote-landscape #stage .tile.remote video{ object-fit: cover; }
 
-/* Si detectamos que es un paisaje muy ancho y quieres llenar, activamos cover via clase */
-body.remote-landscape #stage .tile.remote video{ object-fit: cover; }
     /* ===== MÓVIL: FULL-BLEED MITAD/MITAD ===== */
     .layout-mobile-fixed{
       position:fixed; inset:0; height:calc(var(--dvh) * 100);
@@ -229,14 +239,14 @@ body.remote-landscape #stage .tile.remote video{ object-fit: cover; }
     }
 
     .swipe-tip{
-  position:fixed; top:14px; left:50%; transform:translateX(-50%);
-  z-index:70; color:#fff; background:rgba(17,24,39,.65);
-  border:1px solid rgba(255,255,255,.25);
-  backdrop-filter:blur(8px); border-radius:999px; padding:.45rem .9rem;
-  display:none; 
-  align-items:center; gap:.55rem; font-weight:700; font-size:14px;
-}
-.swipe-tip.show{ display:flex; } 
+      position:fixed; top:14px; left:50%; transform:translateX(-50%);
+      z-index:70; color:#fff; background:rgba(17,24,39,.65);
+      border:1px solid rgba(255,255,255,.25);
+      backdrop-filter:blur(8px); border-radius:999px; padding:.45rem .9rem;
+      display:none; 
+      align-items:center; gap:.55rem; font-weight:700; font-size:14px;
+    }
+    .swipe-tip.show{ display:flex; } 
     .swipe-hand{ width:22px; height:22px; border-radius:6px; background:#fff; animation:handRight 1.8s ease-in-out infinite; }
     @keyframes handRight{
       0%{ transform:translateX(-22px); opacity:.9 }
@@ -362,7 +372,12 @@ body.remote-landscape #stage .tile.remote video{ object-fit: cover; }
           <!-- PC: 50/50 -->
           <div id="stage" class="stage layout-split">
             <div class="tile remote" id="remoteTile">
+              <!-- Idle de ruido (PC) -->
+              <video id="idleNoiseD" class="idle-video" src="./assets/noise.mp4"
+                     muted playsinline autoplay loop preload="auto"></video>
+
               <video id="remoteVideo" autoplay playsinline></video>
+
               <!-- CONTROLES DE ZOOM (PC) REMOTO -->
               <div class="zoom-controls sm:flex hidden" aria-label="Zoom remoto">
                 <button id="fitRemote" class="zoom-btn" title="Ver completo">⤢</button>
@@ -370,6 +385,7 @@ body.remote-landscape #stage .tile.remote video{ object-fit: cover; }
                 <button id="zoomInRemote" class="zoom-btn" title="Acercar">+</button>
               </div>
             </div>
+
             <div class="tile local" id="localTile">
               <video id="localVideo" autoplay playsinline muted class="mirror"></video>
               <!-- CONTROLES DE ZOOM (PC) LOCAL -->
@@ -379,6 +395,7 @@ body.remote-landscape #stage .tile.remote video{ object-fit: cover; }
                 <button id="zoomInLocal" class="zoom-btn" title="Acercar">+</button>
               </div>
             </div>
+
             <div id="pip" class="pip" style="display:none;">
               <video id="pipVideo" autoplay playsinline muted></video>
             </div>
@@ -387,7 +404,9 @@ body.remote-landscape #stage .tile.remote video{ object-fit: cover; }
           <!-- MÓVIL: pantalla partida full-bleed -->
           <div id="stageMobile" class="layout-mobile-fixed" style="display:none;">
             <div class="pane" id="pane-remote">
-              <div id="idle-remote" class="idle static-noise"><div>Desliza → para empezar</div></div>
+              <!-- Idle de ruido (Móvil) -->
+              <video id="idleNoiseM" class="idle-video" src="./assets/noise.mp4"
+                     muted playsinline autoplay loop preload="auto"></video>
               <video id="remoteVideoM" autoplay playsinline></video>
             </div>
             <div class="pane" id="pane-local">
@@ -407,11 +426,12 @@ body.remote-landscape #stage .tile.remote video{ object-fit: cover; }
         <div class="mt-6 flex items-center justify-center">
           <button id="btn-salir-chat" class="rounded-full border-2 border-neutral-900/30 bg-white/80 px-5 py-2 text-sm font-semibold shadow">Salir</button>
         </div>
+
         <!-- Pista de gesto (móvil) -->
-<div id="swipe-tip" class="swipe-tip sm:hidden">
-  <div class="swipe-hand" aria-hidden="true"></div>
-  <span>Desliza → empezar / siguiente — ← detener</span>
-</div>
+        <div id="swipe-tip" class="swipe-tip sm:hidden">
+          <div class="swipe-hand" aria-hidden="true"></div>
+          <span>Desliza → empezar / siguiente — ← detener</span>
+        </div>
       </section>
     </main>
   </div>
@@ -432,8 +452,6 @@ body.remote-landscape #stage .tile.remote video{ object-fit: cover; }
   <div id="gear-sheet" class="sheet">
     <div class="row"><span>Mute micrófono</span><input id="sw-mute" type="checkbox" class="switch"></div>
   </div>
-
-  
 
   <!-- SCRIPTS -->
   <script>
@@ -549,6 +567,10 @@ body.remote-landscape #stage .tile.remote video{ object-fit: cover; }
 
     const gearBtn = qs('#btn-gear'), gearSheet = qs('#gear-sheet'), swMute = qs('#sw-mute');
 
+    /* ===== NUEVO: refs a idles de video ===== */
+    const idleNoiseD = qs('#idleNoiseD');
+    const idleNoiseM = qs('#idleNoiseM');
+
     /* ===== Estado WebRTC/WS ===== */
     let ws=null, wsOpen=false, myId=null, roomId=null, role=null;
     let pc=null, localStream=null, remoteStreamRef=null;
@@ -589,26 +611,27 @@ body.remote-landscape #stage .tile.remote video{ object-fit: cover; }
     function resetZoom(){ zoomState.local=1; zoomState.remote=1; applyZoom('local'); applyZoom('remote'); }
 
     /* ===== gUM helper tolerante ===== */
-   async function getStream({ facing = 'user' } = {}){
-  const base = isMobile()
-    ? { // 📱 MÓVIL: NO forzar width/height/aspectRatio → evita recortes
-        video: { facingMode: { ideal: facing } },
-        audio: { echoCancellation:true, noiseSuppression:true }
-      }
-    : { // 🖥️ PC: mantenemos 1280x720
-        video: { width:{ideal:1280}, height:{ideal:720}, frameRate:{ideal:30}, facingMode:{ ideal:facing } },
-        audio: { echoCancellation:true, noiseSuppression:true }
-      };
+    async function getStream({ facing = 'user' } = {}){
+      const base = isMobile()
+        ? { // 📱 MÓVIL: NO forzar width/height/aspectRatio → evita recortes
+            video: { facingMode: { ideal: facing } },
+            audio: { echoCancellation:true, noiseSuppression:true }
+          }
+        : { // 🖥️ PC: 1280x720
+            video: { width:{ideal:1280}, height:{ideal:720}, frameRate:{ideal:30}, facingMode:{ ideal:facing } },
+            audio: { echoCancellation:true, noiseSuppression:true }
+          };
 
-  try{
-    return await navigator.mediaDevices.getUserMedia(base);
-  }catch(e){
-    try{
-      if (base.video && base.video.facingMode) delete base.video.facingMode; // fallback
-      return await navigator.mediaDevices.getUserMedia(base);
-    }catch(err){ throw err; }
-  }
-}
+      try{
+        return await navigator.mediaDevices.getUserMedia(base);
+      }catch(e){
+        try{
+          if (base.video && base.video.facingMode) delete base.video.facingMode; // fallback
+          return await navigator.mediaDevices.getUserMedia(base);
+        }catch(err){ throw err; }
+      }
+    }
+
     async function ensureMedia(autoPlay=true){
       try{
         const stream = await getStream({ facing: currentFacing });
@@ -624,7 +647,7 @@ body.remote-landscape #stage .tile.remote video{ object-fit: cover; }
           if(sender) await sender.replaceTrack(newV);
         }
         attachLocal(localStream, autoPlay);
-        applyMuteAndCam(); // respetar estados si el usuario ya tocó botones
+        applyMuteAndCam();
         return localStream;
       }catch(e){
         alert("Permite cámara y micrófono para continuar.\n" + (e?.message||e));
@@ -706,8 +729,7 @@ body.remote-landscape #stage .tile.remote video{ object-fit: cover; }
 
     async function startWebRTC(role){
       await ensureMedia();
-// ⚠️ Solo aplicar constraints en PC
-if (!isMobile()) { await applyARConstraints(); }
+      if (!isMobile()) { await applyARConstraints(); }
 
       makePC();
       localStream.getTracks().forEach(t=>pc.addTrack(t, localStream));
@@ -737,7 +759,6 @@ if (!isMobile()) { await applyARConstraints(); }
 
     /* ===== Control de botones según estado ===== */
     function enableControls(){
-      // Estado conectado: Next/Stop/Mute/Cam activos
       btnStart && (btnStart.disabled = true);
       btnNext  && (btnNext.disabled  = false);
       btnStop  && (btnStop.disabled  = false);
@@ -746,10 +767,9 @@ if (!isMobile()) { await applyARConstraints(); }
       if(btnBuscarM) btnBuscarM.textContent = inCall ? 'Siguiente' : (isQueuing ? 'Buscando…' : 'Buscar sala');
     }
     function setSearchingUI(){
-      // Durante búsqueda: permitir Detener, desactivar Next; mantener mute/cam activos si ya hay media
       btnStart && (btnStart.disabled = true);
       btnNext  && (btnNext.disabled  = true);
-      btnStop  && (btnStop.disabled  = false); // << habilitado durante cola
+      btnStop  && (btnStop.disabled  = false);
       btnMute  && (btnMute.disabled  = !localStream);
       btnCam   && (btnCam.disabled   = !localStream);
       if(btnBuscarM) btnBuscarM.textContent = 'Buscando…';
@@ -764,7 +784,7 @@ if (!isMobile()) { await applyARConstraints(); }
     }
 
     // Auto-cycle
-    function handleCallEnded(reason){
+    function handleCallEnded(){
       cleanupPeer({ keepLocal:true, closeWsToo:false });
       if(autoCycle && !userHardStop){
         setStatus('Buscando siguiente…'); overlay.classList.add('show'); setSearchingUI();
@@ -787,13 +807,12 @@ if (!isMobile()) { await applyARConstraints(); }
         const age = (inpEdad.value || localStorage.getItem('ttv_age') || '—');
         await connectWS();
 
-        // Asegura media ya encendida durante búsqueda
         await ensureMedia();
-           if (!isMobile()) { await applyARConstraints(); }
+        if (!isMobile()) { await applyARConstraints(); }
 
         send({type:'find', gender: chosenGender, displayName, age});
         setStatus('En cola…');
-      }catch(e){
+      }catch{
         setStatus('Error de conexión WS'); overlay.classList.remove('show'); isQueuing=false; autoCycle=false; setIdleUI();
       }
     }
@@ -813,10 +832,10 @@ if (!isMobile()) { await applyARConstraints(); }
         cleanupPeer({ keepLocal:true, closeWsToo:false });
         setStatus('Buscando siguiente…'); overlay.classList.add('show'); setSearchingUI();
         await ensureMedia();
-         if (!isMobile()) { await applyARConstraints(); }
+        if (!isMobile()) { await applyARConstraints(); }
 
         findNext();
-      }catch(e){ setStatus('Error WS (siguiente)'); }
+      }catch{ setStatus('Error WS (siguiente)'); }
     }
 
     function stopAll(){
@@ -935,7 +954,7 @@ if (!isMobile()) { await applyARConstraints(); }
     gearBtn?.addEventListener('click', ()=>{ gearSheet.classList.toggle('show'); });
     swMute?.addEventListener('change', (e)=>{ micMuted = !!e.target.checked; applyMuteAndCam(); });
 
-    // Doble toque móvil: ver remoto completo (contain) con detector manual
+    // Doble toque móvil: ver remoto completo (contain)
     let remoteContainM = false, lastTap=0;
     function addDoubleTap(el, cb){
       el.addEventListener('touchend', (e)=>{
@@ -956,10 +975,9 @@ if (!isMobile()) { await applyARConstraints(); }
     });
 
     function isPortrait(){ return window.matchMedia('(orientation: portrait)').matches; }
-function adaptToOrientation(){
-  // Solo UI si quieres (no tocar el track de la cámara)
-  document.body.classList.toggle('portrait-ui', isPortrait());
-}
+    function adaptToOrientation(){
+      document.body.classList.toggle('portrait-ui', isPortrait());
+    }
     window.addEventListener('orientationchange', ()=>{ if(isMobile()) adaptToOrientation(); });
     window.addEventListener('resize', ()=>{ if(isMobile()) adaptToOrientation(); });
 
@@ -1005,14 +1023,30 @@ function adaptToOrientation(){
     window.addEventListener('beforeunload', ()=>{ try{ send({type:'leave'}); }catch{} });
 
     /* ================== AÑADIDOS JS (OmeTV móvil) ================== */
-    const idleRemote = qs('#idle-remote');
+    const idleRemote = qs('#idle-remote'); // puede no existir (usamos videos de ruido)
     const idleLocal  = qs('#idle-local');
     const btnSwapCam = qs('#btn-swapcam');
     const swipeTip   = qs('#swipe-tip');
 
-    function showIdleRemote(show){ if(idleRemote) idleRemote.classList.toggle('hide', !show); }
-    function showIdleLocal(show){  if(idleLocal)  idleLocal.classList.toggle('hide',  !show); }
-    showIdleRemote(true); showIdleLocal(true);
+    // Mostrar/Ocultar idles
+    function showIdleRemote(show){
+      if (idleNoiseD) idleNoiseD.classList.toggle('hide', !show);
+      if (idleNoiseM) idleNoiseM.classList.toggle('hide', !show);
+      if (show){
+        if (idleNoiseD){ idleNoiseD.muted = true; safePlay(idleNoiseD); }
+        if (idleNoiseM){ idleNoiseM.muted = true; safePlay(idleNoiseM); }
+      }else{
+        if (idleNoiseD) idleNoiseD.pause();
+        if (idleNoiseM) idleNoiseM.pause();
+      }
+    }
+    function showIdleLocal(show){ if(idleLocal) idleLocal.classList.toggle('hide', !show); }
+
+    // estado inicial
+    showIdleRemote(true); 
+    showIdleLocal(true);
+    if (idleNoiseD) safePlay(idleNoiseD);
+    if (idleNoiseM) safePlay(idleNoiseM);
 
     // Cambiar cámara (móvil)
     async function toggleCameraFacing(){
@@ -1057,7 +1091,6 @@ function adaptToOrientation(){
       const v = localStream?.getVideoTracks?.() || [];
       a.forEach(t=> t.enabled = !micMuted);
       v.forEach(t=> t.enabled = !camOff);
-      // sincróniza switches/botones
       if(swMute) swMute.checked = micMuted;
       if(btnMute) btnMute.textContent = micMuted ? 'Unmute' : 'Mute';
       if(btnCam)  btnCam.textContent  = camOff ? 'Encender cam' : 'Apagar cam';
@@ -1069,7 +1102,7 @@ function adaptToOrientation(){
       currentUser=u||null;
       if(!u){
         show('landing'); youBadge.classList.add('hidden'); setIdleUI();
-         swipeTip?.classList.remove('show');
+        swipeTip?.classList.remove('show');
         return;
       }
       youBadge.classList.remove('hidden');
@@ -1081,9 +1114,9 @@ function adaptToOrientation(){
       requestAnimationFrame(sizeStageForDesktop);
       if (isMobile()) { swipeTip?.classList.add('show'); }
 
-      // **Autoencender cámara y mic** al entrar a la sala
+      // Autoencender cámara y mic
       try{ await ensureMedia(true); }catch{}
-      setIdleUI(); // con media lista, deja mute/cam disponibles
+      setIdleUI();
     });
 
     // Login Google (con fallback redirect para Safari)
