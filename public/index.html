@@ -586,19 +586,26 @@ body.remote-landscape #stage .tile.remote video{ object-fit: cover; }
     function resetZoom(){ zoomState.local=1; zoomState.remote=1; applyZoom('local'); applyZoom('remote'); }
 
     /* ===== gUM helper tolerante ===== */
-    async function getStream({ facing = 'user' } = {}){
-      const base = {
+   async function getStream({ facing = 'user' } = {}){
+  const base = isMobile()
+    ? { // 📱 MÓVIL: NO forzar width/height/aspectRatio → evita recortes
+        video: { facingMode: { ideal: facing } },
+        audio: { echoCancellation:true, noiseSuppression:true }
+      }
+    : { // 🖥️ PC: mantenemos 1280x720
         video: { width:{ideal:1280}, height:{ideal:720}, frameRate:{ideal:30}, facingMode:{ ideal:facing } },
         audio: { echoCancellation:true, noiseSuppression:true }
       };
-      try{
-        return await navigator.mediaDevices.getUserMedia(base);
-      }catch(e){
-        try{ delete base.video.facingMode; return await navigator.mediaDevices.getUserMedia(base); }
-        catch(err){ throw err; }
-      }
-    }
 
+  try{
+    return await navigator.mediaDevices.getUserMedia(base);
+  }catch(e){
+    try{
+      if (base.video && base.video.facingMode) delete base.video.facingMode; // fallback
+      return await navigator.mediaDevices.getUserMedia(base);
+    }catch(err){ throw err; }
+  }
+}
     async function ensureMedia(autoPlay=true){
       try{
         const stream = await getStream({ facing: currentFacing });
