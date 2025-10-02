@@ -109,10 +109,12 @@
 
     /* Local: SIEMPRE cubrir (sin bandas) */
     #stage .tile.local  video{ object-fit: cover; }
-    /* Remoto: por defecto cubrir; si se detecta retrato (celular), se fuerza contain con bandas laterales */
-    #stage .tile.remote video{ object-fit: cover; }
-    body.remote-portrait #stage .tile.remote video{ object-fit: contain; background:#000; }
+    
+    /* Remoto: por defecto NO recortar */
+#stage .tile.remote video{ object-fit: contain; background:#000; }
 
+/* Si detectamos que es un paisaje muy ancho y quieres llenar, activamos cover via clase */
+body.remote-landscape #stage .tile.remote video{ object-fit: cover; }
     /* ===== MÓVIL: FULL-BLEED MITAD/MITAD ===== */
     .layout-mobile-fixed{
       position:fixed; inset:0; height:calc(var(--dvh) * 100);
@@ -693,10 +695,11 @@
     }
 
     async function startWebRTC(role){
-      await ensureMedia();              // asegura cámara/mic encendidos
-      await applyARConstraints();
-      if(isMobile()) adaptToOrientation();
-
+      await ensureMedia();
+// ⚠️ Solo aplicar constraints en PC
+if (!isMobile()) { await applyARConstraints(); }
+// En móviles solo ajusta la UI, no el track
+if (isMobile()) adaptToOrientation();
       makePC();
       localStream.getTracks().forEach(t=>pc.addTrack(t, localStream));
       tuneSender();
@@ -777,8 +780,9 @@
 
         // Asegura media ya encendida durante búsqueda
         await ensureMedia();
-        await applyARConstraints();
-        if(isMobile()) adaptToOrientation();
+if (!isMobile()) { await applyARConstraints(); }
+if (isMobile()) adaptToOrientation();
+
 
         send({type:'find', gender: chosenGender, displayName, age});
         setStatus('En cola…');
@@ -802,8 +806,8 @@
         cleanupPeer({ keepLocal:true, closeWsToo:false });
         setStatus('Buscando siguiente…'); overlay.classList.add('show'); setSearchingUI();
         await ensureMedia();
-        await applyARConstraints();
-        if(isMobile()) adaptToOrientation();
+if (!isMobile()) { await applyARConstraints(); }
+if (isMobile()) adaptToOrientation();
         findNext();
       }catch(e){ setStatus('Error WS (siguiente)'); }
     }
