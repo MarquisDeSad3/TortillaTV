@@ -705,8 +705,7 @@ body.remote-landscape #stage .tile.remote video{ object-fit: cover; }
       await ensureMedia();
 // ⚠️ Solo aplicar constraints en PC
 if (!isMobile()) { await applyARConstraints(); }
-// En móviles solo ajusta la UI, no el track
-if (isMobile()) adaptToOrientation();
+
       makePC();
       localStream.getTracks().forEach(t=>pc.addTrack(t, localStream));
       tuneSender();
@@ -787,9 +786,7 @@ if (isMobile()) adaptToOrientation();
 
         // Asegura media ya encendida durante búsqueda
         await ensureMedia();
-if (!isMobile()) { await applyARConstraints(); }
-if (isMobile()) adaptToOrientation();
-
+           if (!isMobile()) { await applyARConstraints(); }
 
         send({type:'find', gender: chosenGender, displayName, age});
         setStatus('En cola…');
@@ -813,8 +810,8 @@ if (isMobile()) adaptToOrientation();
         cleanupPeer({ keepLocal:true, closeWsToo:false });
         setStatus('Buscando siguiente…'); overlay.classList.add('show'); setSearchingUI();
         await ensureMedia();
-if (!isMobile()) { await applyARConstraints(); }
-if (isMobile()) adaptToOrientation();
+         if (!isMobile()) { await applyARConstraints(); }
+
         findNext();
       }catch(e){ setStatus('Error WS (siguiente)'); }
     }
@@ -956,12 +953,10 @@ if (isMobile()) adaptToOrientation();
     });
 
     function isPortrait(){ return window.matchMedia('(orientation: portrait)').matches; }
-    async function adaptToOrientation(){
-      const track = localStream?.getVideoTracks?.()[0];
-      if(!track) return;
-      const ar = isPortrait() ? 9/16 : 16/9;
-      try{ await track.applyConstraints({ aspectRatio: ar }); }catch(e){}
-    }
+function adaptToOrientation(){
+  // Solo UI si quieres (no tocar el track de la cámara)
+  document.body.classList.toggle('portrait-ui', isPortrait());
+}
     window.addEventListener('orientationchange', ()=>{ if(isMobile()) adaptToOrientation(); });
     window.addEventListener('resize', ()=>{ if(isMobile()) adaptToOrientation(); });
 
