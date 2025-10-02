@@ -229,12 +229,14 @@ body.remote-landscape #stage .tile.remote video{ object-fit: cover; }
     }
 
     .swipe-tip{
-      position:fixed; top:14px; left:50%; transform:translateX(-50%);
-      z-index:70; color:#fff; background:rgba(17,24,39,.65);
-      border:1px solid rgba(255,255,255,.25);
-      backdrop-filter:blur(8px); border-radius:999px; padding:.45rem .9rem;
-      display:flex; align-items:center; gap:.55rem; font-weight:700; font-size:14px;
-    }
+  position:fixed; top:14px; left:50%; transform:translateX(-50%);
+  z-index:70; color:#fff; background:rgba(17,24,39,.65);
+  border:1px solid rgba(255,255,255,.25);
+  backdrop-filter:blur(8px); border-radius:999px; padding:.45rem .9rem;
+  display:none; 
+  align-items:center; gap:.55rem; font-weight:700; font-size:14px;
+}
+.swipe-tip.show{ display:flex; } 
     .swipe-hand{ width:22px; height:22px; border-radius:6px; background:#fff; animation:handRight 1.8s ease-in-out infinite; }
     @keyframes handRight{
       0%{ transform:translateX(-22px); opacity:.9 }
@@ -405,6 +407,11 @@ body.remote-landscape #stage .tile.remote video{ object-fit: cover; }
         <div class="mt-6 flex items-center justify-center">
           <button id="btn-salir-chat" class="rounded-full border-2 border-neutral-900/30 bg-white/80 px-5 py-2 text-sm font-semibold shadow">Salir</button>
         </div>
+        <!-- Pista de gesto (móvil) -->
+<div id="swipe-tip" class="swipe-tip sm:hidden">
+  <div class="swipe-hand" aria-hidden="true"></div>
+  <span>Desliza → empezar / siguiente — ← detener</span>
+</div>
       </section>
     </main>
   </div>
@@ -426,11 +433,7 @@ body.remote-landscape #stage .tile.remote video{ object-fit: cover; }
     <div class="row"><span>Mute micrófono</span><input id="sw-mute" type="checkbox" class="switch"></div>
   </div>
 
-  <!-- Pista de gesto (móvil) -->
-  <div id="swipe-tip" class="swipe-tip sm:hidden">
-    <div class="swipe-hand" aria-hidden="true"></div>
-    <span>Desliza → empezar / siguiente — ← detener</span>
-  </div>
+  
 
   <!-- SCRIPTS -->
   <script>
@@ -1066,6 +1069,7 @@ function adaptToOrientation(){
       currentUser=u||null;
       if(!u){
         show('landing'); youBadge.classList.add('hidden'); setIdleUI();
+         swipeTip?.classList.remove('show');
         return;
       }
       youBadge.classList.remove('hidden');
@@ -1075,6 +1079,7 @@ function adaptToOrientation(){
       show('chat');
       initLayoutForDevice();
       requestAnimationFrame(sizeStageForDesktop);
+      if (isMobile()) { swipeTip?.classList.add('show'); }
 
       // **Autoencender cámara y mic** al entrar a la sala
       try{ await ensureMedia(true); }catch{}
