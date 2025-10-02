@@ -1,4 +1,4 @@
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
@@ -44,32 +44,27 @@
   <style>
     :root{
       --paper:#faf9f6; --rule:#93c5fd66; --margin:#ef4444aa; --hole:#e5e7eb; --ink:#111827;
-      --box-ar: 1/1;           /* PC por defecto 1:1 (captura/ventana) */
+      --box-ar: 1/1; /* PC por defecto 1:1 (captura/ventana) */
+      --vh: 1vh; --dvh: 1dvh; /* viewport fix cross-browser */
     }
     body.ar-1-1{ --box-ar: 1/1; }
     body.ar-4-3{ --box-ar: 4/3; }
     body.ar-16-9{ --box-ar: 16/9; }
 
-    html,body{ height:100%; background:var(--paper); color:var(--ink); -webkit-font-smoothing:antialiased; }
+    html,body{ height:100%; background:var(--paper); color:var(--ink); -webkit-font-smoothing:antialiased; -webkit-text-size-adjust:100%; }
 
     /* ( ajuste para alinear el scroller) */
-    #noteScroller {
-      display: flex;
-      justify-content: flex-start; 
-      gap: 0.2ch;
-      align-items: center;
-    }
-    /* Hacer más pequeñas SOLO las palabras que rotan */
+    #noteScroller { display:flex; justify-content:flex-start; gap:0.2ch; align-items:center; }
     #noteScroller .slide { font-size: 0.75em; }
 
     /* Bloquear scroll global cuando estemos en la sala en móvil */
-    body.no-scroll{ position:fixed; inset:0; overflow:hidden; width:100%; height:100dvh; }
+    body.no-scroll{ position:fixed; inset:0; overflow:hidden; width:100%; height:calc(var(--dvh) * 100); }
 
     /* Evitar gestos extra de zoom en móvil */
     * { touch-action: manipulation; }
 
     /* Papel y adornos (estética) */
-    .paper-bg{ position:relative; min-height:100vh; background-image:repeating-linear-gradient(0deg, transparent, transparent 32px, var(--rule) 33px, var(--rule) 34px); }
+    .paper-bg{ position:relative; min-height:calc(var(--dvh) * 100); background-image:repeating-linear-gradient(0deg, transparent, transparent 32px, var(--rule) 33px, var(--rule) 34px); }
     .paper-bg::before{ content:""; position:absolute; inset:0; background:linear-gradient(90deg, transparent 56px, var(--margin) 59px, transparent 62px); pointer-events:none }
     .paper-holes{ position:absolute; left:18px; top:96px; display:flex; flex-direction:column; gap:96px; pointer-events:none }
     .paper-hole{ width:18px; height:18px; border-radius:999px; background:var(--hole); box-shadow:inset 0 2px 4px rgba(0,0,0,.2) }
@@ -86,7 +81,6 @@
     .ttv .word:nth-child(3){ animation-delay:.3s }
     .ttv .accent{ display:inline-block; padding-inline:.15em; transform:rotate(-2deg); text-shadow:0 2px 0 #ffe4e6 }
 
-    /* Intro: barrido de tinta detrás del título */
     .ttv::before{
       content:""; position:absolute; inset:auto 0 -8px 0; height:28%;
       background:linear-gradient(90deg, rgba(244,63,94,.28), rgba(244,63,94,.6), rgba(244,63,94,.28));
@@ -94,49 +88,25 @@
       animation:inkSweep 1.4s ease-out .15s 1;
     }
 
-    /* Pegatina amarilla pequeña colocada sobre la T */
-    .note{ 
-      font-family:"Caveat", ui-serif; font-weight:800; background:#fff7cc; color:#0b1324;
-      border-radius:.5rem; box-shadow:0 4px 0 rgba(0,0,0,.2);
-      transform:rotate(-4deg); overflow:hidden;
-    }
-    .note-tiny{
-      font-size:clamp(30px,8vw,36px);
-      padding:.05em .35em;
-      min-width:auto;
-      line-height:1.05;
-    }
-    .note-at-title{
-      position:absolute; left:-10px; top:-14px; z-index:5;
-    }
+    .note{ font-family:"Caveat", ui-serif; font-weight:800; background:#fff7cc; color:#0b1324; border-radius:.5rem; box-shadow:0 4px 0 rgba(0,0,0,.2); transform:rotate(-4deg); overflow:hidden; }
+    .note-tiny{ font-size:clamp(30px,8vw,36px); padding:.05em .35em; min-width:auto; line-height:1.05; }
+    .note-at-title{ position:absolute; left:-10px; top:-14px; z-index:5; }
 
     @keyframes ttv-wobble{ 0%,100%{ transform:translateY(0) } 25%{ transform:translateY(-4px) } 50%{ transform:translateY(2px) } 75%{ transform:translateY(-2px) } }
 
     .scribble{ width:min(920px,92vw); height:32px; margin-inline:auto }
-    .scribble path{
-      stroke:rgba(239,68,68,.82); stroke-width:6; fill:none; stroke-linecap:round;
-      stroke-dasharray:1400; /* para el “draw” inicial */
-      animation:scribble 1.8s ease forwards, scribbleFlow 5s linear 2s infinite;
-      filter: drop-shadow(0 0 6px rgba(239,68,68,.45));
-    }
+    .scribble path{ stroke:rgba(239,68,68,.82); stroke-width:6; fill:none; stroke-linecap:round; stroke-dasharray:1400; animation:scribble 1.8s ease forwards, scribbleFlow 5s linear 2s infinite; filter: drop-shadow(0 0 6px rgba(239,68,68,.45)); }
 
     /* ====== VIDEO (REGLAS BASE) ====== */
-    video{ width:100%; height:100%; background:#000; display:block; object-position:center center; }
+    video{ width:100%; height:100%; background:#000; display:block; object-position:center center; -webkit-user-select:none; user-select:none; }
     video.mirror{ transform: scaleX(-1) }
 
     .stage{ position:relative; width:100%; }
-    .tile{
-      position:relative; border-radius:16px; overflow:hidden; background:#000;
-      height:100%; display:flex; align-items:center; justify-content:center;
-    }
+    .tile{ position:relative; border-radius:16px; overflow:hidden; background:#000; height:100%; display:flex; align-items:center; justify-content:center; }
 
     /* PC: grid 50/50 y altura dinámica para ocupar la pantalla */
-    .layout-split{
-      display:grid; grid-template-columns:1fr 1fr; gap:1rem;
-      min-height: 420px;
-    }
+    .layout-split{ display:grid; grid-template-columns:1fr 1fr; gap:1rem; min-height:420px; }
 
-    /* === Comportamiento PC pedido === */
     /* Local: SIEMPRE cubrir (sin bandas) */
     #stage .tile.local  video{ object-fit: cover; }
     /* Remoto: por defecto cubrir; si se detecta retrato (celular), se fuerza contain con bandas laterales */
@@ -145,17 +115,12 @@
 
     /* ===== MÓVIL: FULL-BLEED MITAD/MITAD ===== */
     .layout-mobile-fixed{
-      position:fixed; inset:0; height:100dvh;
+      position:fixed; inset:0; height:calc(var(--dvh) * 100);
       display:grid; grid-template-rows:1fr 1fr; grid-template-columns:1fr;
-      background:#000;
-      z-index:0; /* botones encima */
+      background:#000; z-index:0;
     }
     .pane{ position:relative; overflow:hidden; background:#000; }
-    .pane video{
-      position:absolute; inset:0; width:100%; height:100%;
-      object-fit:cover; /* llena cada mitad */
-    }
-    /* Ver remoto "completo" en móvil cuando se pida (doble toque) */
+    .pane video{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
     .pane video.contain{ object-fit: contain; background:#000; }
 
     /* Ocultar PiP en móvil y landing */
@@ -218,73 +183,12 @@
       box-shadow:0 16px 36px rgba(0,0,0,.35);
       border:1px solid rgba(255,255,255,.18);
     }
-
-    .dock-btn{
-      padding:.9rem 1rem;
-      border-radius:999px;
-      font-weight:800;
-      border:2px solid transparent;
-      -webkit-tap-highlight-color: transparent;
-    }
-
-    .dock-btn--primary{
-      background:#fff; color:#111;
-      border-color:#ddd;
-    }
-
-    .dock-btn--ghost{
-      background:transparent;
-      color:#fff;
-      border-color:rgba(255,255,255,.4);
-    }
-
-    /* 🚫 Ocultar en pantallas grandes (Windows/PC) */
-    @media (min-width: 641px){
-      .mobile-dock{ display:none }
-    }
-
-    /* ===== Dock inferior SOLO en móviles (repetido original, lo dejamos igual) ===== */
-    .mobile-dock{
-      position:fixed;
-      left:12px; right:12px;
-      bottom:calc(env(safe-area-inset-bottom,0) + 10px);
-      z-index:60;
-      display:grid; grid-template-columns:1fr 1fr; gap:10px;
-      padding:10px;
-      border-radius:18px;
-      background:rgba(17,24,39,.55);
-      backdrop-filter:blur(10px);
-      box-shadow:0 16px 36px rgba(0,0,0,.35);
-      border:1px solid rgba(255,255,255,.18);
-    }
-
-    .dock-btn{
-      padding:.9rem 1rem;
-      border-radius:999px;
-      font-weight:800;
-      border:2px solid transparent;
-      -webkit-tap-highlight-color: transparent;
-    }
-
-    .dock-btn--primary{
-      background:#fff; color:#111;
-      border-color:#ddd;
-    }
-
-    .dock-btn--ghost{
-      background:transparent;
-      color:#fff;
-      border-color:rgba(255,255,255,.4);
-    }
-
-    /* 🚫 Ocultar en pantallas grandes (Windows/PC) */
-    @media (min-width: 641px){
-      .mobile-dock{ display:none }
-    }
+    .dock-btn{ padding:.9rem 1rem; border-radius:999px; font-weight:800; border:2px solid transparent; -webkit-tap-highlight-color: transparent; }
+    .dock-btn--primary{ background:#fff; color:#111; border-color:#ddd; }
+    .dock-btn--ghost{ background:transparent; color:#fff; border-color:rgba(255,255,255,.4); }
+    @media (min-width: 641px){ .mobile-dock{ display:none } }
 
     /* ============== AÑADIDOS (móvil estilo OmeTV) ============== */
-
-    /* Ocultar dock/botones en móvil */
     @media (max-width:640px){
       .mobile-dock{ display:none !important; }
       .topbar{ display:none !important; }
@@ -298,8 +202,9 @@
       display:grid; place-items:center; font-size:18px; font-weight:900;
       background:rgba(17,24,39,.75); color:#fff; border:2px solid rgba(255,255,255,.25);
       backdrop-filter:blur(8px); box-shadow:0 10px 28px rgba(0,0,0,.28);
+      -webkit-tap-highlight-color: transparent;
     }
-    @media (min-width:641px){ .cam-switch{ display:none } } /* sólo móvil */
+    @media (min-width:641px){ .cam-switch{ display:none } }
 
     /* Pantalla estática (cuando no hay stream o esperando) */
     .idle{
@@ -309,7 +214,6 @@
     }
     .idle.hide{ display:none; }
 
-    /* “Ruido” simple para la estática */
     .static-noise{ 
       background:
         repeating-linear-gradient(0deg, rgba(255,255,255,.05) 0 2px, transparent 2px 4px),
@@ -322,7 +226,6 @@
       100%{ filter:contrast(140%) brightness(115%); transform:translateY(-1px); }
     }
 
-    /* Tip de gesto: mano que se desliza */
     .swipe-tip{
       position:fixed; top:14px; left:50%; transform:translateX(-50%);
       z-index:70; color:#fff; background:rgba(17,24,39,.65);
@@ -330,16 +233,39 @@
       backdrop-filter:blur(8px); border-radius:999px; padding:.45rem .9rem;
       display:flex; align-items:center; gap:.55rem; font-weight:700; font-size:14px;
     }
-    .swipe-hand{
-      width:22px; height:22px; border-radius:6px; background:#fff;
-      animation:handRight 1.8s ease-in-out infinite;
-    }
+    .swipe-hand{ width:22px; height:22px; border-radius:6px; background:#fff; animation:handRight 1.8s ease-in-out infinite; }
     @keyframes handRight{
       0%{ transform:translateX(-22px); opacity:.9 }
       45%{ transform:translateX(22px); opacity:1 }
       60%{ opacity:0 }
       100%{ opacity:0 }
     }
+
+    /* ====== Móvil: engranaje ajustes (mute) ====== */
+    .gear-btn{
+      position:fixed; right:12px; top:calc(env(safe-area-inset-top,0) + 12px);
+      z-index:80; width:42px; height:42px; border-radius:999px;
+      display:grid; place-items:center; font-size:18px; font-weight:900;
+      background:rgba(17,24,39,.75); color:#fff; border:2px solid rgba(255,255,255,.25);
+      backdrop-filter:blur(8px); box-shadow:0 10px 28px rgba(0,0,0,.28);
+    }
+    @media (min-width:641px){ .gear-btn{ display:none } }
+
+    .sheet{
+      position:fixed; right:12px; top:60px; z-index:81;
+      background:rgba(17,24,39,.92); color:#fff; border-radius:14px;
+      border:1px solid rgba(255,255,255,.2); padding:10px 12px; min-width:180px;
+      box-shadow:0 16px 36px rgba(0,0,0,.35); display:none;
+    }
+    .sheet.show{ display:block; }
+    .sheet .row{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:6px 2px; }
+    .switch{ appearance:none; width:40px; height:22px; border-radius:999px; position:relative; background:#444; outline:none; cursor:pointer; }
+    .switch:checked{ background:#22c55e; }
+    .switch::after{ content:""; position:absolute; top:3px; left:3px; width:16px; height:16px; border-radius:999px; background:#fff; transition:left .2s; }
+    .switch:checked::after{ left:21px; }
+
+    /* Topbar new controls spacing (PC) */
+    .topbar .sep{ width:1px; height:24px; background:rgba(0,0,0,.15); margin:0 6px; }
   </style>
 </head>
 <body class="font-sans ar-1-1">
@@ -368,11 +294,11 @@
               <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M14.5 3H21v6" stroke="#111827" stroke-width="1.8" stroke-linecap="round"/><path d="M21 3l-7.5 7.5" stroke="#111827" stroke-width="1.8" stroke-linecap="round"/><circle cx="9" cy="15" r="5.5" stroke="#111827" stroke-width="1.8"/></svg>
               <span class="font-semibold">Macho</span>
             </button>
-            <button data-gen="Tortillera"  class="gen card py-4 flex flex-col items-center gap-2">
+            <button data-gen="Tortillera" class="gen card py-4 flex flex-col items-center gap-2">
               <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="8" r="5.5" stroke="#111827" stroke-width="1.8"/><path d="M12 13.5v6M9.5 17h5" stroke="#111827" stroke-width="1.8" stroke-linecap="round"/></svg>
               <span class="font-semibold">Tortillera</span>
             </button>
-            <button data-gen="Lada"   class="gen card py-4 flex flex-col items-center gap-2">
+            <button data-gen="Lada" class="gen card py-4 flex flex-col items-center gap-2">
               <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 14l2-5h12l2 5v4a1 1 0 0 1-1 1h-1" stroke="#111827" stroke-width="1.8" stroke-linejoin="round"/><circle cx="8" cy="19" r="1.6" fill="#111827"/><circle cx="18" cy="19" r="1.6" fill="#111827"/><path d="M6 14h12" stroke="#111827" stroke-width="1.8" stroke-linecap="round"/></svg>
               <span class="font-semibold">Un Lada</span>
             </button>
@@ -410,9 +336,12 @@
             <button id="btn-start" class="btn">Buscar</button>
             <button id="btn-next"  class="btn" disabled>Siguiente</button>
             <button id="btn-stop"  class="btn" disabled>Detener</button>
+            <span class="sep"></span>
+            <!-- NUEVOS BOTONES PC -->
+            <button id="btn-mute"  class="btn" disabled>Mute</button>
+            <button id="btn-cam"   class="btn" disabled>Apagar cam</button>
 
             <div class="ml-auto flex items-center gap-2">
-              <!-- AHORA SIEMPRE VISIBLE EN PC -->
               <button id="btn-ar" class="btn">AR: 1:1</button>
             </div>
 
@@ -454,17 +383,11 @@
           <!-- MÓVIL: pantalla partida full-bleed -->
           <div id="stageMobile" class="layout-mobile-fixed" style="display:none;">
             <div class="pane" id="pane-remote">
-              <!-- Idle remoto (arriba) -->
-              <div id="idle-remote" class="idle static-noise">
-                <div>Desliza → para empezar</div>
-              </div>
+              <div id="idle-remote" class="idle static-noise"><div>Desliza → para empezar</div></div>
               <video id="remoteVideoM" autoplay playsinline></video>
             </div>
             <div class="pane" id="pane-local">
-              <!-- Idle local (abajo) -->
-              <div id="idle-local" class="idle static-noise">
-                <div>Preparando cámara…</div>
-              </div>
+              <div id="idle-local" class="idle static-noise"><div>Preparando cámara…</div></div>
               <video id="localVideoM" autoplay playsinline muted class="mirror"></video>
             </div>
           </div>
@@ -495,6 +418,12 @@
   <!-- Botón mini: cambiar cámara (móvil) -->
   <button id="btn-swapcam" class="cam-switch" aria-label="Cambiar cámara">↻</button>
 
+  <!-- Engranaje ajustes (móvil) -->
+  <button id="btn-gear" class="gear-btn" aria-label="Ajustes">⚙</button>
+  <div id="gear-sheet" class="sheet">
+    <div class="row"><span>Mute micrófono</span><input id="sw-mute" type="checkbox" class="switch"></div>
+  </div>
+
   <!-- Pista de gesto (móvil) -->
   <div id="swipe-tip" class="swipe-tip sm:hidden">
     <div class="swipe-hand" aria-hidden="true"></div>
@@ -503,6 +432,15 @@
 
   <!-- SCRIPTS -->
   <script>
+    /* ==== Viewport fix cross-browser ==== */
+    function setVHVars(){
+      const h = window.innerHeight;
+      document.documentElement.style.setProperty('--dvh', h / 100 + 'px');
+    }
+    setVHVars();
+    window.addEventListener('resize', setVHVars);
+    window.addEventListener('orientationchange', setVHVars);
+
     // Limpiar highlight por hash
     window.addEventListener('DOMContentLoaded', () => {
       if (location.hash) history.replaceState(null, document.title, location.pathname + location.search);
@@ -532,6 +470,7 @@
     function qs(s,root=document){ return root.querySelector(s) }
     function show(k){ Object.values(pages).forEach(p=>{p.classList.add('hidden');p.classList.remove('visible')}); pages[k].classList.remove('hidden'); pages[k].classList.add('visible'); window.scrollTo({top:0,behavior:'smooth'}) }
     function setStatus(t){ const el=qs('#status'); if(el) el.textContent=t }
+    function safePlay(v){ try{ const p=v?.play?.(); if(p?.catch) p.catch(()=>{}); }catch{} }
 
     const overlay   = qs('#overlay');
     const peerLabel = qs('#peerLabel');
@@ -573,9 +512,7 @@
     const inpNombre=qs('#inpNombre');
     const inpEdad=qs('#inpEdad');
 
-    function validateLoginEnable(){
-      btnGoogle.disabled = !chosenGender;
-    }
+    function validateLoginEnable(){ btnGoogle.disabled = !chosenGender; }
 
     genButtons.forEach(b=>{
       b.addEventListener('click', ()=>{
@@ -595,45 +532,25 @@
       });
     });
 
-    let currentUser=null;
-    auth.onAuthStateChanged((u)=>{
-      currentUser=u||null;
-      if(!u){ show('landing'); youBadge.classList.add('hidden'); return; }
-      youBadge.classList.remove('hidden');
-      const n = inpNombre.value || localStorage.getItem('ttv_name') || u.displayName || '—';
-      const a = inpEdad.value    || localStorage.getItem('ttv_age')  || '—';
-      youBadge.textContent=`Tú: ${n} (${a}) · ${chosenGender||'—'}`;
-      show('chat');
-      initLayoutForDevice();
-      requestAnimationFrame(sizeStageForDesktop);
-    });
-
-    btnGoogle?.addEventListener('click', async ()=>{
-      if(!chosenGender){ alert('Elige tu género primero'); return; }
-      try{
-        const provider=new firebase.auth.GoogleAuthProvider();
-        await auth.signInWithPopup(provider);
-        localStorage.setItem('ttv_gender', chosenGender);
-      }catch(e){ alert('Error Google: '+e.message); }
-    });
-
-    /* ===== WebRTC / Señalización ===== */
+    /* ===== Refs ===== */
     const btnStart=qs('#btn-start'), btnNext=qs('#btn-next'), btnStop=qs('#btn-stop'), btnSalirChat=qs('#btn-salir-chat');
+    const btnMute=qs('#btn-mute'), btnCam=qs('#btn-cam');
 
     const localVideo=qs('#localVideo'), remoteVideo=qs('#remoteVideo'), pip=qs('#pip'), pipVideo=qs('#pipVideo');
-
-    // Vídeos móviles (full-bleed en cada mitad)
     const localVideoM=qs('#localVideoM'), remoteVideoM=qs('#remoteVideoM');
 
     const stage=qs('#stage'), stageMobile=qs('#stageMobile');
-
-    // Botones móviles
     const btnBuscarM=qs('#btn-buscar-m'), btnSalirM=qs('#btn-salir-m');
 
+    const gearBtn = qs('#btn-gear'), gearSheet = qs('#gear-sheet'), swMute = qs('#sw-mute');
+
+    /* ===== Estado WebRTC/WS ===== */
     let ws=null, wsOpen=false, myId=null, roomId=null, role=null;
     let pc=null, localStream=null, remoteStreamRef=null;
     let isQueuing=false, inCall=false, autoCycle=false, userHardStop=false;
     let layoutMode='split'; // 'split' | 'mobile-fixed'
+    let micMuted=false, camOff=false;
+    let currentFacing = 'user'; // móvil
     const iceServers=[{urls:'stun:stun.l.google.com:19302'}];
 
     /* ===== ZOOM STATE (PC) ===== */
@@ -646,16 +563,11 @@
     function applyZoom(which){
       const v = (which==='local') ? localVideo : remoteVideo;
       if(!v) return;
-
       const z = zoomState[which];
       const mirror = v.classList.contains('mirror');
-
       v.style.transformOrigin = 'center center';
-      v.style.transform = mirror
-        ? `scaleX(-1) scale(${z})`
-        : `scale(${z})`;
+      v.style.transform = mirror ? `scaleX(-1) scale(${z})` : `scale(${z})`;
     }
-
     function changeZoom(which, delta){
       const isRemote = (which === 'remote');
       const min = isRemote ? ZOOM_MIN_REMOTE : ZOOM_MIN_LOCAL;
@@ -663,23 +575,31 @@
       zoomState[which] = Number(next.toFixed(2));
       applyZoom(which);
     }
-
-    // Bind zoom buttons (solo PC)
     qs('#zoomInLocal') ?.addEventListener('click', ()=> changeZoom('local', +ZOOM_STEP));
     qs('#zoomOutLocal')?.addEventListener('click', ()=> changeZoom('local', -ZOOM_STEP));
     qs('#zoomInRemote')?.addEventListener('click', ()=> changeZoom('remote', +ZOOM_STEP));
     qs('#zoomOutRemote')?.addEventListener('click',()=> changeZoom('remote', -ZOOM_STEP));
     qs('#resetLocal')  ?.addEventListener('click', ()=> { zoomState.local=1; applyZoom('local'); });
     qs('#fitRemote')  ?.addEventListener('click', ()=> { zoomState.remote=1; applyZoom('remote'); });
-
     function resetZoom(){ zoomState.local=1; zoomState.remote=1; applyZoom('local'); applyZoom('remote'); }
 
-    async function ensureMedia(){
+    /* ===== gUM helper tolerante ===== */
+    async function getStream({ facing = 'user' } = {}){
+      const base = {
+        video: { width:{ideal:1280}, height:{ideal:720}, frameRate:{ideal:30}, facingMode:{ ideal:facing } },
+        audio: { echoCancellation:true, noiseSuppression:true }
+      };
       try{
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video:{ width:{ideal:1280}, height:{ideal:720}, frameRate:{ideal:30}, facingMode:'user' },
-          audio:{ echoCancellation:true, noiseSuppression:true }
-        });
+        return await navigator.mediaDevices.getUserMedia(base);
+      }catch(e){
+        try{ delete base.video.facingMode; return await navigator.mediaDevices.getUserMedia(base); }
+        catch(err){ throw err; }
+      }
+    }
+
+    async function ensureMedia(autoPlay=true){
+      try{
+        const stream = await getStream({ facing: currentFacing });
         if(!localStream){
           localStream = stream;
         }else{
@@ -691,7 +611,8 @@
           const sender = pc?.getSenders().find(s=>s.track && s.track.kind==='video');
           if(sender) await sender.replaceTrack(newV);
         }
-        attachLocal(localStream);
+        attachLocal(localStream, autoPlay);
+        applyMuteAndCam(); // respetar estados si el usuario ya tocó botones
         return localStream;
       }catch(e){
         alert("Permite cámara y micrófono para continuar.\n" + (e?.message||e));
@@ -699,41 +620,39 @@
       }
     }
 
-    function attachLocal(stream){
+    function attachLocal(stream, autoPlay=true){
       if(layoutMode==='split'){
-        localVideo.srcObject = stream;
+        localVideo.srcObject = stream; if(autoPlay) safePlay(localVideo);
         localVideoM.srcObject = null;
         applyZoom('local');
       }else{
-        localVideoM.srcObject = stream;
+        localVideoM.srcObject = stream; if(autoPlay) safePlay(localVideoM);
         localVideo.srcObject = null;
       }
-      pipVideo.srcObject   = stream;
+      pipVideo.srcObject = stream; if(autoPlay) safePlay(pipVideo);
+      showIdleLocal(false);
     }
 
     function attachRemote(){
       if(!remoteStreamRef) return;
       if(layoutMode==='split'){
-        remoteVideo.srcObject = remoteStreamRef;
+        remoteVideo.srcObject = remoteStreamRef; safePlay(remoteVideo);
         remoteVideoM.srcObject = null;
         applyZoom('remote');
       }else{
-        remoteVideoM.srcObject = remoteStreamRef;
+        remoteVideoM.srcObject = remoteStreamRef; safePlay(remoteVideoM);
         remoteVideo.srcObject = null;
       }
+      showIdleRemote(false);
     }
 
     function makePC(){
       pc = new RTCPeerConnection({iceServers});
       pc.onicecandidate = (e)=>{ if(e.candidate) send({type:'ice', candidate:e.candidate}); };
-      pc.ontrack = (e)=>{
-        remoteStreamRef = e.streams[0];
-        attachRemote();
-        setupRemoteRatioWatchers();
-      };
+      pc.ontrack = (e)=>{ remoteStreamRef = e.streams[0]; attachRemote(); setupRemoteRatioWatchers(); };
       pc.onconnectionstatechange = ()=> {
         const st = pc.connectionState;
-        if(st==='connected'){ inCall = true; setStatus('Conectado'); overlay.classList.remove('show'); enableInCall(true); }
+        if(st==='connected'){ inCall = true; setStatus('Conectado'); overlay.classList.remove('show'); enableControls(); }
         if(st==='disconnected' || st==='failed'){ handleCallEnded('conn:'+st); }
         if(st==='closed'){ setStatus('Cerrado'); }
       };
@@ -774,7 +693,7 @@
     }
 
     async function startWebRTC(role){
-      await ensureMedia();
+      await ensureMedia();              // asegura cámara/mic encendidos
       await applyARConstraints();
       if(isMobile()) adaptToOrientation();
 
@@ -804,42 +723,67 @@
       resetZoom();
     }
 
-    function enableInCall(connected){
-      if(btnStart) btnStart.disabled = connected;
-      if(btnNext)  btnNext.disabled  = !connected;
-      if(btnStop)  btnStop.disabled  = !connected;
-      if(btnBuscarM) btnBuscarM.textContent = connected ? 'Siguiente' : 'Buscar sala';
+    /* ===== Control de botones según estado ===== */
+    function enableControls(){
+      // Estado conectado: Next/Stop/Mute/Cam activos
+      btnStart && (btnStart.disabled = true);
+      btnNext  && (btnNext.disabled  = false);
+      btnStop  && (btnStop.disabled  = false);
+      btnMute  && (btnMute.disabled  = false);
+      btnCam   && (btnCam.disabled   = false);
+      if(btnBuscarM) btnBuscarM.textContent = inCall ? 'Siguiente' : (isQueuing ? 'Buscando…' : 'Buscar sala');
+    }
+    function setSearchingUI(){
+      // Durante búsqueda: permitir Detener, desactivar Next; mantener mute/cam activos si ya hay media
+      btnStart && (btnStart.disabled = true);
+      btnNext  && (btnNext.disabled  = true);
+      btnStop  && (btnStop.disabled  = false); // << habilitado durante cola
+      btnMute  && (btnMute.disabled  = !localStream);
+      btnCam   && (btnCam.disabled   = !localStream);
+      if(btnBuscarM) btnBuscarM.textContent = 'Buscando…';
+    }
+    function setIdleUI(){
+      btnStart && (btnStart.disabled = false);
+      btnNext  && (btnNext.disabled  = true);
+      btnStop  && (btnStop.disabled  = true);
+      btnMute  && (btnMute.disabled  = !localStream);
+      btnCam   && (btnCam.disabled   = !localStream);
+      if(btnBuscarM) btnBuscarM.textContent = 'Buscar sala';
     }
 
     // Auto-cycle
     function handleCallEnded(reason){
       cleanupPeer({ keepLocal:true, closeWsToo:false });
       if(autoCycle && !userHardStop){
-        setStatus('Buscando siguiente…'); overlay.classList.add('show'); enableInCall(false);
+        setStatus('Buscando siguiente…'); overlay.classList.add('show'); setSearchingUI();
         setTimeout(()=>{ findNext(); }, 400);
       }else{
-        overlay.classList.remove('show'); enableInCall(false);
+        overlay.classList.remove('show'); setIdleUI();
       }
+      showIdleRemote(true);
     }
 
     async function joinQueue(){
       if(!currentUser){ alert('Inicia sesión con Google'); return; }
       if(isQueuing) return;
       isQueuing = true; autoCycle = true; userHardStop = false;
-      enableInCall(false);
       overlay.classList.add('show');
+      setSearchingUI();
       try{
         if(!chosenGender) chosenGender = localStorage.getItem('ttv_gender') || 'Hombre';
         const displayName = (inpNombre.value || localStorage.getItem('ttv_name') || currentUser.displayName || '—');
         const age = (inpEdad.value || localStorage.getItem('ttv_age') || '—');
         await connectWS();
+
+        // Asegura media ya encendida durante búsqueda
         await ensureMedia();
         await applyARConstraints();
         if(isMobile()) adaptToOrientation();
+
         send({type:'find', gender: chosenGender, displayName, age});
         setStatus('En cola…');
       }catch(e){
-        setStatus('Error de conexión WS'); overlay.classList.remove('show'); isQueuing=false; autoCycle=false;
+        setStatus('Error de conexión WS'); overlay.classList.remove('show'); isQueuing=false; autoCycle=false; setIdleUI();
       }
     }
 
@@ -856,7 +800,7 @@
       try{
         send({type:'leave'});
         cleanupPeer({ keepLocal:true, closeWsToo:false });
-        setStatus('Buscando siguiente…'); overlay.classList.add('show'); enableInCall(false);
+        setStatus('Buscando siguiente…'); overlay.classList.add('show'); setSearchingUI();
         await ensureMedia();
         await applyARConstraints();
         if(isMobile()) adaptToOrientation();
@@ -869,13 +813,12 @@
       try{ send({type:'leave'}); }catch{}
       cleanupPeer({ keepLocal:true, closeWsToo:false });
       overlay.classList.remove('show');
-      setStatus('Detenido'); enableInCall(false);
+      setStatus('Detenido'); setIdleUI();
     }
 
     /* ===== Layout ===== */
     function setLayout(mode){
       layoutMode = mode;
-
       if(mode==='split'){
         stage.style.display = '';
         stage.classList.add('layout-split');
@@ -890,17 +833,12 @@
       if(localStream) attachLocal(localStream);
       attachRemote();
     }
-
     function isMobile(){ return window.matchMedia('(max-width: 640px)').matches }
-
     function initLayoutForDevice(){
       if(isMobile()){
-        const btnAR=qs('#btn-ar');
-        if(btnAR) btnAR.style.display='none';
+        const btnAR=qs('#btn-ar'); if(btnAR) btnAR.style.display='none';
         setLayout('mobile-fixed');
-      }else{
-        setLayout('split');
-      }
+      }else{ setLayout('split'); }
     }
 
     /* ===== Desktop: ocupar pantalla y RESPETAR AR elegido ===== */
@@ -930,9 +868,16 @@
     btnNext  ?.addEventListener('click', nextMatch);
     btnStop  ?.addEventListener('click', stopAll);
 
-    // ===== Botón AR (PC) → cambia FORMA visible y constraints del track =====
-    const btnAR = qs('#btn-ar');
+    // Botones nuevos: mute/cam (PC)
+    btnMute?.addEventListener('click', ()=>{
+      micMuted = !micMuted; applyMuteAndCam(); btnMute.textContent = micMuted ? 'Unmute' : 'Mute';
+    });
+    btnCam?.addEventListener('click', ()=>{
+      camOff = !camOff; applyMuteAndCam(); btnCam.textContent = camOff ? 'Encender cam' : 'Apagar cam';
+    });
 
+    // ===== Botón AR (PC) =====
+    const btnAR = qs('#btn-ar');
     function setBodyAR(cls, label){
       document.body.classList.remove('ar-1-1','ar-4-3','ar-16-9');
       document.body.classList.add(cls);
@@ -944,21 +889,13 @@
       if(document.body.classList.contains('ar-16-9')) return 16/9;
       return 1/1;
     }
-
     function nextARLabel(){
-      const portraitRemote = document.body.classList.contains('remote-portrait');
       const is11  = document.body.classList.contains('ar-1-1');
       const is43  = document.body.classList.contains('ar-4-3');
-      const is169 = document.body.classList.contains('ar-16-9');
-      if(portraitRemote){
-        if(is11)  return ['ar-4-3','4:3'];
-        return ['ar-1-1','1:1'];
-      }
       if(is11)   return ['ar-4-3','4:3'];
       if(is43)   return ['ar-16-9','16:9'];
       return ['ar-1-1','1:1'];
     }
-
     async function applyARConstraints(){
       const track = localStream?.getVideoTracks?.()[0];
       if(!track) return;
@@ -968,28 +905,37 @@
           width:  { ideal: 1280, max: 1920 },
           height: { ideal: 720,  max: 1080 }
         });
-      }catch(e){
-        console.warn('applyConstraints fallo (ignorado):', e?.message||e);
+      }catch(e1){
+        try{ await track.applyConstraints({ aspectRatio: currentARValue() }); }catch(e2){}
       }
     }
-
     btnAR?.addEventListener('click', async ()=>{
       const [cls,label] = nextARLabel();
       setBodyAR(cls,label);
       await applyARConstraints();
     });
 
-    // MÓVIL: dos botones fijos (se ocultan por CSS en móvil para look OmeTV)
-    btnBuscarM?.addEventListener('click', ()=>{ if(inCall){ nextMatch(); } else { joinQueue(); } });
+    // MÓVIL: dos botones fijos (UI general)
+    btnBuscarM?.addEventListener('click', ()=>{ if(inCall){ nextMatch(); } else if(isQueuing){ stopAll(); } else { joinQueue(); } });
     btnSalirM ?.addEventListener('click', ()=>{ stopAll(); auth.signOut(); });
     btnSalirChat?.addEventListener('click', ()=>{ stopAll(); auth.signOut(); });
 
-    // Doble toque móvil: ver remoto completo (contain)
-    let remoteContainM = false;
-    qs('#pane-remote')?.addEventListener('dblclick', ()=>{
+    // MÓVIL: engranaje ajustes (mute)
+    gearBtn?.addEventListener('click', ()=>{ gearSheet.classList.toggle('show'); });
+    swMute?.addEventListener('change', (e)=>{ micMuted = !!e.target.checked; applyMuteAndCam(); });
+
+    // Doble toque móvil: ver remoto completo (contain) con detector manual
+    let remoteContainM = false, lastTap=0;
+    function addDoubleTap(el, cb){
+      el.addEventListener('touchend', (e)=>{
+        const now = Date.now();
+        if(now - lastTap < 300){ cb(e); }
+        lastTap = now;
+      }, {passive:true});
+    }
+    addDoubleTap(document.getElementById('pane-remote'), ()=>{
       remoteContainM = !remoteContainM;
-      if(remoteContainM) remoteVideoM.classList.add('contain');
-      else remoteVideoM.classList.remove('contain');
+      remoteVideoM.classList.toggle('contain', remoteContainM);
     });
 
     // Doble clic PC en el remoto: alterna contain/cover manualmente
@@ -1022,38 +968,27 @@
       } catch {}
     }
 
-    /* ======== DETECTOR de “stream de celular” para PC ======== */
+    /* ======== DETECTOR retrato remoto ======== */
     function setupRemoteRatioWatchers(){
       if(!remoteVideo) return;
       const mark = ()=> updateRemoteFitClass();
-
       remoteVideo.addEventListener('loadedmetadata', mark);
       remoteVideo.addEventListener('resize', mark);
-
       try{
         const track = remoteStreamRef?.getVideoTracks?.()[0];
         const st = track?.getSettings?.();
         if(st?.width && st?.height){ updateRemoteFitClass(st.width, st.height); }
       }catch{}
     }
-
     function updateRemoteFitClass(wFromTrack, hFromTrack){
-      const w = wFromTrack || remoteVideo.videoWidth  || 0;
-      const h = hFromTrack || remoteVideo.videoHeight || 0;
-      if(!w || !h) return;
+      let w = wFromTrack || remoteVideo.videoWidth  || remoteVideoM.videoWidth  || 0;
+      let h = hFromTrack || remoteVideo.videoHeight || remoteVideoM.videoHeight || 0;
+      if(!w || !h){ setTimeout(()=>updateRemoteFitClass(), 120); return; }
       const ar = w / h;
       const isPortraitRemote = ar < 0.9;
-
       if(layoutMode==='split'){
-        if(isPortraitRemote){
-          document.body.classList.add('remote-portrait');
-          if(document.body.classList.contains('ar-16-9')){
-            setBodyAR('ar-4-3','4:3');
-            applyARConstraints();
-          }
-        }else{
-          document.body.classList.remove('remote-portrait');
-        }
+        if(isPortraitRemote){ document.body.classList.add('remote-portrait'); }
+        else { document.body.classList.remove('remote-portrait'); }
       }
     }
 
@@ -1061,28 +996,20 @@
     window.addEventListener('beforeunload', ()=>{ try{ send({type:'leave'}); }catch{} });
 
     /* ================== AÑADIDOS JS (OmeTV móvil) ================== */
-
-    // Referencias extra móvil
     const idleRemote = qs('#idle-remote');
     const idleLocal  = qs('#idle-local');
     const btnSwapCam = qs('#btn-swapcam');
     const swipeTip   = qs('#swipe-tip');
 
-    let currentFacing = 'user'; // frontal por defecto
-
     function showIdleRemote(show){ if(idleRemote) idleRemote.classList.toggle('hide', !show); }
     function showIdleLocal(show){  if(idleLocal)  idleLocal.classList.toggle('hide',  !show); }
-    // Estado inicial
     showIdleRemote(true); showIdleLocal(true);
 
-    // Cambiar cámara
-    async function toggleCamera(){
+    // Cambiar cámara (móvil)
+    async function toggleCameraFacing(){
       try{
         const target = (currentFacing === 'user') ? 'environment' : 'user';
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video:{ width:{ideal:1280}, height:{ideal:720}, frameRate:{ideal:30}, facingMode:{ exact: target } },
-          audio:{ echoCancellation:true, noiseSuppression:true }
-        });
+        const stream = await getStream({ facing: target });
         const newTrack = stream.getVideoTracks()[0];
         if(localStream){
           const old = localStream.getVideoTracks()[0]; if(old) old.stop();
@@ -1094,62 +1021,74 @@
         }
         currentFacing = target;
         attachLocal(localStream);
-      }catch(e){
-        console.warn('No se pudo cambiar la cámara:', e?.message||e);
-      }
+        applyMuteAndCam();
+      }catch(e){ console.warn('No se pudo cambiar la cámara:', e?.message||e); }
     }
-    btnSwapCam?.addEventListener('click', toggleCamera);
+    btnSwapCam?.addEventListener('click', toggleCameraFacing);
 
-    // Mostrar/Ocultar idles junto a tus attach*
-    const _attachLocal_orig  = attachLocal;
-    attachLocal = function(stream){ _attachLocal_orig(stream); showIdleLocal(false); }
-
-    const _attachRemote_orig = attachRemote;
-    attachRemote = function(){ _attachRemote_orig(); showIdleRemote(false); }
-
-    // En fin de llamada -> vuelve la estática de arriba
-    const _handleCallEnded = handleCallEnded;
-    handleCallEnded = function(reason){
-      _handleCallEnded(reason);
-      showIdleRemote(true);
-    };
-
-    // En cola: mostrar “cargando” hasta conectar
-    const _joinQueue = joinQueue;
-    joinQueue = async function(){
-      showIdleRemote(true);
-      await _joinQueue();
-    };
-
-    // Limpiar: restaurar idles
-    const _cleanupPeer = cleanupPeer;
-    cleanupPeer = function(opts){
-      _cleanupPeer(opts);
-      if(opts?.keepLocal){ showIdleLocal(false); } else { showIdleLocal(true); }
-      showIdleRemote(true);
-    };
-
-    // Gestos de swipe en la pantalla superior (remoto)
+    // Gestos swipe remoto
     function initSwipeGestures(){
       const el = document.getElementById('pane-remote');
       if(!el) return;
       let startX=0, dx=0, active=false;
-
       el.addEventListener('touchstart', (e)=>{ active=true; dx=0; startX=e.touches[0].clientX; }, {passive:true});
       el.addEventListener('touchmove',  (e)=>{ if(!active) return; dx = e.touches[0].clientX - startX; }, {passive:true});
       el.addEventListener('touchend',   ()=>{
         if(!active) return; active=false;
         const TH=80;
-        if(dx >  TH){  // derecha: empezar/siguiente
-          if(inCall){ nextMatch(); } else { joinQueue(); }
-          swipeTip?.remove();
-        }else if(dx < -TH){ // izquierda: detener
-          stopAll();
-          swipeTip?.remove();
-        }
+        if(dx >  TH){ if(inCall){ nextMatch(); } else if(isQueuing){ stopAll(); } else { joinQueue(); } swipeTip?.remove(); }
+        else if(dx < -TH){ stopAll(); swipeTip?.remove(); }
       });
     }
     initSwipeGestures();
+
+    /* ====== Mute/Cam helpers ====== */
+    function applyMuteAndCam(){
+      const a = localStream?.getAudioTracks?.() || [];
+      const v = localStream?.getVideoTracks?.() || [];
+      a.forEach(t=> t.enabled = !micMuted);
+      v.forEach(t=> t.enabled = !camOff);
+      // sincróniza switches/botones
+      if(swMute) swMute.checked = micMuted;
+      if(btnMute) btnMute.textContent = micMuted ? 'Unmute' : 'Mute';
+      if(btnCam)  btnCam.textContent  = camOff ? 'Encender cam' : 'Apagar cam';
+    }
+
+    /* ===== Auth: entrar a sala y autoencender cam/mic ===== */
+    let currentUser=null;
+    auth.onAuthStateChanged(async (u)=>{
+      currentUser=u||null;
+      if(!u){
+        show('landing'); youBadge.classList.add('hidden'); setIdleUI();
+        return;
+      }
+      youBadge.classList.remove('hidden');
+      const n = inpNombre.value || localStorage.getItem('ttv_name') || u.displayName || '—';
+      const a = inpEdad.value    || localStorage.getItem('ttv_age')  || '—';
+      youBadge.textContent=`Tú: ${n} (${a}) · ${chosenGender||'—'}`;
+      show('chat');
+      initLayoutForDevice();
+      requestAnimationFrame(sizeStageForDesktop);
+
+      // **Autoencender cámara y mic** al entrar a la sala
+      try{ await ensureMedia(true); }catch{}
+      setIdleUI(); // con media lista, deja mute/cam disponibles
+    });
+
+    // Login Google (con fallback redirect para Safari)
+    btnGoogle?.addEventListener('click', async ()=>{
+      if(!chosenGender){ alert('Elige tu género primero'); return; }
+      try{
+        const provider=new firebase.auth.GoogleAuthProvider();
+        await auth.signInWithPopup(provider);
+        localStorage.setItem('ttv_gender', chosenGender);
+      }catch(e){
+        try{
+          const provider=new firebase.auth.GoogleAuthProvider();
+          await auth.signInWithRedirect(provider);
+        }catch(e2){ alert('Error Google: '+(e2?.message||e?.message)); }
+      }
+    });
   </script>
 </body>
 </html>
