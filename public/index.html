@@ -93,12 +93,8 @@
     .ttv .word:nth-child(3){ animation-delay:.3s }
     .ttv .accent{ display:inline-block; padding-inline:.15em; transform:rotate(-2deg); text-shadow:0 2px 0 #ffe4e6 }
 
-    .ttv::before{
-      content:""; position:absolute; inset:auto 0 -8px 0; height:28%;
-      background:linear-gradient(90deg, rgba(244,63,94,.28), rgba(244,63,94,.6), rgba(244,63,94,.28));
-      filter:blur(10px); transform-origin:left center; pointer-events:none;
-      animation:inkSweep 1.4s ease-out .15s 1;
-    }
+    /* 🔴 DESACTIVAR LA “BARRA”/RESPLANDOR BAJO EL TÍTULO */
+    .ttv::before{ content:none !important; display:none !important; animation:none !important; }
 
     .note{ font-family:"Caveat", ui-serif; font-weight:800; background:#fff7cc; color:#0b1324; border-radius:.5rem; box-shadow:0 4px 0 rgba(0,0,0,.2); transform:rotate(-4deg); overflow:hidden; }
     .note-tiny{ font-size:clamp(30px,8vw,36px); padding:.05em .35em; min-width:auto; line-height:1.05; }
@@ -113,10 +109,10 @@
     .idle-video{
       position:absolute; inset:0;
       width:100%; height:100%;
-      object-fit:cover;        /* ocupa todo el contenedor */
-      transform:scale(1.22);   /* más de cerca */
+      object-fit:cover;
+      transform:scale(1.22);
       z-index:2;
-      pointer-events:none;     /* no bloquea clicks */
+      pointer-events:none;
     }
     .hide{ display:none !important; }
 
@@ -163,11 +159,22 @@
     #btn-buscar-m{ left:14px; }
     #btn-salir-m{ right:14px; }
 
-    /* Overlay sala de espera */
+    /* Overlay sala de espera (modo global por defecto) */
     .overlay{ position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.25); z-index:55 }
     .overlay.show{ display:flex }
     .dot{ width:10px; height:10px; border-radius:999px; background:#ef4444; margin:0 4px; animation:b .9s infinite alternate }
     .dot:nth-child(2){ animation-delay:.15s } .dot:nth-child(3){ animation-delay:.3s }
+
+    /* ✅ Overlay usado dentro del recuadro remoto (no bloquea la UI) */
+    .overlay.overlay--remote{
+      position:absolute; inset:0;
+      display:none; align-items:center; justify-content:center;
+      background:rgba(0,0,0,.25);
+      z-index:30;            /* por encima del video remoto, por debajo de controles UI */
+      pointer-events:none;   /* no bloquea clicks (Detener/Siguiente, etc.) */
+      border-radius:16px;    /* respeta el redondeado del tile remoto */
+    }
+    .overlay.overlay--remote.show{ display:flex; }
 
     /* PC helpers */
     .full-bleed{ width:100vw; position:relative; left:50%; right:50%; margin-left:-50vw; margin-right:-50vw; }
@@ -330,7 +337,7 @@
         box-shadow:0 0 14px rgba(255,255,255,.6), 0 4px 10px rgba(0,0,0,.35);
         transform:translate(-50%,-50%);
         animation: bubbleRun 1.8s cubic-bezier(.22,.61,.36,1) infinite;
-        animation-direction: normal; /* one-way loop */
+        animation-direction: normal;
       }
       .search-anim .label{
         color:#fff; font-weight:900; font-size:14px; letter-spacing:.2px;
@@ -345,6 +352,39 @@
         100% { left: 94%; }
       }
     }
+
+    /* 🔵 NUEVO: Badge “Buscando tortilleras…” centrado en el remoto (PC + móvil). */
+    .search-badge{
+      position:absolute; inset:0;
+      display:none; align-items:center; justify-content:center; flex-direction:column;
+      z-index:30; pointer-events:none;
+    }
+    .search-badge.show{ display:flex; }
+    .search-badge .center-dot{
+      width:16px; height:16px; border-radius:999px; background:#fff;
+      box-shadow:0 0 14px rgba(255,255,255,.7), 0 4px 10px rgba(0,0,0,.35);
+      margin-bottom:10px;
+      animation: dotCenter 1.6s ease-in-out infinite alternate;
+    }
+    @keyframes dotCenter{
+      0%{ transform: translateX(-24px); }
+      100%{ transform: translateX(24px); }
+    }
+    .search-badge .search-label{
+      color:#fff; font-weight:900; font-size:14px; letter-spacing:.2px;
+      text-shadow:0 2px 10px rgba(0,0,0,.6);
+      background:rgba(17,24,39,.55);
+      border:1px solid rgba(255,255,255,.25);
+      padding:.45rem .9rem; border-radius:999px;
+      backdrop-filter:blur(6px);
+    }
+    @media (min-width:641px){
+      .search-badge .center-dot{ display:none; }
+    }
+
+    /* ❌ Forzamos a esconder la barrita animada antigua en móvil */
+    #searchAnimM{ display:none !important; }
+
   </style>
 </head>
 <body class="font-sans ar-1-1">
@@ -442,6 +482,12 @@
 
               <video id="remoteVideo" autoplay playsinline></video>
 
+              <!-- 🔵 Badge de búsqueda en PC -->
+              <div id="searchBadgeD" class="search-badge">
+                <div class="center-dot"></div>
+                <div class="search-label">Buscando tortilleras…</div>
+              </div>
+
               <!-- CONTROLES DE ZOOM (PC) REMOTO -->
               <div class="zoom-controls sm:flex hidden" aria-label="Zoom remoto">
                 <button id="fitRemote" class="zoom-btn" title="Ver completo">⤢</button>
@@ -471,10 +517,16 @@
               <!-- Idle de ruido (Móvil) -->
               <video id="idleNoiseM" class="idle-video" src="./assets/noise.mp4" muted playsinline autoplay loop preload="auto"></video>
 
-              <!-- 🔵 Overlay animación SOLO móvil -->
+              <!-- ❌ Antiguo overlay animación (barra) → forzado a hidden vía CSS -->
               <div id="searchAnimM" class="search-anim sm:hidden" aria-hidden="true">
                 <div class="track"><div class="dot"></div></div>
                 <div class="label">Buscar</div>
+              </div>
+
+              <!-- 🔵 Badge de búsqueda en MÓVIL -->
+              <div id="searchBadgeM" class="search-badge">
+                <div class="center-dot"></div>
+                <div class="search-label">Buscando tortilleras…</div>
               </div>
 
               <video id="remoteVideoM" autoplay playsinline></video>
@@ -506,7 +558,7 @@
     </main>
   </div>
 
-  <!-- Overlay sala de espera -->
+  <!-- Overlay reutilizado: ahora se reposiciona dentro del remoto -->
   <div id="overlay" class="overlay">
     <div class="card px-5 py-4 flex items-center gap-3 bg-white">
       <span class="font-semibold">Buscando tortilleras!!!…</span>
@@ -568,6 +620,24 @@
     const overlay   = qs('#overlay');
     const peerLabel = qs('#peerLabel');
     const youBadge  = qs('#you-badge');
+
+    /* === Overlay: reposicionar dentro del remoto y mostrar === */
+    let layoutMode='split'; // lo declaro arriba también para overlay helpers
+    function placeOverlayInRemote(){
+      if(!overlay) return;
+      overlay.classList.add('overlay--remote'); // lo convertimos al modo interno
+      const parent = (layoutMode === 'split') ? qs('#remoteTile') : qs('#pane-remote');
+      if (parent && overlay.parentNode !== parent) parent.appendChild(overlay);
+    }
+    function placeOverlayInBody(){
+      if(!overlay) return;
+      overlay.classList.remove('overlay--remote');
+      if (overlay.parentNode !== document.body) document.body.appendChild(overlay);
+    }
+    function showOverlayInRemote(show){
+      placeOverlayInRemote();
+      overlay.classList.toggle('show', !!show);
+    }
 
     /* ===== Letrero con deslizamiento unísono ===== */
     const NOTE_WORDS = ["anal","beso","charla","broma","random","a ochoa lo fusilaron","aayyyy","ya se me olvido que era singar","dame promo","https://instagram.com/marquisdsad3"];
@@ -637,6 +707,10 @@
 
     const gearBtn = qs('#btn-gear'), gearSheet = qs('#gear-sheet'), swMute = qs('#sw-mute');
 
+    /* ===== NUEVO: refs a badges de búsqueda ===== */
+    const searchBadgeD = qs('#searchBadgeD'); // PC
+    const searchBadgeM = qs('#searchBadgeM'); // Móvil
+
     /* ===== NUEVO: refs a idles de video ===== */
     const idleNoiseD = qs('#idleNoiseD');
     const idleNoiseM = qs('#idleNoiseM');
@@ -645,7 +719,6 @@
     let ws=null, wsOpen=false, myId=null, roomId=null, role=null;
     let pc=null, localStream=null, remoteStreamRef=null;
     let isQueuing=false, inCall=false, autoCycle=false, userHardStop=false;
-    let layoutMode='split'; // 'split' | 'mobile-fixed'
     let micMuted=false, camOff=false;
     let currentFacing = 'user'; // móvil
     const iceServers=[{urls:'stun:stun.l.google.com:19302'}];
@@ -683,7 +756,7 @@
     /* ===== gUM helper tolerante ===== */
     async function getStream({ facing = 'user' } = {}){
       const base = isMobile()
-        ? { // 📱 MÓVIL: NO forzar width/height/aspectRatio → evita recortes
+        ? { // 📱 MÓVIL: no forzar width/height/aspectRatio → evita recortes
             video: { facingMode: { ideal: facing } },
             audio: { echoCancellation:true, noiseSuppression:true }
           }
@@ -748,8 +821,11 @@
         remoteVideoM.srcObject = remoteStreamRef; safePlay(remoteVideoM);
         remoteVideo.srcObject = null;
       }
-      // Al entrar video remoto, ocultamos idle (y por tanto se apaga el paneo/overlay en móvil)
+      // Al entrar video remoto, ocultamos idle y badges
       showIdleRemote(false);
+      showSearchBadges(false);
+      // asegurar que el overlay (si visible) siga pegado al remoto
+      if (overlay?.classList.contains('show')) placeOverlayInRemote();
     }
 
     function makePC(){
@@ -758,7 +834,7 @@
       pc.ontrack = (e)=>{ remoteStreamRef = e.streams[0]; attachRemote(); setupRemoteRatioWatchers(); };
       pc.onconnectionstatechange = ()=> {
         const st = pc.connectionState;
-        if(st==='connected'){ inCall = true; setStatus('Conectado'); overlay.classList.remove('show'); enableControls(); }
+        if(st==='connected'){ inCall = true; setStatus('Conectado'); showOverlayInRemote(false); enableControls(); showSearchBadges(false); }
         if(st==='disconnected' || st==='failed'){ handleCallEnded('conn:'+st); }
         if(st==='closed'){ setStatus('Cerrado'); }
       };
@@ -778,9 +854,10 @@
           if(data.type==='matched'){
             roomId=data.roomId; role=data.role;
             setStatus('Pareja encontrada · Conectando…');
-            overlay.classList.add('show');
+            showOverlayInRemote(true);
+            showSearchBadges(true);
             if(data.peer && data.peer.name){ peerLabel.classList.remove('hidden'); peerLabel.textContent = 'Pareja: '+(data.peer.name||'—'); }
-            try{ await startWebRTC(role); }catch(e){ setStatus('Error WebRTC: '+e.message); overlay.classList.remove('show'); }
+            try{ await startWebRTC(role); }catch(e){ setStatus('Error WebRTC: '+e.message); showOverlayInRemote(false); showSearchBadges(false); }
           }
           if(data.type==='offer'){
             await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
@@ -828,6 +905,12 @@
       resetZoom();
     }
 
+    /* ===== Control de badges ===== */
+    function showSearchBadges(show){
+      searchBadgeD?.classList.toggle('show', !!show);
+      searchBadgeM?.classList.toggle('show', !!show);
+    }
+
     /* ===== Control de botones según estado ===== */
     function enableControls(){
       btnStart && (btnStart.disabled = true);
@@ -844,6 +927,7 @@
       btnMute  && (btnMute.disabled  = !localStream);
       btnCam   && (btnCam.disabled   = !localStream);
       if(btnBuscarM) btnBuscarM.textContent = 'Buscando…';
+      showSearchBadges(true);
     }
     function setIdleUI(){
       btnStart && (btnStart.disabled = false);
@@ -852,16 +936,17 @@
       btnMute  && (btnMute.disabled  = !localStream);
       btnCam   && (btnCam.disabled   = !localStream);
       if(btnBuscarM) btnBuscarM.textContent = 'Buscar sala';
+      showSearchBadges(false);
     }
 
     // Auto-cycle
     function handleCallEnded(){
       cleanupPeer({ keepLocal:true, closeWsToo:false });
       if(autoCycle && !userHardStop){
-        setStatus('Buscando siguiente…'); overlay.classList.add('show'); setSearchingUI();
+        setStatus('Buscando siguiente…'); showOverlayInRemote(true); setSearchingUI();
         setTimeout(()=>{ findNext(); }, 400);
       }else{
-        overlay.classList.remove('show'); setIdleUI();
+        showOverlayInRemote(false); setIdleUI();
       }
       // Volvemos al idle → si estamos en SALA (móvil), reactivar paneo y overlay
       showIdleRemote(true);
@@ -871,7 +956,7 @@
       if(!currentUser){ alert('Inicia sesión con Google'); return; }
       if(isQueuing) return;
       isQueuing = true; autoCycle = true; userHardStop = false;
-      overlay.classList.add('show');
+      showOverlayInRemote(true);
       setSearchingUI();
       try{
         if(!chosenGender) chosenGender = localStorage.getItem('ttv_gender') || 'Hombre';
@@ -885,7 +970,7 @@
         send({type:'find', gender: chosenGender, displayName, age});
         setStatus('En cola…');
       }catch{
-        setStatus('Error de conexión WS'); overlay.classList.remove('show'); isQueuing=false; autoCycle=false; setIdleUI();
+        setStatus('Error de conexión WS'); showOverlayInRemote(false); isQueuing=false; autoCycle=false; setIdleUI();
       }
     }
 
@@ -902,10 +987,9 @@
       try{
         send({type:'leave'});
         cleanupPeer({ keepLocal:true, closeWsToo:false });
-        setStatus('Buscando siguiente…'); overlay.classList.add('show'); setSearchingUI();
+        setStatus('Buscando siguiente…'); showOverlayInRemote(true); setSearchingUI();
         await ensureMedia();
         if (!isMobile()) { await applyARConstraints(); }
-
         findNext();
       }catch{ setStatus('Error WS (siguiente)'); }
     }
@@ -914,7 +998,7 @@
       userHardStop = true; autoCycle = false; isQueuing = false;
       try{ send({type:'leave'}); }catch{}
       cleanupPeer({ keepLocal:true, closeWsToo:false });
-      overlay.classList.remove('show');
+      showOverlayInRemote(false);
       setStatus('Detenido'); setIdleUI();
     }
 
@@ -934,6 +1018,8 @@
       }
       if(localStream) attachLocal(localStream);
       attachRemote();
+      // si el overlay está visible, asegúrate de reubicarlo al contenedor correcto
+      if (overlay?.classList.contains('show')) placeOverlayInRemote();
     }
     function isMobile(){ return window.matchMedia('(max-width: 640px)').matches }
     function initLayoutForDevice(){
@@ -1117,18 +1203,18 @@
       if (idleNoiseD) idleNoiseD.classList.toggle('hide', !show);
       if (idleNoiseM) idleNoiseM.classList.toggle('hide', !show);
 
-      // 🔵 Overlay de “Buscar” SOLO en móvil
+      // Antiguo overlay de “Buscar” SOLO en móvil (queda oculto por CSS)
       const saM = document.getElementById('searchAnimM');
       if (saM) saM.classList.toggle('show', !!show && isMobile());
 
       if (show){
         if (idleNoiseD){ idleNoiseD.muted = true; safePlay(idleNoiseD); }
         if (idleNoiseM){ idleNoiseM.muted = true; safePlay(idleNoiseM); }
-        startIdlePanIfMobile();   // en sala móvil: activar paneo
+        startIdlePanIfMobile();
       }else{
         if (idleNoiseD) idleNoiseD.pause();
         if (idleNoiseM) idleNoiseM.pause();
-        stopIdlePan();            // al ocultar idle: apagar paneo
+        stopIdlePan();
       }
     }
     function showIdleLocal(show){ if(idleLocal) idleLocal.classList.toggle('hide', !show); }
@@ -1194,9 +1280,10 @@
       if(!u){
         show('landing'); youBadge.classList.add('hidden'); setIdleUI();
         swipeTip?.classList.remove('show');
-        // saliendo de sala → desactivar paneo
         mobilePanEnabled = false;
         stopIdlePan();
+        // si vuelves a landing y quieres overlay global fullscreen:
+        // placeOverlayInBody();
         return;
       }
       youBadge.classList.remove('hidden');
@@ -1210,7 +1297,6 @@
 
       // Al entrar a SALA: habilitar paneo para móvil
       mobilePanEnabled = true;
-      // Si en este momento aún está el idle visible, enciende el paneo
       startIdlePanIfMobile();
 
       // Autoencender cámara y mic
