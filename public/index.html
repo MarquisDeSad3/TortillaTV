@@ -1,4 +1,4 @@
-<!DOCTYPE html> 
+<!DOCTYPE html>  
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
@@ -280,6 +280,23 @@
 
     /* Topbar new controls spacing (PC) */
     .topbar .sep{ width:1px; height:24px; background:rgba(0,0,0,.15); margin:0 6px; }
+
+    /* ====== PAN L↔R del idle en móvil (solo SALA) ====== */
+    @media (max-width:640px){
+      #idleNoiseM.lr-pan{
+        will-change: transform;
+        animation: noisePan 1.8s ease-in-out infinite alternate;
+        -webkit-animation: noisePan 1.8s ease-in-out infinite alternate;
+      }
+      @keyframes noisePan{
+        0%   { transform: scale(1.22) translateX(-6%); }
+        100% { transform: scale(1.22) translateX( 6%); }
+      }
+      @-webkit-keyframes noisePan{
+        0%   { -webkit-transform: scale(1.22) translateX(-6%); }
+        100% { -webkit-transform: scale(1.22) translateX( 6%); }
+      }
+    }
   </style>
 </head>
 <body class="font-sans ar-1-1">
@@ -678,6 +695,7 @@
         remoteVideoM.srcObject = remoteStreamRef; safePlay(remoteVideoM);
         remoteVideo.srcObject = null;
       }
+      // Al entrar video remoto, ocultamos idle (y por tanto se apaga el paneo)
       showIdleRemote(false);
     }
 
@@ -792,6 +810,7 @@
       }else{
         overlay.classList.remove('show'); setIdleUI();
       }
+      // Volvemos al idle → si estamos en SALA (móvil), reactivar paneo
       showIdleRemote(true);
     }
 
@@ -1028,21 +1047,35 @@
     const btnSwapCam = qs('#btn-swapcam');
     const swipeTip   = qs('#swipe-tip');
 
-    // Mostrar/Ocultar idles
+    // ===== Paneo L↔R del idle SOLO en móvil y SOLO en SALA =====
+    let mobilePanEnabled = false; // true cuando estamos en page-chat en móvil
+
+    function startIdlePanIfMobile(){
+      if (mobilePanEnabled && isMobile() && idleNoiseM) {
+        idleNoiseM.classList.add('lr-pan');
+      }
+    }
+    function stopIdlePan(){
+      if (idleNoiseM) idleNoiseM.classList.remove('lr-pan');
+    }
+
+    // Mostrar/Ocultar idles (controla paneo según estado)
     function showIdleRemote(show){
       if (idleNoiseD) idleNoiseD.classList.toggle('hide', !show);
       if (idleNoiseM) idleNoiseM.classList.toggle('hide', !show);
       if (show){
         if (idleNoiseD){ idleNoiseD.muted = true; safePlay(idleNoiseD); }
         if (idleNoiseM){ idleNoiseM.muted = true; safePlay(idleNoiseM); }
+        startIdlePanIfMobile();   // en sala móvil: activar paneo
       }else{
         if (idleNoiseD) idleNoiseD.pause();
         if (idleNoiseM) idleNoiseM.pause();
+        stopIdlePan();            // al ocultar idle: apagar paneo
       }
     }
     function showIdleLocal(show){ if(idleLocal) idleLocal.classList.toggle('hide', !show); }
 
-    // estado inicial
+    // estado inicial (landing): idle visible pero SIN paneo (mobilePanEnabled=false)
     showIdleRemote(true); 
     showIdleLocal(true);
     if (idleNoiseD) safePlay(idleNoiseD);
@@ -1103,6 +1136,9 @@
       if(!u){
         show('landing'); youBadge.classList.add('hidden'); setIdleUI();
         swipeTip?.classList.remove('show');
+        // saliendo de sala → desactivar paneo
+        mobilePanEnabled = false;
+        stopIdlePan();
         return;
       }
       youBadge.classList.remove('hidden');
@@ -1113,6 +1149,11 @@
       initLayoutForDevice();
       requestAnimationFrame(sizeStageForDesktop);
       if (isMobile()) { swipeTip?.classList.add('show'); }
+
+      // Al entrar a SALA: habilitar paneo para móvil
+      mobilePanEnabled = true;
+      // Si en este momento aún está el idle visible, enciende el paneo
+      startIdlePanIfMobile();
 
       // Autoencender cámara y mic
       try{ await ensureMedia(true); }catch{}
