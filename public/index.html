@@ -1,5 +1,4 @@
-
-<!DOCTYPE html>  
+<!DOCTYPE html>   
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
@@ -153,9 +152,16 @@
     #btn-buscar-m{ left:14px; }
     #btn-salir-m{ right:14px; }
 
-    /* Overlay sala de espera */
-    .overlay{ position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.25); z-index:55 }
+    /* ====== Overlay sala de espera pegado al REMOTO (PC y móvil) ====== */
+    .overlay{
+      position:absolute; inset:0; display:none;
+      align-items:center; justify-content:center;
+      background:rgba(0,0,0,.25); z-index:20;
+      pointer-events:none; /* deja usar los botones (Detener, etc.) */
+    }
     .overlay.show{ display:flex }
+    .overlay .card{ pointer-events:auto; } /* por si quieres hacer clic en algo dentro */
+
     .dot{ width:10px; height:10px; border-radius:999px; background:#ef4444; margin:0 4px; animation:b .9s infinite alternate }
     .dot:nth-child(2){ animation-delay:.15s } .dot:nth-child(3){ animation-delay:.3s }
 
@@ -239,6 +245,7 @@
       100%{ filter:contrast(140%) brightness(115%); transform:translateY(-1px); }
     }
 
+    /* Tip de gesto simple */
     .swipe-tip{
       position:fixed; top:14px; left:50%; transform:translateX(-50%);
       z-index:70; color:#fff; background:rgba(17,24,39,.65);
@@ -297,6 +304,22 @@
         0%   { -webkit-transform: scale(1.22) translateX(-6%); }
         100% { -webkit-transform: scale(1.22) translateX( 6%); }
       }
+    }
+
+    /* ===== Emojis en overlay ===== */
+    .emoji-layer{
+      position:absolute; inset:0; pointer-events:none; overflow:hidden;
+    }
+    .swipe-emoji{
+      position:absolute; font-size:18px;
+      filter: drop-shadow(0 2px 6px rgba(0,0,0,.35));
+      opacity:0; transform: translate3d(0,0,0) scale(0.9) rotate(0deg);
+      animation: emojiFloat .95s ease-out forwards;
+    }
+    @keyframes emojiFloat{
+      0%   { opacity:0; transform: translateY(6px) scale(.9) rotate(0deg); }
+      20%  { opacity:1; }
+      100% { opacity:0; transform: translateY(-26px) scale(1.06) rotate(12deg); }
     }
   </style>
 </head>
@@ -396,6 +419,15 @@
 
               <video id="remoteVideo" autoplay playsinline></video>
 
+              <!-- OVERLAY PC dentro del remoto -->
+              <div id="overlayD" class="overlay">
+                <div class="card px-5 py-4 flex items-center gap-3 bg-white">
+                  <span class="font-semibold">Buscando tortilleras!!!…</span>
+                  <div class="flex"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+                </div>
+                <div class="emoji-layer" aria-hidden="true"></div>
+              </div>
+
               <!-- CONTROLES DE ZOOM (PC) REMOTO -->
               <div class="zoom-controls sm:flex hidden" aria-label="Zoom remoto">
                 <button id="fitRemote" class="zoom-btn" title="Ver completo">⤢</button>
@@ -426,6 +458,15 @@
               <video id="idleNoiseM" class="idle-video" src="./assets/noise.mp4"
                      muted playsinline autoplay loop preload="auto"></video>
               <video id="remoteVideoM" autoplay playsinline></video>
+
+              <!-- OVERLAY MÓVIL dentro del remoto -->
+              <div id="overlayM" class="overlay">
+                <div class="card px-5 py-4 flex items-center gap-3 bg-white">
+                  <span class="font-semibold">Buscando tortilleras!!!…</span>
+                  <div class="flex"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+                </div>
+                <div class="emoji-layer" aria-hidden="true"></div>
+              </div>
             </div>
             <div class="pane" id="pane-local">
               <div id="idle-local" class="idle static-noise"><div>Preparando cámara…</div></div>
@@ -452,14 +493,6 @@
         </div>
       </section>
     </main>
-  </div>
-
-  <!-- Overlay sala de espera -->
-  <div id="overlay" class="overlay">
-    <div class="card px-5 py-4 flex items-center gap-3 bg-white">
-      <span class="font-semibold">Buscando tortilleras!!!…</span>
-      <div class="flex"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
-    </div>
   </div>
 
   <!-- Botón mini: cambiar cámara (móvil) -->
@@ -513,7 +546,59 @@
     function setStatus(t){ const el=qs('#status'); if(el) el.textContent=t }
     function safePlay(v){ try{ const p=v?.play?.(); if(p?.catch) p.catch(()=>{}); }catch{} }
 
-    const overlay   = qs('#overlay');
+    // === Overlay acoplado al REMOTO (PC/Móvil) ===
+    function overlayEl(){
+      return (layoutMode === 'split')
+        ? document.getElementById('overlayD')
+        : document.getElementById('overlayM');
+    }
+    function overlayEmojiLayer(){
+      const root = overlayEl();
+      return root ? root.querySelector('.emoji-layer') : null;
+    }
+    let searchEmojiTimer = null;
+    const EMOJIS = ['👋','💬','🎭','🎥','✨','😄','🤝','🍀','🧑‍🤝‍🧑','🌟'];
+    function spawnSearchEmoji(){
+      const layer = overlayEmojiLayer(); if(!layer) return;
+      const span = document.createElement('span');
+      span.className = 'swipe-emoji';
+      span.textContent = EMOJIS[Math.floor(Math.random()*EMOJIS.length)];
+
+      // posición aleatoria dentro del overlay remoto
+      const rect = layer.getBoundingClientRect();
+      const x = Math.random() * rect.width;
+      const y = Math.random() * rect.height * 0.6 + rect.height*0.2;
+      span.style.left = x + 'px';
+      span.style.top  = y + 'px';
+
+      // ligera deriva horizontal
+      const dir = Math.random() < .5 ? -1 : 1;
+      span.animate(
+        [
+          { transform:`translate(${dir*4}px, 6px) scale(.9)`, opacity:0 },
+          { transform:`translate(${dir*14}px, -26px) scale(1.06) rotate(12deg)`, opacity:1 },
+          { transform:`translate(${dir*20}px, -36px) scale(1.06) rotate(18deg)`, opacity:0 }
+        ],
+        { duration: 950, easing: 'ease-out', fill: 'forwards' }
+      );
+
+      layer.appendChild(span);
+      setTimeout(()=> span.remove(), 980);
+    }
+    function startSearchEmojis(){
+      stopSearchEmojis();
+      // ritmo agradable mientras se busca
+      searchEmojiTimer = setInterval(spawnSearchEmoji, 420);
+    }
+    function stopSearchEmojis(){
+      if(searchEmojiTimer){ clearInterval(searchEmojiTimer); searchEmojiTimer=null; }
+    }
+    function overlayShow(show){
+      const ov = overlayEl(); if(!ov) return;
+      ov.classList.toggle('show', !!show);
+      if(show) startSearchEmojis(); else stopSearchEmojis();
+    }
+
     const peerLabel = qs('#peerLabel');
     const youBadge  = qs('#you-badge');
 
@@ -698,6 +783,8 @@
       }
       // Al entrar video remoto, ocultamos idle (y por tanto se apaga el paneo)
       showIdleRemote(false);
+      // Ocultar overlay al mostrar video remoto (por si seguía visible)
+      overlayShow(false);
     }
 
     function makePC(){
@@ -706,7 +793,7 @@
       pc.ontrack = (e)=>{ remoteStreamRef = e.streams[0]; attachRemote(); setupRemoteRatioWatchers(); };
       pc.onconnectionstatechange = ()=> {
         const st = pc.connectionState;
-        if(st==='connected'){ inCall = true; setStatus('Conectado'); overlay.classList.remove('show'); enableControls(); }
+        if(st==='connected'){ inCall = true; setStatus('Conectado'); overlayShow(false); enableControls(); }
         if(st==='disconnected' || st==='failed'){ handleCallEnded('conn:'+st); }
         if(st==='closed'){ setStatus('Cerrado'); }
       };
@@ -726,9 +813,9 @@
           if(data.type==='matched'){
             roomId=data.roomId; role=data.role;
             setStatus('Pareja encontrada · Conectando…');
-            overlay.classList.add('show');
+            overlayShow(true);
             if(data.peer && data.peer.name){ peerLabel.classList.remove('hidden'); peerLabel.textContent = 'Pareja: '+(data.peer.name||'—'); }
-            try{ await startWebRTC(role); }catch(e){ setStatus('Error WebRTC: '+e.message); overlay.classList.remove('show'); }
+            try{ await startWebRTC(role); }catch(e){ setStatus('Error WebRTC: '+e.message); overlayShow(false); }
           }
           if(data.type==='offer'){
             await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
@@ -806,10 +893,10 @@
     function handleCallEnded(){
       cleanupPeer({ keepLocal:true, closeWsToo:false });
       if(autoCycle && !userHardStop){
-        setStatus('Buscando siguiente…'); overlay.classList.add('show'); setSearchingUI();
+        setStatus('Buscando siguiente…'); overlayShow(true); setSearchingUI();
         setTimeout(()=>{ findNext(); }, 400);
       }else{
-        overlay.classList.remove('show'); setIdleUI();
+        overlayShow(false); setIdleUI();
       }
       // Volvemos al idle → si estamos en SALA (móvil), reactivar paneo
       showIdleRemote(true);
@@ -819,7 +906,7 @@
       if(!currentUser){ alert('Inicia sesión con Google'); return; }
       if(isQueuing) return;
       isQueuing = true; autoCycle = true; userHardStop = false;
-      overlay.classList.add('show');
+      overlayShow(true);
       setSearchingUI();
       try{
         if(!chosenGender) chosenGender = localStorage.getItem('ttv_gender') || 'Hombre';
@@ -833,7 +920,7 @@
         send({type:'find', gender: chosenGender, displayName, age});
         setStatus('En cola…');
       }catch{
-        setStatus('Error de conexión WS'); overlay.classList.remove('show'); isQueuing=false; autoCycle=false; setIdleUI();
+        setStatus('Error de conexión WS'); overlayShow(false); isQueuing=false; autoCycle=false; setIdleUI();
       }
     }
 
@@ -850,7 +937,7 @@
       try{
         send({type:'leave'});
         cleanupPeer({ keepLocal:true, closeWsToo:false });
-        setStatus('Buscando siguiente…'); overlay.classList.add('show'); setSearchingUI();
+        setStatus('Buscando siguiente…'); overlayShow(true); setSearchingUI();
         await ensureMedia();
         if (!isMobile()) { await applyARConstraints(); }
 
@@ -862,7 +949,7 @@
       userHardStop = true; autoCycle = false; isQueuing = false;
       try{ send({type:'leave'}); }catch{}
       cleanupPeer({ keepLocal:true, closeWsToo:false });
-      overlay.classList.remove('show');
+      overlayShow(false);
       setStatus('Detenido'); setIdleUI();
     }
 
@@ -1103,7 +1190,7 @@
     }
     btnSwapCam?.addEventListener('click', toggleCameraFacing);
 
-    // Gestos swipe remoto
+    // Gestos swipe remoto (mantengo tu lógica original)
     function initSwipeGestures(){
       const el = document.getElementById('pane-remote');
       if(!el) return;
@@ -1177,3 +1264,4 @@
     });
   </script>
 </body>
+</html>
