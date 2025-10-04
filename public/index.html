@@ -1,4 +1,4 @@
-<!DOCTYPE html>   
+<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
@@ -245,23 +245,8 @@
       100%{ filter:contrast(140%) brightness(115%); transform:translateY(-1px); }
     }
 
-    /* Tip de gesto simple */
-    .swipe-tip{
-      position:fixed; top:14px; left:50%; transform:translateX(-50%);
-      z-index:70; color:#fff; background:rgba(17,24,39,.65);
-      border:1px solid rgba(255,255,255,.25);
-      backdrop-filter:blur(8px); border-radius:999px; padding:.45rem .9rem;
-      display:none; 
-      align-items:center; gap:.55rem; font-weight:700; font-size:14px;
-    }
-    .swipe-tip.show{ display:flex; } 
-    .swipe-hand{ width:22px; height:22px; border-radius:6px; background:#fff; animation:handRight 1.8s ease-in-out infinite; }
-    @keyframes handRight{
-      0%{ transform:translateX(-22px); opacity:.9 }
-      45%{ transform:translateX(22px); opacity:1 }
-      60%{ opacity:0 }
-      100%{ opacity:0 }
-    }
+    /* Ocultamos tip "desliza" porque ahora hay cubo + sway */
+    .swipe-tip{ display:none !important; }
 
     /* ====== Móvil: engranaje ajustes (mute) ====== */
     .gear-btn{
@@ -320,6 +305,44 @@
       0%   { opacity:0; transform: translateY(6px) scale(.9) rotate(0deg); }
       20%  { opacity:1; }
       100% { opacity:0; transform: translateY(-26px) scale(1.06) rotate(12deg); }
+    }
+
+    /* ===== Cubo 3D + bamboleo remoto (solo móvil) ===== */
+    @media (max-width:640px){
+      .cube-hint{ position:absolute; inset:0; display:grid; place-items:center; z-index:22; pointer-events:none; }
+      .cube{
+        --cube: min(44vw, 44vh);
+        --z: calc(var(--cube) / 2);
+        width: var(--cube); height: var(--cube);
+        transform-style: preserve-3d;
+        animation: cubeSpin 3.2s ease-in-out infinite;
+      }
+      .cube .face{
+        position:absolute; inset:0; display:grid; place-items:center;
+        font-size:clamp(22px, 8vw, 36px); font-weight:900; color:#fff;
+        background:rgba(17,24,39,.22); border:1px solid rgba(255,255,255,.15);
+        border-radius:14px; backdrop-filter: blur(6px);
+      }
+      .cube .front  { transform: translateZ(var(--z)); }
+      .cube .back   { transform: rotateY(180deg) translateZ(var(--z)); }
+      .cube .left   { transform: rotateY(-90deg) translateZ(var(--z)); }
+      .cube .right  { transform: rotateY(90deg) translateZ(var(--z)); }
+      .cube .top    { transform: rotateX(90deg) translateZ(var(--z)); }
+      .cube .bottom { transform: rotateX(-90deg) translateZ(var(--z)); }
+
+      @keyframes cubeSpin{
+        0%   { transform: rotateX(-12deg) rotateY(0deg); }
+        50%  { transform: rotateX(12deg)  rotateY(180deg); }
+        100% { transform: rotateX(-12deg) rotateY(360deg); }
+      }
+
+      /* bamboleo del remoto mientras está buscando */
+      #pane-remote.searching{ animation: remoteSway 1.6s ease-in-out infinite; }
+      @keyframes remoteSway{
+        0%   { transform: translateX(-2%) rotateZ(-0.3deg); }
+        50%  { transform: translateX( 2%) rotateZ( 0.3deg); }
+        100% { transform: translateX(-2%) rotateZ(-0.3deg); }
+      }
     }
   </style>
 </head>
@@ -459,12 +482,24 @@
                      muted playsinline autoplay loop preload="auto"></video>
               <video id="remoteVideoM" autoplay playsinline></video>
 
-              <!-- OVERLAY MÓVIL dentro del remoto -->
+              <!-- OVERLAY MÓVIL dentro del remoto (cubo + emojis) -->
               <div id="overlayM" class="overlay">
                 <div class="card px-5 py-4 flex items-center gap-3 bg-white">
                   <span class="font-semibold">Buscando tortilleras!!!…</span>
                   <div class="flex"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
                 </div>
+                <!-- Cubo 3D -->
+                <div class="cube-hint" aria-hidden="true">
+                  <div class="cube">
+                    <div class="face front">👉</div>
+                    <div class="face back">🎥</div>
+                    <div class="face left">✨</div>
+                    <div class="face right">💬</div>
+                    <div class="face top">👋</div>
+                    <div class="face bottom">🔍</div>
+                  </div>
+                </div>
+                <!-- Emojis -->
                 <div class="emoji-layer" aria-hidden="true"></div>
               </div>
             </div>
@@ -486,7 +521,7 @@
           <button id="btn-salir-chat" class="rounded-full border-2 border-neutral-900/30 bg-white/80 px-5 py-2 text-sm font-semibold shadow">Salir</button>
         </div>
 
-        <!-- Pista de gesto (móvil) -->
+        <!-- Tip de gesto (móvil) — oculto por CSS -->
         <div id="swipe-tip" class="swipe-tip sm:hidden">
           <div class="swipe-hand" aria-hidden="true"></div>
           <span>Desliza → empezar / siguiente — ← detener</span>
@@ -597,6 +632,10 @@
       const ov = overlayEl(); if(!ov) return;
       ov.classList.toggle('show', !!show);
       if(show) startSearchEmojis(); else stopSearchEmojis();
+
+      // bamboleo del remoto en móvil mientras se busca
+      const pane = document.getElementById('pane-remote');
+      if(pane){ pane.classList.toggle('searching', !!show); }
     }
 
     const peerLabel = qs('#peerLabel');
@@ -673,6 +712,7 @@
     /* ===== NUEVO: refs a idles de video ===== */
     const idleNoiseD = qs('#idleNoiseD');
     const idleNoiseM = qs('#idleNoiseM');
+    const idleLocal  = qs('#idle-local');
 
     /* ===== Estado WebRTC/WS ===== */
     let ws=null, wsOpen=false, myId=null, roomId=null, role=null;
@@ -1130,8 +1170,6 @@
     window.addEventListener('beforeunload', ()=>{ try{ send({type:'leave'}); }catch{} });
 
     /* ================== AÑADIDOS JS (OmeTV móvil) ================== */
-    const idleRemote = qs('#idle-remote'); // puede no existir (usamos videos de ruido)
-    const idleLocal  = qs('#idle-local');
     const btnSwapCam = qs('#btn-swapcam');
     const swipeTip   = qs('#swipe-tip');
 
