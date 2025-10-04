@@ -309,7 +309,7 @@
 
     /* ===== Cubo 3D + bamboleo remoto (solo móvil) ===== */
     @media (max-width:640px){
-      .cube-hint{ position:absolute; inset:0; display:grid; place-items:center; z-index:22; pointer-events:none; }
+      .cube-hint{ display:none !important; } /* ← oculto definitivamente en móvil */
       .cube{
         --cube: min(44vw, 44vh);
         --z: calc(var(--cube) / 2);
@@ -342,6 +342,48 @@
         0%   { transform: translateX(-2%) rotateZ(-0.3deg); }
         50%  { transform: translateX( 2%) rotateZ( 0.3deg); }
         100% { transform: translateX(-2%) rotateZ(-0.3deg); }
+      }
+    }
+
+    /* ===== Mano fantasma (móvil, idle) ===== */
+    @media (max-width:640px){
+      .swipe-ghost{
+        position:absolute; inset:0; pointer-events:none; z-index:22;
+        display:none; /* .show => visible */
+      }
+      .swipe-ghost.show{ display:block; }
+
+      .swipe-ghost .hand{
+        position:absolute;
+        right:14px; top:38%;
+        transform: translateY(-50%);
+        font-size: clamp(56px,14vw,96px);
+        opacity:.75;
+        filter: drop-shadow(0 6px 14px rgba(0,0,0,.35));
+        animation: ghostSeq 2.6s ease-in-out infinite;
+        transform-origin: right center;
+      }
+      .swipe-ghost .hand::before,
+      .swipe-ghost .hand::after{
+        content:"👉";
+        position:absolute; right:0; top:0;
+        filter: blur(1px);
+        opacity:.28;
+      }
+      .swipe-ghost .hand::after{
+        opacity:.14;
+        filter: blur(2px);
+      }
+      .swipe-ghost .hand::before{ animation: ghostSeq 2.6s ease-in-out infinite .03s; }
+      .swipe-ghost .hand::after { animation: ghostSeq 2.6s ease-in-out infinite .06s; }
+
+      @keyframes ghostSeq{
+        0%   { transform: translateY(-50%) translateX(0) scale(.82);   opacity:0;    }
+        8%   { transform: translateY(-50%) translateX(0) scale(1.08);  opacity:.92;  } /* pop */
+        16%  { transform: translateY(-50%) translateX(0) scale(1.00);  opacity:.75;  }
+        48%  { transform: translateY(-50%) translateX(-120px) scale(1);opacity:.30;  } /* desliz */
+        60%  { transform: translateY(-50%) translateX(-120px) scale(.98); opacity:0; }
+        100% { transform: translateY(-50%) translateX(0) scale(.96);   opacity:0;    } /* pausa */
       }
     }
   </style>
@@ -482,25 +524,19 @@
                      muted playsinline autoplay loop preload="auto"></video>
               <video id="remoteVideoM" autoplay playsinline></video>
 
-              <!-- OVERLAY MÓVIL dentro del remoto (cubo + emojis) -->
+              <!-- OVERLAY MÓVIL dentro del remoto (emojis) -->
               <div id="overlayM" class="overlay">
                 <div class="card px-5 py-4 flex items-center gap-3 bg-white">
                   <span class="font-semibold">Buscando tortilleras!!!…</span>
                   <div class="flex"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
                 </div>
-                <!-- Cubo 3D -->
-                <div class="cube-hint" aria-hidden="true">
-                  <div class="cube">
-                    <div class="face front">👉</div>
-                    <div class="face back">🎥</div>
-                    <div class="face left">✨</div>
-                    <div class="face right">💬</div>
-                    <div class="face top">👋</div>
-                    <div class="face bottom">🔍</div>
-                  </div>
-                </div>
                 <!-- Emojis -->
                 <div class="emoji-layer" aria-hidden="true"></div>
+              </div>
+
+              <!-- Tutorial gesto (solo idle móvil) -->
+              <div id="swipe-ghost" class="swipe-ghost sm:hidden" aria-hidden="true">
+                <div class="hand">👉</div>
               </div>
             </div>
             <div class="pane" id="pane-local">
@@ -636,6 +672,9 @@
       // bamboleo del remoto en móvil mientras se busca
       const pane = document.getElementById('pane-remote');
       if(pane){ pane.classList.toggle('searching', !!show); }
+
+      // 👇 Mano fantasma: si aparece overlay (buscando), ocultar; si se cierra, reevaluar
+      if (show) setGhostVisible(false); else updateGhostHandVisibility();
     }
 
     const peerLabel = qs('#peerLabel');
@@ -713,6 +752,22 @@
     const idleNoiseD = qs('#idleNoiseD');
     const idleNoiseM = qs('#idleNoiseM');
     const idleLocal  = qs('#idle-local');
+
+    /* ===== Mano fantasma (idle móvil) ===== */
+    const swipeGhost = document.getElementById('swipe-ghost');
+    function setGhostVisible(show){
+      if(!swipeGhost) return;
+      swipeGhost.classList.toggle('show', !!show);
+    }
+    function isPageChatVisible(){
+      return pages?.chat?.classList.contains('visible');
+    }
+    function updateGhostHandVisibility(){
+      // Mostrar SOLO si: móvil + en sala + idle (!isQueuing && !inCall) + idle remoto visible
+      const idleRemoteVisible = !!idleNoiseM && !idleNoiseM.classList.contains('hide');
+      const mustShow = isMobile() && isPageChatVisible() && !isQueuing && !inCall && idleRemoteVisible;
+      setGhostVisible(mustShow);
+    }
 
     /* ===== Estado WebRTC/WS ===== */
     let ws=null, wsOpen=false, myId=null, roomId=null, role=null;
@@ -825,6 +880,8 @@
       showIdleRemote(false);
       // Ocultar overlay al mostrar video remoto (por si seguía visible)
       overlayShow(false);
+      // 👇 Mano fantasma nunca sobre video remoto
+      setGhostVisible(false);
     }
 
     function makePC(){
@@ -940,6 +997,8 @@
       }
       // Volvemos al idle → si estamos en SALA (móvil), reactivar paneo
       showIdleRemote(true);
+      // 👇 y evaluar la mano fantasma
+      updateGhostHandVisibility();
     }
 
     async function joinQueue(){
@@ -991,6 +1050,7 @@
       cleanupPeer({ keepLocal:true, closeWsToo:false });
       overlayShow(false);
       setStatus('Detenido'); setIdleUI();
+      updateGhostHandVisibility();
     }
 
     /* ===== Layout ===== */
@@ -1193,10 +1253,12 @@
         if (idleNoiseD){ idleNoiseD.muted = true; safePlay(idleNoiseD); }
         if (idleNoiseM){ idleNoiseM.muted = true; safePlay(idleNoiseM); }
         startIdlePanIfMobile();   // en sala móvil: activar paneo
+        updateGhostHandVisibility(); // 👈 evaluar mano cuando el idle se muestra
       }else{
         if (idleNoiseD) idleNoiseD.pause();
         if (idleNoiseM) idleNoiseM.pause();
         stopIdlePan();            // al ocultar idle: apagar paneo
+        setGhostVisible(false);   // 👈 ocultar mano si no hay idle
       }
     }
     function showIdleLocal(show){ if(idleLocal) idleLocal.classList.toggle('hide', !show); }
@@ -1228,7 +1290,7 @@
     }
     btnSwapCam?.addEventListener('click', toggleCameraFacing);
 
-    // Gestos swipe remoto (mantengo tu lógica original)
+    // Gestos swipe remoto
     function initSwipeGestures(){
       const el = document.getElementById('pane-remote');
       if(!el) return;
@@ -1262,9 +1324,10 @@
       if(!u){
         show('landing'); youBadge.classList.add('hidden'); setIdleUI();
         swipeTip?.classList.remove('show');
-        // saliendo de sala → desactivar paneo
+        // saliendo de sala → desactivar paneo y mano
         mobilePanEnabled = false;
         stopIdlePan();
+        setGhostVisible(false);
         return;
       }
       youBadge.classList.remove('hidden');
@@ -1284,9 +1347,11 @@
       // Autoencender cámara y mic
       try{ await ensureMedia(true); }catch{}
       setIdleUI();
+      updateGhostHandVisibility(); // 👈 evaluar mano al entrar a sala
     });
 
     // Login Google (con fallback redirect para Safari)
+    const btnGoogleel=qs('#btn-google');
     btnGoogle?.addEventListener('click', async ()=>{
       if(!chosenGender){ alert('Elige tu género primero'); return; }
       try{
