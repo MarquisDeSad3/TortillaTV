@@ -218,22 +218,71 @@
       100%{ filter:contrast(140%) brightness(115%); transform:translateY(-1px); }
     }
 
-    .swipe-tip{
-      position:fixed; top:14px; left:50%; transform:translateX(-50%);
-      z-index:70; color:#fff; background:rgba(17,24,39,.65);
-      border:1px solid rgba(255,255,255,.25);
-      backdrop-filter:blur(8px); border-radius:999px; padding:.45rem .9rem;
-      display:none; 
-      align-items:center; gap:.55rem; font-weight:700; font-size:14px;
-    }
-    .swipe-tip.show{ display:flex; } 
-    .swipe-hand{ width:22px; height:22px; border-radius:6px; background:#fff; animation:handRight 1.8s ease-in-out infinite; }
-    @keyframes handRight{
-      0%{ transform:translateX(-22px); opacity:.9 }
-      45%{ transform:translateX(22px); opacity:1 }
-      60%{ opacity:0 }
-      100%{ opacity:0 }
-    }
+    /* ===== Swipe Tip 3D Demo ===== */
+.swipe-tip{
+  position:fixed; top:14px; left:50%; transform:translateX(-50%);
+  z-index:70; color:#fff; background:rgba(17,24,39,.65);
+  border:1px solid rgba(255,255,255,.25);
+  backdrop-filter:blur(8px); border-radius:999px; padding:.45rem .9rem;
+  display:none; align-items:center; gap:.75rem; font-weight:800; font-size:14px;
+}
+.swipe-tip.show{ display:flex; }
+
+.swipe-tip .swipe-label{
+  letter-spacing:.2px; user-select:none;
+}
+
+/* Contenedor con perspectiva */
+.swipe-tip .swipe-demo{
+  width:44px; height:30px; perspective:420px; pointer-events:none;
+}
+
+/* Cubo */
+.swipe-tip .cube{
+  width:100%; height:100%;
+  position:relative; transform-style:preserve-3d;
+  animation: cubeSlide 2.2s ease-in-out infinite;
+}
+
+/* Caras del cubo (usamos el mismo video de ruido) */
+.swipe-tip .face{
+  position:absolute; inset:0; width:100%; height:100%;
+  object-fit:cover; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,.35);
+}
+
+/* Profundidad simulada */
+.swipe-tip .face--front{ transform: translateZ(16px); }
+.swipe-tip .face--right { transform: rotateY(90deg) translateZ(16px); transform-origin:right center; }
+.swipe-tip .face--left  { transform: rotateY(-90deg) translateZ(16px); transform-origin:left center; }
+
+/* Balanceo y desplazamiento de demo */
+@keyframes cubeSlide{
+  0%   { transform: translateX(-10px) rotateY(18deg);  }
+  50%  { transform: translateX( 10px) rotateY(-18deg); }
+  100% { transform: translateX(-10px) rotateY(18deg);  }
+}
+
+/* Capa para soltar emojis */
+.swipe-tip .emoji-layer{
+  position:absolute; inset:-6px; pointer-events:none; overflow:visible;
+}
+
+/* Partículas emoji */
+.swipe-emoji{
+  position:absolute; font-size:16px; filter: drop-shadow(0 2px 6px rgba(0,0,0,.35));
+  opacity:0; transform: translate3d(0,0,0) scale(0.9) rotate(0deg);
+  animation: emojiFloat .9s ease-out forwards;
+}
+@keyframes emojiFloat{
+  0%   { opacity:0; transform: translateY(6px) scale(.9) rotate(0deg); }
+  20%  { opacity:1; }
+  100% { opacity:0; transform: translateY(-18px) scale(1.05) rotate(12deg); }
+}
+
+/* En pantallas muy pequeñas, reduce un poco */
+@media (max-width:380px){
+  .swipe-tip .swipe-demo{ width:38px; height:26px; }
+}
 
     /* ====== Móvil: engranaje ajustes (mute) ====== */
     .gear-btn{
@@ -438,17 +487,21 @@
 
           
 
-        <!-- Pista de gesto (móvil) -->
-        <div id="swipe-tip" class="swipe-tip sm:hidden">
-          <div class="swipe-hand" aria-hidden="true"></div>
-          <span>Desliza → empezar / siguiente — ← detener</span>
-        </div>
-      </section>
-    </main>
+        <!-- Pista de gesto (móvil) - demo 3D -->
+<div id="swipe-tip" class="swipe-tip sm:hidden" aria-live="polite">
+  <div class="swipe-demo">
+    <div class="cube">
+      <video class="face face--front" src="./assets/noise.mp4" muted playsinline autoplay loop></video>
+      <video class="face face--right" src="./assets/noise.mp4" muted playsinline autoplay loop></video>
+      <video class="face face--left"  src="./assets/noise.mp4" muted playsinline autoplay loop></video>
+    </div>
   </div>
+  <span class="swipe-label">Desliza</span>
+  <div class="emoji-layer" aria-hidden="true"></div>
+</div>
 
-  <!-- (El overlay global original fue eliminado) -->
 
+  
   <!-- Botón mini: cambiar cámara (móvil) -->
   <button id="btn-swapcam" class="cam-switch" aria-label="Cambiar cámara">↻</button>
 
@@ -511,6 +564,90 @@
       if (!ov) return;
       ov.classList.toggle('show', !!show);
     }
+    /* ===== Emojis helper (pista de gesto) ===== */
+const SWIPE_EMOJIS_L = ['👩','🧑','👨','💬','🎭','👋'];
+const SWIPE_EMOJIS_R = ['👨','🧑','👩','💬','🎭','👋'];
+const STOP_EMOJIS    = ['🛑','✋','⛔️'];
+
+function tipRoot(){ return document.getElementById('swipe-tip'); }
+function tipEmojiLayer(){
+  return tipRoot()?.querySelector('.emoji-layer');
+}
+function spawnEmoji(direction='right'){
+  const layer = tipEmojiLayer();
+  if(!layer) return;
+  const span = document.createElement('span');
+  span.className = 'swipe-emoji';
+
+  const pool = direction==='left' ? SWIPE_EMOJIS_L : SWIPE_EMOJIS_R;
+  span.textContent = pool[Math.floor(Math.random()*pool.length)];
+
+  // Posición aleatoria ligera dentro del chip
+  const x = 12 + Math.random()*32;
+  const y = 4 + Math.random()*12;
+  span.style.left = `${x}px`;
+  span.style.top  = `${y}px`;
+
+  // Pequeño empuje horizontal para dar sensación de dirección
+  const dirPush = (direction==='left' ? -1 : 1) * (6 + Math.random()*8);
+  span.animate(
+    [
+      { transform:`translate(${dirPush/2}px, 6px) scale(.9)`, opacity:0 },
+      { transform:`translate(${dirPush}px, -18px) scale(1.05) rotate(12deg)`, opacity:1 },
+      { transform:`translate(${dirPush*1.2}px, -28px) scale(1.05) rotate(16deg)`, opacity:0 }
+    ],
+    { duration: 900, easing: 'ease-out', fill: 'forwards' }
+  );
+
+  layer.appendChild(span);
+  setTimeout(()=> span.remove(), 950);
+}
+
+function burst(direction='right', n=6){
+  for(let i=0;i<n;i++){
+    setTimeout(()=> spawnEmoji(direction), i*60);
+  }
+}
+
+function burstStop(){
+  const layer = tipEmojiLayer();
+  if(!layer) return;
+  STOP_EMOJIS.forEach((e,i)=>{
+    const span = document.createElement('span');
+    span.className = 'swipe-emoji';
+    span.textContent = e;
+    span.style.left = `${16 + i*14}px`;
+    span.style.top  = `${4 + (i%2)*6}px`;
+    layer.appendChild(span);
+    setTimeout(()=> span.remove(), 950);
+  });
+}
+
+/* ===== Demo automática mientras está visible la pista ===== */
+let tipDemoTimer = null;
+function startSwipeTipDemo(){
+  const root = tipRoot();
+  if(!root) return;
+  if(tipDemoTimer) clearInterval(tipDemoTimer);
+  // Cada ~420ms soltamos un emoji acorde al frame “imaginario”
+  let towardRight = true;
+  tipDemoTimer = setInterval(()=>{
+    spawnEmoji(towardRight ? 'right' : 'left');
+    towardRight = !towardRight;
+  }, 420);
+}
+function stopSwipeTipDemo(){
+  if(tipDemoTimer){ clearInterval(tipDemoTimer); tipDemoTimer=null; }
+}
+
+/* Mostrar/Ocultar el tip con su demo */
+function showSwipeTip(show){
+  const tip = tipRoot();
+  if(!tip) return;
+  tip.classList.toggle('show', !!show);
+  if(show) startSwipeTipDemo(); else stopSwipeTipDemo();
+}
+
 
     const peerLabel = qs('#peerLabel');
     const youBadge  = qs('#you-badge');
@@ -1130,18 +1267,37 @@ btnSalirChat?.addEventListener('click', async ()=>{
 
     // Gestos swipe remoto
     function initSwipeGestures(){
-      const el = document.getElementById('pane-remote');
-      if(!el) return;
-      let startX=0, dx=0, active=false;
-      el.addEventListener('touchstart', (e)=>{ active=true; dx=0; startX=e.touches[0].clientX; }, {passive:true});
-      el.addEventListener('touchmove',  (e)=>{ if(!active) return; dx = e.touches[0].clientX - startX; }, {passive:true});
-      el.addEventListener('touchend',   ()=>{
-        if(!active) return; active=false;
-        const TH=80;
-        if(dx >  TH){ if(inCall){ nextMatch(); } else if(isQueuing){ stopAll(); } else { joinQueue(); } swipeTip?.remove(); }
-        else if(dx < -TH){ stopAll(); swipeTip?.remove(); }
-      });
+  const el = document.getElementById('pane-remote');
+  if(!el) return;
+  let startX=0, dx=0, active=false;
+
+  el.addEventListener('touchstart', (e)=>{ active=true; dx=0; startX=e.touches[0].clientX; }, {passive:true});
+  el.addEventListener('touchmove',  (e)=>{ if(!active) return; dx = e.touches[0].clientX - startX;
+
+    // mientras arrastra, suelta emojis suaves en la dirección actual
+    if(Math.abs(dx) > 16){
+      burst(dx>0 ? 'right' : 'left', 2);
     }
+  }, {passive:true});
+
+  el.addEventListener('touchend',   ()=>{
+    if(!active) return; active=false;
+    const TH=80;
+    if(dx >  TH){
+      // derecha → siguiente / buscar
+      if(inCall){ nextMatch(); } else if(isQueuing){ stopAll(); } else { joinQueue(); }
+      burst('right', 8);
+      showSwipeTip(false); // oculta pista tras primer gesto “bueno”
+    }
+    else if(dx < -TH){
+      // izquierda → detener
+      stopAll();
+      burst('left', 8);
+      burstStop(); // 🛑
+      showSwipeTip(false);
+    }
+  });
+}
     initSwipeGestures();
 
     /* ====== Mute/Cam helpers ====== */
@@ -1161,7 +1317,7 @@ btnSalirChat?.addEventListener('click', async ()=>{
       currentUser=u||null;
       if(!u){
         show('landing'); youBadge.classList.add('hidden'); setIdleUI();
-        swipeTip?.classList.remove('show');
+        showSwipeTip(false);
         // saliendo de sala → desactivar paneo
         mobilePanEnabled = false;
         stopIdlePan();
@@ -1174,7 +1330,7 @@ btnSalirChat?.addEventListener('click', async ()=>{
       show('chat');
       initLayoutForDevice();
       requestAnimationFrame(sizeStageForDesktop);
-      if (isMobile()) { swipeTip?.classList.add('show'); }
+      if (isMobile()) { showSwipeTip(true); }
 
       // Al entrar a SALA: habilitar paneo para móvil
       mobilePanEnabled = true;
