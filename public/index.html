@@ -531,7 +531,7 @@
     (function(){
       const p = new URLSearchParams(location.search);
       const wsOverride = p.get('ws');
-      window.WS_SIGNALLING_URL = wsOverride || ((location.protocol === 'https:') ? `wss://${location.host}` : `ws://${location.host}`);
+     window.WS_SIGNALLING_URL = 'wss://tortillatv.onrender.com';
     })();
 
     // Firebase
