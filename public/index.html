@@ -1,4 +1,5 @@
 
+
 <!DOCTYPE html>  
 <html lang="es">
 <head>
@@ -182,31 +183,10 @@
     /* Asegura el clipping al hacer zoom */
     .tile video{ will-change:transform; }
 
-    /* ===== Dock inferior SOLO en móviles ===== */
-    .mobile-dock{
-      position:fixed;
-      left:12px; right:12px;
-      bottom:calc(env(safe-area-inset-bottom,0) + 10px);
-      z-index:60;
-      display:grid; grid-template-columns:1fr 1fr; gap:10px;
-      padding:10px;
-      border-radius:18px;
-      background:rgba(17,24,39,.55);
-      backdrop-filter:blur(10px);
-      box-shadow:0 16px 36px rgba(0,0,0,.35);
-      border:1px solid rgba(255,255,255,.18);
-    }
-    .dock-btn{ padding:.9rem 1rem; border-radius:999px; font-weight:800; border:2px solid transparent; -webkit-tap-highlight-color: transparent; }
-    .dock-btn--primary{ background:#fff; color:#111; border-color:#ddd; }
-    .dock-btn--ghost{ background:transparent; color:#fff; border-color:rgba(255,255,255,.4); }
-    @media (min-width: 641px){ .mobile-dock{ display:none } }
+   
 
-    /* ============== AÑADIDOS (móvil estilo OmeTV) ============== */
-    @media (max-width:640px){
-      .mobile-dock{ display:none !important; }
-      .topbar{ display:none !important; }
-    }
-
+    
+    
     /* Botón mini cambiar cámara (abajo-izq) */
     .cam-switch{
       position:fixed; left:12px;
@@ -434,11 +414,7 @@
           </div>
         </div>
 
-        <!-- Dock inferior SOLO en móviles (queda en DOM pero se oculta en móvil) -->
-        <div class="mobile-dock sm:hidden" role="toolbar" aria-label="Controles de sala">
-          <button id="btn-buscar-m" class="dock-btn dock-btn--primary">Buscar sala</button>
-          <button id="btn-salir-m" class="dock-btn dock-btn--ghost">Salir</button>
-        </div>
+      
 
         <!-- Botón salir extra (PC / fallback) -->
         <div class="mt-6 flex items-center justify-center">
@@ -581,7 +557,7 @@
     const localVideoM=qs('#localVideoM'), remoteVideoM=qs('#remoteVideoM');
 
     const stage=qs('#stage'), stageMobile=qs('#stageMobile');
-    const btnBuscarM=qs('#btn-buscar-m'), btnSalirM=qs('#btn-salir-m');
+   
 
     const gearBtn = qs('#btn-gear'), gearSheet = qs('#gear-sheet'), swMute = qs('#sw-mute');
 
@@ -965,10 +941,7 @@
       await applyARConstraints();
     });
 
-    // MÓVIL: dos botones fijos (UI general)
-    btnBuscarM?.addEventListener('click', ()=>{ if(inCall){ nextMatch(); } else if(isQueuing){ stopAll(); } else { joinQueue(); } });
-    btnSalirM ?.addEventListener('click', ()=>{ stopAll(); auth.signOut(); });
-    btnSalirChat?.addEventListener('click', ()=>{ stopAll(); auth.signOut(); });
+  
 
     // MÓVIL: engranaje ajustes (mute)
     gearBtn?.addEventListener('click', ()=>{ gearSheet.classList.toggle('show'); });
@@ -1177,4 +1150,4 @@
     });
   </script>
 </body>
-</html>
+</html
