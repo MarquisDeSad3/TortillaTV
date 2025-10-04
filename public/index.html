@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!DOCTYPE html> 
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
@@ -111,10 +111,9 @@
     #stage .tile.local  video{ object-fit: cover; }
     
     /* Remoto: por defecto NO recortar */
-#stage .tile.remote video{ object-fit: contain; background:#000; }
+    #stage .tile.remote video{ object-fit: contain; background:#000; }
+    body.remote-landscape #stage .tile.remote video{ object-fit: cover; }
 
-/* Si detectamos que es un paisaje muy ancho y quieres llenar, activamos cover via clase */
-body.remote-landscape #stage .tile.remote video{ object-fit: cover; }
     /* ===== MÓVIL: FULL-BLEED MITAD/MITAD ===== */
     .layout-mobile-fixed{
       position:fixed; inset:0; height:calc(var(--dvh) * 100);
@@ -143,7 +142,11 @@ body.remote-landscape #stage .tile.remote video{ object-fit: cover; }
     #btn-salir-m{ right:14px; }
 
     /* Overlay sala de espera */
-    .overlay{ position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.25); z-index:55 }
+    .overlay{
+      position:absolute; inset:0; display:none; align-items:center; justify-content:center; z-index:30;
+      /* importante: dejar pasar los eventos para que Detener/gestos sigan funcionando */
+      pointer-events:none;
+    }
     .overlay.show{ display:flex }
     .dot{ width:10px; height:10px; border-radius:999px; background:#ef4444; margin:0 4px; animation:b .9s infinite alternate }
     .dot:nth-child(2){ animation-delay:.15s } .dot:nth-child(3){ animation-delay:.3s }
@@ -211,36 +214,23 @@ body.remote-landscape #stage .tile.remote video{ object-fit: cover; }
     /* Pantalla estática (cuando no hay stream o esperando) */
     .idle{
       position:absolute; inset:0; display:grid; place-items:center;
-      background:#000; color:#fff; text-align:center; font-weight:800;
+      background:transparent; color:#fff; text-align:center; font-weight:800;
       text-shadow:0 2px 10px rgba(0,0,0,.6); z-index:1;
     }
     .idle.hide{ display:none; }
 
-    .static-noise{ 
-      background:
-        repeating-linear-gradient(0deg, rgba(255,255,255,.05) 0 2px, transparent 2px 4px),
-        repeating-linear-gradient(90deg, rgba(255,255,255,.035) 0 2px, transparent 2px 3px),
-        #000;
-      animation:tvNoise 1s steps(8) infinite;
-    }
-    @keyframes tvNoise{
-      0%{ filter:contrast(140%) brightness(115%); }
-      100%{ filter:contrast(140%) brightness(115%); transform:translateY(-1px); }
+    /* Video de idle de fondo (siempre presente) */
+    .idle-bg{
+      position:absolute; inset:0; z-index:0; object-fit:cover; opacity:.6;
+      filter:contrast(120%) brightness(110%);
     }
 
+    /* Tip de swipe: SOLO letras (sin badge) */
     .swipe-tip{
       position:fixed; top:14px; left:50%; transform:translateX(-50%);
-      z-index:70; color:#fff; background:rgba(17,24,39,.65);
-      border:1px solid rgba(255,255,255,.25);
-      backdrop-filter:blur(8px); border-radius:999px; padding:.45rem .9rem;
-      display:flex; align-items:center; gap:.55rem; font-weight:700; font-size:14px;
-    }
-    .swipe-hand{ width:22px; height:22px; border-radius:6px; background:#fff; animation:handRight 1.8s ease-in-out infinite; }
-    @keyframes handRight{
-      0%{ transform:translateX(-22px); opacity:.9 }
-      45%{ transform:translateX(22px); opacity:1 }
-      60%{ opacity:0 }
-      100%{ opacity:0 }
+      z-index:70; color:#fff; font-weight:700; font-size:14px;
+      background:transparent; border:none; padding:0; display:block;
+      text-shadow:0 2px 10px rgba(0,0,0,.55);
     }
 
     /* ====== Móvil: engranaje ajustes (mute) ====== */
@@ -360,7 +350,19 @@ body.remote-landscape #stage .tile.remote video{ object-fit: cover; }
           <!-- PC: 50/50 -->
           <div id="stage" class="stage layout-split">
             <div class="tile remote" id="remoteTile">
+              <!-- Idle video de fondo (PC) -->
+              <video class="idle-bg" src="assets/noise.mp4" autoplay muted loop playsinline></video>
+
               <video id="remoteVideo" autoplay playsinline></video>
+
+              <!-- Overlay de búsqueda anclado a remota -->
+              <div id="overlay" class="overlay">
+                <div class="card px-5 py-4 flex items-center gap-3 bg-white">
+                  <span class="font-semibold">Buscando tortilleras!!!…</span>
+                  <div class="flex"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+                </div>
+              </div>
+
               <!-- CONTROLES DE ZOOM (PC) REMOTO -->
               <div class="zoom-controls sm:flex hidden" aria-label="Zoom remoto">
                 <button id="fitRemote" class="zoom-btn" title="Ver completo">⤢</button>
@@ -385,11 +387,17 @@ body.remote-landscape #stage .tile.remote video{ object-fit: cover; }
           <!-- MÓVIL: pantalla partida full-bleed -->
           <div id="stageMobile" class="layout-mobile-fixed" style="display:none;">
             <div class="pane" id="pane-remote">
-              <div id="idle-remote" class="idle static-noise"><div>Desliza → para empezar</div></div>
+              <!-- Idle de fondo (móvil) -->
+              <video class="idle-bg" src="assets/noise.mp4" autoplay muted loop playsinline></video>
+              <!-- Tip “solo letras” -->
+              <div id="idle-remote" class="idle"><div>Desliza → para empezar</div></div>
               <video id="remoteVideoM" autoplay playsinline></video>
+
+              <!-- Overlay de búsqueda también aquí cuando sea móvil -->
+              <!-- (el #overlay se reubica por JS según layout; aquí no duplicamos) -->
             </div>
             <div class="pane" id="pane-local">
-              <div id="idle-local" class="idle static-noise"><div>Preparando cámara…</div></div>
+              <div id="idle-local" class="idle"><div>Preparando cámara…</div></div>
               <video id="localVideoM" autoplay playsinline muted class="mirror"></video>
             </div>
           </div>
@@ -409,14 +417,6 @@ body.remote-landscape #stage .tile.remote video{ object-fit: cover; }
     </main>
   </div>
 
-  <!-- Overlay sala de espera -->
-  <div id="overlay" class="overlay">
-    <div class="card px-5 py-4 flex items-center gap-3 bg-white">
-      <span class="font-semibold">Buscando tortilleras!!!…</span>
-      <div class="flex"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
-    </div>
-  </div>
-
   <!-- Botón mini: cambiar cámara (móvil) -->
   <button id="btn-swapcam" class="cam-switch" aria-label="Cambiar cámara">↻</button>
 
@@ -426,10 +426,9 @@ body.remote-landscape #stage .tile.remote video{ object-fit: cover; }
     <div class="row"><span>Mute micrófono</span><input id="sw-mute" type="checkbox" class="switch"></div>
   </div>
 
-  <!-- Pista de gesto (móvil) -->
+  <!-- Pista de gesto (móvil) SOLO TEXTO -->
   <div id="swipe-tip" class="swipe-tip sm:hidden">
-    <div class="swipe-hand" aria-hidden="true"></div>
-    <span>Desliza → empezar / siguiente — ← detener</span>
+    Desliza → empezar / siguiente — ← detener
   </div>
 
   <!-- SCRIPTS -->
@@ -474,6 +473,7 @@ body.remote-landscape #stage .tile.remote video{ object-fit: cover; }
     function setStatus(t){ const el=qs('#status'); if(el) el.textContent=t }
     function safePlay(v){ try{ const p=v?.play?.(); if(p?.catch) p.catch(()=>{}); }catch{} }
 
+    // ⬇️ Moveremos el overlay entre PC y móvil según layout
     const overlay   = qs('#overlay');
     const peerLabel = qs('#peerLabel');
     const youBadge  = qs('#you-badge');
@@ -654,7 +654,7 @@ body.remote-landscape #stage .tile.remote video{ object-fit: cover; }
       pc.ontrack = (e)=>{ remoteStreamRef = e.streams[0]; attachRemote(); setupRemoteRatioWatchers(); };
       pc.onconnectionstatechange = ()=> {
         const st = pc.connectionState;
-        if(st==='connected'){ inCall = true; setStatus('Conectado'); overlay.classList.remove('show'); enableControls(); }
+        if(st==='connected'){ inCall = true; setStatus('Conectado'); overlay.classList.add('show'); /* visible pero no bloquea */ enableControls(); }
         if(st==='disconnected' || st==='failed'){ handleCallEnded('conn:'+st); }
         if(st==='closed'){ setStatus('Cerrado'); }
       };
@@ -674,7 +674,7 @@ body.remote-landscape #stage .tile.remote video{ object-fit: cover; }
           if(data.type==='matched'){
             roomId=data.roomId; role=data.role;
             setStatus('Pareja encontrada · Conectando…');
-            overlay.classList.add('show');
+            overlay.classList.add('show'); // aparece sobre la pantalla remota (no bloquea)
             if(data.peer && data.peer.name){ peerLabel.classList.remove('hidden'); peerLabel.textContent = 'Pareja: '+(data.peer.name||'—'); }
             try{ await startWebRTC(role); }catch(e){ setStatus('Error WebRTC: '+e.message); overlay.classList.remove('show'); }
           }
@@ -696,10 +696,8 @@ body.remote-landscape #stage .tile.remote video{ object-fit: cover; }
 
     async function startWebRTC(role){
       await ensureMedia();
-// ⚠️ Solo aplicar constraints en PC
-if (!isMobile()) { await applyARConstraints(); }
-// En móviles solo ajusta la UI, no el track
-if (isMobile()) adaptToOrientation();
+      if (!isMobile()) { await applyARConstraints(); }
+      if (isMobile()) adaptToOrientation();
       makePC();
       localStream.getTracks().forEach(t=>pc.addTrack(t, localStream));
       tuneSender();
@@ -780,9 +778,8 @@ if (isMobile()) adaptToOrientation();
 
         // Asegura media ya encendida durante búsqueda
         await ensureMedia();
-if (!isMobile()) { await applyARConstraints(); }
-if (isMobile()) adaptToOrientation();
-
+        if (!isMobile()) { await applyARConstraints(); }
+        if (isMobile()) adaptToOrientation();
 
         send({type:'find', gender: chosenGender, displayName, age});
         setStatus('En cola…');
@@ -806,8 +803,8 @@ if (isMobile()) adaptToOrientation();
         cleanupPeer({ keepLocal:true, closeWsToo:false });
         setStatus('Buscando siguiente…'); overlay.classList.add('show'); setSearchingUI();
         await ensureMedia();
-if (!isMobile()) { await applyARConstraints(); }
-if (isMobile()) adaptToOrientation();
+        if (!isMobile()) { await applyARConstraints(); }
+        if (isMobile()) adaptToOrientation();
         findNext();
       }catch(e){ setStatus('Error WS (siguiente)'); }
     }
@@ -829,10 +826,14 @@ if (isMobile()) adaptToOrientation();
         stageMobile.style.display = 'none';
         document.body.classList.remove('no-scroll');
         sizeStageForDesktop();
+        // Asegura overlay dentro de la pantalla remota de PC
+        qs('#remoteTile')?.appendChild(overlay);
       }else{
         stage.style.display = 'none';
         stageMobile.style.display = '';
         document.body.classList.add('no-scroll');
+        // Asegura overlay dentro de la pantalla remota de móvil
+        qs('#pane-remote')?.appendChild(overlay);
       }
       if(localStream) attachLocal(localStream);
       attachRemote();
@@ -1030,9 +1031,9 @@ if (isMobile()) adaptToOrientation();
     }
     btnSwapCam?.addEventListener('click', toggleCameraFacing);
 
-    // Gestos swipe remoto
+    // Gestos swipe en TODA la pantalla móvil (stageMobile)
     function initSwipeGestures(){
-      const el = document.getElementById('pane-remote');
+      const el = document.getElementById('stageMobile');
       if(!el) return;
       let startX=0, dx=0, active=false;
       el.addEventListener('touchstart', (e)=>{ active=true; dx=0; startX=e.touches[0].clientX; }, {passive:true});
@@ -1073,6 +1074,10 @@ if (isMobile()) adaptToOrientation();
       show('chat');
       initLayoutForDevice();
       requestAnimationFrame(sizeStageForDesktop);
+
+      // Reubicar overlay al contenedor correcto al entrar
+      if(isMobile()){ qs('#pane-remote')?.appendChild(overlay); }
+      else{ qs('#remoteTile')?.appendChild(overlay); }
 
       // **Autoencender cámara y mic** al entrar a la sala
       try{ await ensureMedia(true); }catch{}
