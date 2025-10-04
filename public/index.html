@@ -1,6 +1,4 @@
-
-
-<!DOCTYPE html>  
+<!DOCTYPE html>   
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
@@ -154,8 +152,13 @@
     #btn-buscar-m{ left:14px; }
     #btn-salir-m{ right:14px; }
 
-    /* Overlay sala de espera */
-    .overlay{ position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.25); z-index:55 }
+    /* Overlay sala de espera (AHORA relativo al tile/pane remoto) */
+    .overlay{
+      position:absolute; inset:0; display:none;
+      align-items:center; justify-content:center;
+      background:rgba(0,0,0,.25); z-index:20;
+      pointer-events:none; /* no bloquea botones/gestos */
+    }
     .overlay.show{ display:flex }
     .dot{ width:10px; height:10px; border-radius:999px; background:#ef4444; margin:0 4px; animation:b .9s infinite alternate }
     .dot:nth-child(2){ animation-delay:.15s } .dot:nth-child(3){ animation-delay:.3s }
@@ -183,10 +186,6 @@
     /* Asegura el clipping al hacer zoom */
     .tile video{ will-change:transform; }
 
-   
-
-    
-    
     /* Botón mini cambiar cámara (abajo-izq) */
     .cam-switch{
       position:fixed; left:12px;
@@ -352,7 +351,8 @@
             <!-- NUEVOS BOTONES PC -->
             <button id="btn-mute"  class="btn" disabled>Mute</button>
             <button id="btn-cam"   class="btn" disabled>Apagar cam</button>
-
+              
+     
             <div class="ml-auto flex items-center gap-2">
               <button id="btn-ar" class="btn">AR: 1:1</button>
             </div>
@@ -375,6 +375,14 @@
                      muted playsinline autoplay loop preload="auto"></video>
 
               <video id="remoteVideo" autoplay playsinline></video>
+
+              <!-- OVERLAY PC dentro del remoto -->
+              <div id="overlayD" class="overlay">
+                <div class="card px-5 py-4 flex items-center gap-3 bg-white">
+                  <span class="font-semibold">Buscando tortilleras!!!…</span>
+                  <div class="flex"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+                </div>
+              </div>
 
               <!-- CONTROLES DE ZOOM (PC) REMOTO -->
               <div class="zoom-controls sm:flex hidden" aria-label="Zoom remoto">
@@ -406,6 +414,14 @@
               <video id="idleNoiseM" class="idle-video" src="./assets/noise.mp4"
                      muted playsinline autoplay loop preload="auto"></video>
               <video id="remoteVideoM" autoplay playsinline></video>
+
+              <!-- OVERLAY MÓVIL dentro del remoto -->
+              <div id="overlayM" class="overlay">
+                <div class="card px-5 py-4 flex items-center gap-3 bg-white">
+                  <span class="font-semibold">Buscando tortilleras!!!…</span>
+                  <div class="flex"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+                </div>
+              </div>
             </div>
             <div class="pane" id="pane-local">
               <div id="idle-local" class="idle static-noise"><div>Preparando cámara…</div></div>
@@ -414,12 +430,13 @@
           </div>
         </div>
 
-      
-
         <!-- Botón salir extra (PC / fallback) -->
         <div class="mt-6 flex items-center justify-center">
           <button id="btn-salir-chat" class="rounded-full border-2 border-neutral-900/30 bg-white/80 px-5 py-2 text-sm font-semibold shadow">Salir</button>
+       
         </div>
+
+          
 
         <!-- Pista de gesto (móvil) -->
         <div id="swipe-tip" class="swipe-tip sm:hidden">
@@ -430,13 +447,7 @@
     </main>
   </div>
 
-  <!-- Overlay sala de espera -->
-  <div id="overlay" class="overlay">
-    <div class="card px-5 py-4 flex items-center gap-3 bg-white">
-      <span class="font-semibold">Buscando tortilleras!!!…</span>
-      <div class="flex"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
-    </div>
-  </div>
+  <!-- (El overlay global original fue eliminado) -->
 
   <!-- Botón mini: cambiar cámara (móvil) -->
   <button id="btn-swapcam" class="cam-switch" aria-label="Cambiar cámara">↻</button>
@@ -489,7 +500,18 @@
     function setStatus(t){ const el=qs('#status'); if(el) el.textContent=t }
     function safePlay(v){ try{ const p=v?.play?.(); if(p?.catch) p.catch(()=>{}); }catch{} }
 
-    const overlay   = qs('#overlay');
+    // (overlay global eliminado) → utilidades nuevas
+    function overlayEl(){
+      return (layoutMode === 'split')
+        ? document.getElementById('overlayD')
+        : document.getElementById('overlayM');
+    }
+    function overlayShow(show){
+      const ov = overlayEl();
+      if (!ov) return;
+      ov.classList.toggle('show', !!show);
+    }
+
     const peerLabel = qs('#peerLabel');
     const youBadge  = qs('#you-badge');
 
@@ -558,7 +580,6 @@
 
     const stage=qs('#stage'), stageMobile=qs('#stageMobile');
    
-
     const gearBtn = qs('#btn-gear'), gearSheet = qs('#gear-sheet'), swMute = qs('#sw-mute');
 
     /* ===== NUEVO: refs a idles de video ===== */
@@ -674,6 +695,8 @@
       }
       // Al entrar video remoto, ocultamos idle (y por tanto se apaga el paneo)
       showIdleRemote(false);
+      // Ocultar overlay al mostrar video remoto (por si seguía visible)
+      overlayShow(false);
     }
 
     function makePC(){
@@ -682,7 +705,7 @@
       pc.ontrack = (e)=>{ remoteStreamRef = e.streams[0]; attachRemote(); setupRemoteRatioWatchers(); };
       pc.onconnectionstatechange = ()=> {
         const st = pc.connectionState;
-        if(st==='connected'){ inCall = true; setStatus('Conectado'); overlay.classList.remove('show'); enableControls(); }
+        if(st==='connected'){ inCall = true; setStatus('Conectado'); overlayShow(false); enableControls(); }
         if(st==='disconnected' || st==='failed'){ handleCallEnded('conn:'+st); }
         if(st==='closed'){ setStatus('Cerrado'); }
       };
@@ -702,9 +725,9 @@
           if(data.type==='matched'){
             roomId=data.roomId; role=data.role;
             setStatus('Pareja encontrada · Conectando…');
-            overlay.classList.add('show');
+            overlayShow(true);
             if(data.peer && data.peer.name){ peerLabel.classList.remove('hidden'); peerLabel.textContent = 'Pareja: '+(data.peer.name||'—'); }
-            try{ await startWebRTC(role); }catch(e){ setStatus('Error WebRTC: '+e.message); overlay.classList.remove('show'); }
+            try{ await startWebRTC(role); }catch(e){ setStatus('Error WebRTC: '+e.message); overlayShow(false); }
           }
           if(data.type==='offer'){
             await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
@@ -782,10 +805,10 @@
     function handleCallEnded(){
       cleanupPeer({ keepLocal:true, closeWsToo:false });
       if(autoCycle && !userHardStop){
-        setStatus('Buscando siguiente…'); overlay.classList.add('show'); setSearchingUI();
+        setStatus('Buscando siguiente…'); overlayShow(true); setSearchingUI();
         setTimeout(()=>{ findNext(); }, 400);
       }else{
-        overlay.classList.remove('show'); setIdleUI();
+        overlayShow(false); setIdleUI();
       }
       // Volvemos al idle → si estamos en SALA (móvil), reactivar paneo
       showIdleRemote(true);
@@ -795,7 +818,7 @@
       if(!currentUser){ alert('Inicia sesión con Google'); return; }
       if(isQueuing) return;
       isQueuing = true; autoCycle = true; userHardStop = false;
-      overlay.classList.add('show');
+      overlayShow(true);
       setSearchingUI();
       try{
         if(!chosenGender) chosenGender = localStorage.getItem('ttv_gender') || 'Hombre';
@@ -809,7 +832,7 @@
         send({type:'find', gender: chosenGender, displayName, age});
         setStatus('En cola…');
       }catch{
-        setStatus('Error de conexión WS'); overlay.classList.remove('show'); isQueuing=false; autoCycle=false; setIdleUI();
+        setStatus('Error de conexión WS'); overlayShow(false); isQueuing=false; autoCycle=false; setIdleUI();
       }
     }
 
@@ -826,7 +849,7 @@
       try{
         send({type:'leave'});
         cleanupPeer({ keepLocal:true, closeWsToo:false });
-        setStatus('Buscando siguiente…'); overlay.classList.add('show'); setSearchingUI();
+        setStatus('Buscando siguiente…'); overlayShow(true); setSearchingUI();
         await ensureMedia();
         if (!isMobile()) { await applyARConstraints(); }
 
@@ -838,7 +861,7 @@
       userHardStop = true; autoCycle = false; isQueuing = false;
       try{ send({type:'leave'}); }catch{}
       cleanupPeer({ keepLocal:true, closeWsToo:false });
-      overlay.classList.remove('show');
+      overlayShow(false);
       setStatus('Detenido'); setIdleUI();
     }
 
@@ -893,6 +916,37 @@
     btnStart ?.addEventListener('click', joinQueue);
     btnNext  ?.addEventListener('click', nextMatch);
     btnStop  ?.addEventListener('click', stopAll);
+     // Botón Salir (PC / fallback)
+btnSalirChat?.addEventListener('click', async ()=>{
+  userHardStop = true;
+  autoCycle = false;
+  isQueuing = false;
+
+  try { send({ type:'leave' }); } catch {}
+
+  // Cierra sesión para que onAuthStateChanged NO te regrese a la sala
+  try { await auth.signOut(); } catch(e) { console.warn('signOut:', e); }
+
+  // Limpia WebRTC y apaga la cámara local
+  cleanupPeer({ keepLocal:false, closeWsToo:false });
+
+  // Oculta overlay y resetea UI/estado
+  overlayShow(false);
+  setStatus('Listo');
+  setIdleUI();
+  document.body.classList.remove('no-scroll');
+
+  // Mostrar landing
+  show('landing');
+
+  // Ajustes móviles (idle / paneo)
+  mobilePanEnabled = false;
+  try { stopIdlePan(); } catch {}
+  showIdleRemote(true);
+  showIdleLocal(true);
+});
+
+
 
     // Botones nuevos: mute/cam (PC)
     btnMute?.addEventListener('click', ()=>{
@@ -940,8 +994,6 @@
       setBodyAR(cls,label);
       await applyARConstraints();
     });
-
-  
 
     // MÓVIL: engranaje ajustes (mute)
     gearBtn?.addEventListener('click', ()=>{ gearSheet.classList.toggle('show'); });
@@ -1150,4 +1202,4 @@
     });
   </script>
 </body>
-</html
+</html>
