@@ -347,45 +347,32 @@
 
     /* ===== Mano fantasma (móvil, idle) ===== */
     @media (max-width:640px){
-      .swipe-ghost{
-        position:absolute; inset:0; pointer-events:none; z-index:22;
-        display:none; /* .show => visible */
-      }
-      .swipe-ghost.show{ display:block; }
+  .swipe-ghost{
+    position:absolute; inset:0; pointer-events:none; z-index:22;
+    display:none; /* .show => visible */
+  }
+  .swipe-ghost.show{ display:block; }
 
-      .swipe-ghost .hand{
-        position:absolute;
-        right:14px; top:38%;
-        transform: translateY(-50%);
-        font-size: clamp(56px,14vw,96px);
-        opacity:.75;
-        filter: drop-shadow(0 6px 14px rgba(0,0,0,.35));
-        animation: ghostSeq 2.6s ease-in-out infinite;
-        transform-origin: right center;
-      }
-      .swipe-ghost .hand::before,
-      .swipe-ghost .hand::after{
-        content:"👉";
-        position:absolute; right:0; top:0;
-        filter: blur(1px);
-        opacity:.28;
-      }
-      .swipe-ghost .hand::after{
-        opacity:.14;
-        filter: blur(2px);
-      }
-      .swipe-ghost .hand::before{ animation: ghostSeq 2.6s ease-in-out infinite .03s; }
-      .swipe-ghost .hand::after { animation: ghostSeq 2.6s ease-in-out infinite .06s; }
+  .swipe-ghost .hand{
+    position:absolute;
+    left:14px; top:40%;
+    transform: translateY(-50%);
+    width: clamp(70px, 18vw, 120px);
+    opacity:.85;
+    filter: drop-shadow(0 6px 14px rgba(0,0,0,.4));
+    animation: ghostSeq 2.6s ease-in-out infinite;
+    transform-origin: left center;
+  }
 
-      @keyframes ghostSeq{
-        0%   { transform: translateY(-50%) translateX(0) scale(.82);   opacity:0;    }
-        8%   { transform: translateY(-50%) translateX(0) scale(1.08);  opacity:.92;  } /* pop */
-        16%  { transform: translateY(-50%) translateX(0) scale(1.00);  opacity:.75;  }
-        48%  { transform: translateY(-50%) translateX(-120px) scale(1);opacity:.30;  } /* desliz */
-        60%  { transform: translateY(-50%) translateX(-120px) scale(.98); opacity:0; }
-        100% { transform: translateY(-50%) translateX(0) scale(.96);   opacity:0;    } /* pausa */
-      }
-    }
+  @keyframes ghostSeq{
+    0%   { transform: translateY(-50%) translateX(0) scale(.9);  opacity:0; }
+    10%  { transform: translateY(-50%) translateX(0) scale(1.05); opacity:.95; }
+    20%  { transform: translateY(-50%) translateX(0) scale(1.0); opacity:.8; }
+    50%  { transform: translateY(-50%) translateX(120px) scale(1); opacity:.4; } /* Izq→Der */
+    60%  { transform: translateY(-50%) translateX(120px) scale(.98); opacity:0; }
+    100% { transform: translateY(-50%) translateX(0) scale(.96); opacity:0; }
+  }
+}
   </style>
 </head>
 <body class="font-sans ar-1-1">
@@ -534,10 +521,9 @@
                 <div class="emoji-layer" aria-hidden="true"></div>
               </div>
 
-              <!-- Tutorial gesto (solo idle móvil) -->
               <div id="swipe-ghost" class="swipe-ghost sm:hidden" aria-hidden="true">
-                <div class="hand">👉</div>
-              </div>
+                    <img src="assets/hand.png" alt="hand" class="hand" />
+            </div>
             </div>
             <div class="pane" id="pane-local">
               <div id="idle-local" class="idle static-noise"><div>Preparando cámara…</div></div>
