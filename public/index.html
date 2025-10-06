@@ -762,7 +762,18 @@
     let layoutMode='split'; // 'split' | 'mobile-fixed'
     let micMuted=false, camOff=false;
     let currentFacing = 'user'; // móvil
-    const iceServers=[{urls:'stun:stun.l.google.com:19302'}];
+    const iceServers = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  {
+    urls: [
+      'turn:45.76.60.11:3478?transport=udp',
+      'turn:45.76.60.11:3478?transport=tcp'
+      // 'turns:45.76.60.11:5349?transport=tcp' // actívalo cuando tengas TLS/Let's Encrypt
+    ],
+    username: 'tortilla',
+    credential: 'Cl4uD1@2025'
+  }
+];
 
     /* ===== ZOOM STATE (PC) ===== */
     const zoomState = { local: 1, remote: 1 };
@@ -1351,6 +1362,8 @@
         }catch(e2){ alert('Error Google: '+(e2?.message||e?.message)); }
       }
     });
+    
+  
   </script>
 </body>
 </html>
