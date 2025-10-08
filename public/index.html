@@ -809,7 +809,29 @@
     const ZOOM_STEP = 0.15;
     const ZOOM_MIN_LOCAL  = 1;
     const ZOOM_MIN_REMOTE = 0.35;
+      
+    qs('#zoomInLocal') ?.addEventListener('click', ()=>{
+  changeZoom('local', +ZOOM_STEP);
+  saveLocalZoom(zoomState.local);
+});
+qs('#zoomOutLocal')?.addEventListener('click', ()=>{
+  changeZoom('local', -ZOOM_STEP);
+  saveLocalZoom(zoomState.local);
+});
+qs('#resetLocal')  ?.addEventListener('click', ()=>{
+  zoomState.local = 1;
+  applyZoom('local');
+  saveLocalZoom(1);
+});
+const CAM_ZOOM_KEY = 'ttv_local_zoom';
 
+function getSavedLocalZoom(){
+  const z = parseFloat(localStorage.getItem(CAM_ZOOM_KEY));
+  return Number.isFinite(z) ? Math.min(ZOOM_MAX, Math.max(ZOOM_MIN_LOCAL, z)) : 1;
+}
+function saveLocalZoom(z){
+  localStorage.setItem(CAM_ZOOM_KEY, String(z));
+}
     function applyZoom(which){
       const v = (which==='local') ? localVideo : remoteVideo;
       if(!v) return;
@@ -982,7 +1004,8 @@
       if(closeWsToo && ws){ try{ ws.close(); }catch{} ws=null; wsOpen=false; }
       peerLabel.classList.add('hidden'); peerLabel.textContent='Pareja: —';
       document.body.classList.remove('remote-portrait');
-      resetZoom();
+      zoomState.remote = 1;
+applyZoom('remote');
     }
 
     /* ===== Control de botones según estado ===== */
@@ -1100,7 +1123,12 @@
       if(isMobile()){
         const btnAR=qs('#btn-ar'); if(btnAR) btnAR.style.display='none';
         setLayout('mobile-fixed');
-      }else{ setLayout('split'); }
+      }else{ setLayout('split'); 
+         document.body.classList.remove('ar-1-1','ar-16-9');
+    document.body.classList.add('ar-4-3');
+    const btnAR = document.getElementById('btn-ar');
+    if (btnAR) btnAR.textContent = 'AR: 4:3';
+      }
     }
 
   
@@ -1339,7 +1367,8 @@
       youBadge.textContent=`Tú: ${n} (${a}) · ${chosenGender||'—'}`;
       show('chat');
       initLayoutForDevice();
-      
+       zoomState.local = getSavedLocalZoom();
+applyZoom('local');
       if (isMobile()) { swipeTip?.classList.add('show'); }
 
       // Al entrar a SALA: habilitar paneo para móvil
