@@ -112,12 +112,23 @@
     video{ width:100%; height:100%; background:#000; display:block; object-position:center center; -webkit-user-select:none; user-select:none; }
     video.mirror{ transform: scaleX(-1) }
 
-    .stage{ position:relative; width:100%; }
-    .tile{ position:relative; border-radius:16px; overflow:hidden; background:#000; height:100%; display:flex; align-items:center; justify-content:center; }
-
-    /* PC: grid 50/50 y altura dinámica para ocupar la pantalla */
-    .layout-split{ display:grid; grid-template-columns:1fr 1fr; gap:1rem; min-height:420px; }
-
+   /* --- Desktop con aspect-ratio: no dependas de JS para altura --- */
+.stage{ position:relative; width:100%; }
+.layout-split{
+  display:grid; grid-template-columns:1fr 1fr; gap:1rem;
+}
+.layout-split .tile{
+  position:relative;
+  border-radius:16px; overflow:hidden; background:#000;
+  /* la altura la define el aspect-ratio */
+  height:auto; 
+  aspect-ratio: var(--box-ar);
+  display:block;
+}
+/* fija el <video> pegado al tile, sin alterar layout */
+.layout-split .tile video{
+  position:absolute; inset:0; width:100%; height:100%;
+}
     /* Local: SIEMPRE cubrir (sin bandas) */
     #stage .tile.local  video{ object-fit: cover; }
     
@@ -152,14 +163,31 @@
     #btn-buscar-m{ left:14px; }
     #btn-salir-m{ right:14px; }
 
-    /* ====== Overlay sala de espera pegado al REMOTO (PC y móvil) ====== */
-    .overlay{
-      position:absolute; inset:0; display:none;
-      align-items:center; justify-content:center;
-      background:rgba(0,0,0,.25); z-index:20;
-      pointer-events:none; /* deja usar los botones (Detener, etc.) */
-    }
-    .overlay.show{ display:flex }
+   .overlay{
+  position:absolute; inset:0;
+  display:flex; align-items:center; justify-content:center;
+  background:rgba(0,0,0,.25); z-index:20;
+  pointer-events:none;
+  opacity:0; visibility:hidden;
+  transition: opacity .18s linear, visibility 0s linear .18s;
+}
+.overlay.show{
+  opacity:1; visibility:visible;
+  transition: opacity .18s linear;
+}
+ .idle-video{
+  position:absolute; inset:0;
+  width:100%; height:100%;
+  object-fit:cover;
+  transform:scale(1.22);
+  z-index:2; pointer-events:none;
+  opacity:1; visibility:visible;
+  transition: opacity .12s linear, visibility 0s linear .12s;
+}
+.idle-video.hide{
+  opacity:0; visibility:hidden;
+  transition: opacity .12s linear;
+}
     .overlay .card{ pointer-events:auto; } /* por si quieres hacer clic en algo dentro */
 
     .dot{ width:10px; height:10px; border-radius:999px; background:#ef4444; margin:0 4px; animation:b .9s infinite alternate }
@@ -1058,7 +1086,7 @@
         stage.classList.add('layout-split');
         stageMobile.style.display = 'none';
         document.body.classList.remove('no-scroll');
-        sizeStageForDesktop();
+      
       }else{
         stage.style.display = 'none';
         stageMobile.style.display = '';
@@ -1075,28 +1103,7 @@
       }else{ setLayout('split'); }
     }
 
-    /* ===== Desktop: ocupar pantalla y RESPETAR AR elegido ===== */
-    function sizeStageForDesktop(){
-      if(layoutMode!=='split') return;
-      const shell = document.getElementById('videoShell');
-      const rect  = shell.getBoundingClientRect();
-      const vh    = window.innerHeight;
-      const usable= Math.max(420, Math.floor(vh - rect.top - 24));
-
-      const cs = getComputedStyle(stage);
-      const gapPx = parseFloat(cs.gap || '16');
-      const stageW = stage.clientWidth;
-      const tileW  = (stageW - gapPx) / 2;
-
-      const ar     = currentARValue();
-      let idealH   = Math.round(tileW / ar);
-      if(idealH > usable) idealH = usable;
-
-      stage.style.height = idealH + 'px';
-    }
-    window.addEventListener('resize', ()=>{ if(!isMobile()) sizeStageForDesktop(); });
-    new ResizeObserver(()=>{ if(!isMobile()) sizeStageForDesktop(); }).observe(document.body);
-
+  
     /* ===== Botones (PC) ===== */
     btnStart ?.addEventListener('click', joinQueue);
     btnNext  ?.addEventListener('click', nextMatch);
@@ -1116,7 +1123,7 @@
       document.body.classList.remove('ar-1-1','ar-4-3','ar-16-9');
       document.body.classList.add(cls);
       if(btnAR) btnAR.textContent = 'AR: ' + label;
-      if(!isMobile()) requestAnimationFrame(sizeStageForDesktop);
+     
     }
     function currentARValue(){
       if(document.body.classList.contains('ar-4-3'))  return 4/3;
@@ -1252,11 +1259,10 @@
         startIdlePanIfMobile();   // en sala móvil: activar paneo
         updateGhostHandVisibility(); // 👈 evaluar mano cuando el idle se muestra
       }else{
-        if (idleNoiseD) idleNoiseD.pause();
-        if (idleNoiseM) idleNoiseM.pause();
-        stopIdlePan();            // al ocultar idle: apagar paneo
-        setGhostVisible(false);   // 👈 ocultar mano si no hay idle
-      }
+  // NO pausar: deja que siga corriendo para evitar flash al primer frame
+  stopIdlePan();
+  setGhostVisible(false);
+}
     }
     function showIdleLocal(show){ if(idleLocal) idleLocal.classList.toggle('hide', !show); }
 
@@ -1333,7 +1339,7 @@
       youBadge.textContent=`Tú: ${n} (${a}) · ${chosenGender||'—'}`;
       show('chat');
       initLayoutForDevice();
-      requestAnimationFrame(sizeStageForDesktop);
+      
       if (isMobile()) { swipeTip?.classList.add('show'); }
 
       // Al entrar a SALA: habilitar paneo para móvil
