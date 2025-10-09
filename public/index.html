@@ -234,8 +234,6 @@
     .dock-btn--primary{ background:#fff; color:#111; border-color:#ddd; }
     .dock-btn--ghost{ background:transparent; color:#fff; border-color:rgba(255,255,255,.4); }
     @media (min-width: 641px){ .mobile-dock{ display:none } }
-       
-     
 
     /* ============== AÑADIDOS (móvil estilo OmeTV) ============== */
     @media (max-width:640px){
@@ -403,59 +401,6 @@
     100% { transform: translateY(-50%) translateX(0) scale(.96); opacity:0; }
   }
 }
-/* ===== Admin badge arriba-derecha ===== */
-.admin-badge{
-  position:fixed; right:12px; top:12px; z-index:100;
-  display:inline-flex; align-items:center; gap:6px;
-  padding:8px 10px; border-radius:999px;
-  background:rgba(17,24,39,.85); color:#fff;
-  border:2px solid rgba(255,255,255,.25);
-  backdrop-filter:blur(8px);
-  box-shadow:0 10px 28px rgba(0,0,0,.28);
-  -webkit-tap-highlight-color: transparent;
-  font-weight:900;
-}
-.admin-badge .adm-icon{
-  display:inline-grid; place-items:center;
-  width:22px; height:22px; border-radius:999px;
-  font-size:14px; line-height:1;
-  border:1px solid rgba(255,255,255,.5);
-}
-.admin-badge .star{
-  background:linear-gradient(180deg,#ffd54a,#f59e0b);
-  text-shadow:0 1px 2px rgba(0,0,0,.35);
-}
-.admin-badge .shield{
-  background:linear-gradient(180deg,#e5e7eb,#9ca3af);
-}
-
-/* Panel flotante (placeholder) */
-.admin-panel{
-  position:fixed; inset:0; z-index:101;
-  display:grid; place-items:center;
-  background:rgba(0,0,0,.35);
-}
-.admin-panel-card{
-  min-width:280px; max-width:92vw;
-  background:#0b1324; color:#fff;
-  border:1px solid rgba(255,255,255,.2);
-  border-radius:16px; padding:16px;
-  box-shadow:0 16px 36px rgba(0,0,0,.45);
-}
-.admin-panel-card .hdr{ font-weight:800; margin-bottom:8px; }
-.admin-close{
-  margin-top:10px;
-  border:2px solid rgba(255,255,255,.25);
-  background:#fff; color:#111; font-weight:800;
-  border-radius:999px; padding:.5rem .9rem;
-}
-@media (max-width:640px){
-  .admin-badge{ top:calc(env(safe-area-inset-top,0) + 12px); }
-}
-
-
-
-
   </style>
 </head>
 <body class="font-sans ar-1-1">
@@ -506,7 +451,7 @@
               <input id="inpEdad" class="w-full bg-transparent outline-none" type="number" inputmode="numeric" min="18" max="99" placeholder="Edad (18+)" />
             </label>
           </div>
-             
+
           <!-- Google login -->
           <button id="btn-google" class="mt-6 rounded-xl border-2 border-neutral-900/40 bg-white/90 px-7 py-3.5 font-semibold shadow disabled:opacity-50" disabled>
             Iniciar con Google
@@ -542,7 +487,7 @@
             </div>
           </div>
         </div>
-         
+
         <!-- Video PC y contenedor móvil -->
         <div id="videoShell" class="full-bleed">
           <!-- PC: 50/50 -->
@@ -857,26 +802,6 @@
     credential: 'Cl4uD1@2025'
   }
 ];
- // ===== Admin flags (UI) =====
-let isAdmin = false;
-let isPro   = false;
-
-function updateAdminUI(){
-  const badge = document.getElementById('adminBadge');
-  if (!badge) return;
-  const show = isAdmin || isPro;
-  badge.style.display = show ? 'inline-flex' : 'none';
-}
-
-function openAdminPanel(open){
-  const panel = document.getElementById('adminPanel');
-  if (!panel) return;
-  panel.style.display = open ? 'grid' : 'none';
-}
-document.getElementById('adminBadge')?.addEventListener('click', ()=> openAdminPanel(true));
-document.getElementById('adminClose')?.addEventListener('click', ()=> openAdminPanel(false));
-
-  
 
     /* ===== ZOOM STATE (PC) ===== */
     const zoomState = { local: 1, remote: 1 };
@@ -1023,61 +948,19 @@ function saveLocalZoom(z){
       return new Promise((resolve,reject)=>{
         if(ws && wsOpen) return resolve();
         try{ ws = new WebSocket(window.WS_SIGNALLING_URL); }catch(e){ return reject(e); }
-       ws.onopen  = ()=>{ 
-  wsOpen=true; 
-  // Enviar identify si ya hay usuario con email (modo admin/pro)
-  if (currentUser?.email) {
-    try {
-      ws.send(JSON.stringify({
-        type: 'identify',
-        email: String(currentUser.email).toLowerCase(),
-        displayName: currentUser.displayName || inpNombre.value || localStorage.getItem('ttv_name') || '—'
-      }));
-    } catch {}
-  }
-  resolve();
-};
+        ws.onopen  = ()=>{ wsOpen=true; resolve(); };
         ws.onerror = (e)=>{ console.error("WS error", e); reject(e); };
         ws.onclose = ()=>{ wsOpen=false; };
-        ws.onmessage = async (msg)=>{ 
+        ws.onmessage = async (msg)=>{
           const data = JSON.parse(msg.data);
-         if (data.type === 'welcome') {
-  myId = data.id;
-
-  // (opcional) el servidor puede enviar flags iniciales
-  if (typeof data.isAdmin === 'boolean') isAdmin = data.isAdmin;
-  if (typeof data.isPro   === 'boolean') isPro   = data.isPro;
-  updateAdminUI();
-}
-
-if (data.type === 'role') {
-  // Respuesta a identify → setear flags y refrescar UI
-  isAdmin = !!data.isAdmin;
-  isPro   = !!data.isPro;
-  updateAdminUI();
-}
-          if (data.type === 'matched') {
-  roomId = data.roomId;
-  role = data.role;
-  setStatus('Pareja encontrada · Conectando…');
-  overlayShow(true);
-
-  // ✅ Mostrar nombre de la pareja con insignias si aplica
-  if (data.peer) {
-    const flags = [];
-    if (data.peer.isAdmin) flags.push('★');  // dorado
-    if (data.peer.isPro)   flags.push('🛡');  // plateado
-    peerLabel.classList.remove('hidden');
-    peerLabel.textContent = `Pareja: ${data.peer.name || '—'} ${flags.join(' ')}`;
-  }
-
-  try {
-    await startWebRTC(role);
-  } catch (e) {
-    setStatus('Error WebRTC: ' + e.message);
-    overlayShow(false);
-  }
-}
+          if(data.type==='welcome'){ myId=data.id; }
+          if(data.type==='matched'){
+            roomId=data.roomId; role=data.role;
+            setStatus('Pareja encontrada · Conectando…');
+            overlayShow(true);
+            if(data.peer && data.peer.name){ peerLabel.classList.remove('hidden'); peerLabel.textContent = 'Pareja: '+(data.peer.name||'—'); }
+            try{ await startWebRTC(role); }catch(e){ setStatus('Error WebRTC: '+e.message); overlayShow(false); }
+          }
           if(data.type==='offer'){
             await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
             const answer = await pc.createAnswer(); await pc.setLocalDescription(answer);
@@ -1470,8 +1353,6 @@ applyZoom('remote');
     auth.onAuthStateChanged(async (u)=>{
       currentUser=u||null;
       if(!u){
-      
-
         show('landing'); youBadge.classList.add('hidden'); setIdleUI();
         swipeTip?.classList.remove('show');
         // saliendo de sala → desactivar paneo y mano
@@ -1500,16 +1381,7 @@ applyZoom('local');
       setIdleUI();
       updateGhostHandVisibility(); // 👈 evaluar mano al entrar a sala
     });
-    // Identificar al servidor (si WS ya abierto) para activar admin/pro
-if (wsOpen && currentUser?.email) {
-  try{
-    ws.send(JSON.stringify({
-      type:'identify',
-      email: String(currentUser.email).toLowerCase(),
-      displayName: currentUser.displayName || inpNombre.value || localStorage.getItem('ttv_name') || '—'
-    }));
-  }catch{}
-}
+
     // Login Google (con fallback redirect para Safari)
     const btnGoogleel=qs('#btn-google');
     btnGoogle?.addEventListener('click', async ()=>{
@@ -1525,22 +1397,8 @@ if (wsOpen && currentUser?.email) {
         }catch(e2){ alert('Error Google: '+(e2?.message||e?.message)); }
       }
     });
-   
+    
+  
   </script>
-   <!-- Badge Admin / Pro (arriba a la derecha) -->
-<button id="adminBadge" class="admin-badge" title="Modo Admin"
-        style="display:none" aria-label="Modo Admin">
-  <span class="adm-icon star" aria-hidden="true">★</span>
-  <span class="adm-icon shield" aria-hidden="true">🛡</span>
-</button>
-
-<!-- Panel (placeholder) -->
-<div id="adminPanel" class="admin-panel" style="display:none;">
-  <div class="admin-panel-card">
-    <div class="hdr">Modo Admin</div>
-    <p>Funciones de admin llegarán en la próxima actualización.</p>
-    <button id="adminClose" class="admin-close">Cerrar</button>
-  </div>
-</div>
 </body>
 </html>
