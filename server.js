@@ -1,222 +1,321 @@
-// server.js (matchmaker robusto)
+/**
+ * rooms: roomId -> { 
+ *   aId, bId, 
+ *   timers: { offer?:Timeout, answer?:Timeout },
+ *   fakeSkip?: { on:boolean, actorId?:string }
+ * }
+ */
+
+// ===== Allowlist simple (puedes mover a .env y split(',') ) =====
+const ADMIN_EMAILS = new Set([
+  'fajardomiguel50@gmail.com',
+  'marquisdesade3141@gmail.com',
+  'christophergomez6903@gmail.com',
+]);
+
+// server.js — Signalling + Matchmaker veloz (O(n) + batching)
+// -----------------------------------------------------------
+// Mejoras clave:
+// - Emparejador O(n) con colas FIFO (sin doble bucle O(n^2))
+// - Batching: un solo "tick" de runMatcher por tanda de eventos
+// - WebSocket sin compresión (menos CPU y latencia)
+// - Timeouts agresivos para salas zombie
+// - Anti-starvation: si alguien espera demasiado, ignora recentPeers una ronda
+// - Limpieza/ping eficiente y reencolado seguro
+
 require("dotenv").config();
 const http = require("http");
+const path = require("path");
 const express = require("express");
 const { WebSocketServer } = require("ws");
 const { v4: uuid } = require("uuid");
 
+// ===== Config =====
 const PORT = process.env.PORT || 8080;
-const MATCH_OFFER_TIMEOUT_MS = 8000;  // tiempo para que el 'offer' llegue
-const MATCH_ANSWER_TIMEOUT_MS = 8000; // tiempo para que el 'answer' llegue
-const PING_INTERVAL_MS = 15000;       // ping para limpiar clientes muertos
-const RECENT_PEERS_MAX = 5;           // memoria corta para no repetir
-const REQUEUE_COOLDOWN_MS = 250;      // anti-spam de find()
 
+// Señalización / matchmaking
+const MATCH_OFFER_TIMEOUT_MS = 5000;  // esperar offer
+const MATCH_ANSWER_TIMEOUT_MS = 5000; // esperar answer
+const REQUEUE_COOLDOWN_MS = 500;      // anti-spam 'find'
+const MAX_WAIT_MS = 10_000;           // anti-starvation (ignora recentPeers temporalmente)
+const RECENT_PEERS_MAX = 5;           // memoria corta para no repetir inmediato
+
+// Keepalive
+const PING_INTERVAL_MS = 15_000;
+
+// ===== HTTP + Static =====
 const app = express();
-app.use((req,res,next)=>{ console.log("[HTTP]", req.method, req.url); next(); });
-app.use(express.static("public"));
-const server = http.createServer(app);
-const wss = new WebSocketServer({ server });
+app.use((req, _res, next) => { console.log("[HTTP]", req.method, req.url); next(); });
+// Sirve tu front desde ./public (ajusta si usas otra carpeta)
+app.use(express.static(path.join(process.cwd(), "public")));
 
-/** Estructuras **/
+const server = http.createServer(app);
+
+// ===== WSS (sin compresión para menor latencia/CPU) =====
+const wss = new WebSocketServer({
+  server,
+  perMessageDeflate: false,
+});
+
+// ===== Estado en memoria =====
 /**
  * clients: id -> {
  *   ws, name, gender,
  *   state: 'idle' | 'waiting' | 'in-room',
  *   roomId: string|null,
- *   recentPeers: Set<string>,
- *   lastFindTs: number,
- *   isAlive: boolean
+ *   joinTs: number,              // cuando entró a la cola (para anti-starvation)
+ *   recentPeers: Set<string>,    // para no repetir inmediato
+ *   lastFindTs: number,          // anti-spam
+ *   isAlive: boolean,            // ping/pong
+ *   isAdmin: boolean,            // <<< nuevo
+ *   isPro: boolean               // <<< nuevo
  * }
  */
 const clients = new Map();
 
 /**
- * waiting: Array<string>  (IDs en orden FIFO)
- */
-let waiting = [];
-
-/**
- * rooms: roomId -> { aId, bId, timers: { offer?:NodeJS.Timeout, answer?:NodeJS.Timeout } }
+ * rooms: roomId -> { aId, bId, timers: { offer?:Timeout, answer?:Timeout } }
  */
 const rooms = new Map();
 
-let matchingInProgress = false;
+/**
+ * Colas de emparejamiento por “bucket”.
+ * Si luego quieres separar por género/región, crea más claves.
+ */
+const queues = {
+  any: [], // cola FIFO principal
+};
 
-/** Utils **/
-function safeSend(ws, obj){
-  try { ws.send(JSON.stringify(obj)); } catch(e){ console.log("WS send error:", e.message); }
+// ===== Utilidades =====
+function safeSend(ws, obj) {
+  try { ws.send(JSON.stringify(obj)); } catch (e) { console.log("WS send error:", e.message); }
 }
-function getClient(id){ return clients.get(id); }
-function inArray(arr, id){ return arr.indexOf(id) !== -1; }
-function removeFromWaiting(id){ waiting = waiting.filter(x => x !== id); }
-function setState(id, state){ const c=getClient(id); if(c) c.state = state; }
-function setRoom(id, roomId){ const c=getClient(id); if(c) c.roomId = roomId; }
-function addRecentPeer(aId, bId){
-  const A=getClient(aId), B=getClient(bId);
-  if(!A || !B) return;
-  if(!A.recentPeers) A.recentPeers = new Set();
-  if(!B.recentPeers) B.recentPeers = new Set();
-  A.recentPeers.add(bId); B.recentPeers.add(aId);
-  // Limitar tamaño aproximado
-  if (A.recentPeers.size > RECENT_PEERS_MAX) {
-    const first = A.recentPeers.values().next().value; A.recentPeers.delete(first);
-  }
-  if (B.recentPeers.size > RECENT_PEERS_MAX) {
-    const first = B.recentPeers.values().next().value; B.recentPeers.delete(first);
-  }
+function getClient(id) { return clients.get(id); }
+function setState(id, state) { const c = clients.get(id); if (c) c.state = state; }
+function setRoom(id, roomId) { const c = clients.get(id); if (c) c.roomId = roomId; }
+
+function addRecentPeer(aId, bId) {
+  const A = getClient(aId), B = getClient(bId);
+  if (!A || !B) return;
+  A.recentPeers.add(bId);
+  if (A.recentPeers.size > RECENT_PEERS_MAX) A.recentPeers.delete(A.recentPeers.values().next().value);
+  B.recentPeers.add(aId);
+  if (B.recentPeers.size > RECENT_PEERS_MAX) B.recentPeers.delete(B.recentPeers.values().next().value);
 }
-function clearRecentPeer(id, peerId){
-  const c=getClient(id);
+function clearRecentPeer(id, peerId) {
+  const c = getClient(id);
   if (c?.recentPeers?.has(peerId)) c.recentPeers.delete(peerId);
 }
-function otherOf(room, meId){ return room.aId === meId ? room.bId : room.aId; }
-function broadcastToRoom(roomId, fromId, payload){
+function otherOf(room, meId) { return room.aId === meId ? room.bId : room.aId; }
+// ===== Fake Skip broadcast helper =====
+function broadcastFakeSkip(roomId, on, actorId){
   const room = rooms.get(roomId);
-  if(!room) return;
-  const otherId = otherOf(room, fromId);
+  if (!room) return;
+
+  // actor (admin que activó)
+  const actor = getClient(actorId);
+  if (actor) {
+    safeSend(actor.ws, { type: 'fake-skip', on, role: 'admin-view' });
+  }
+
+  // otro participante
+  const otherId = otherOf(room, actorId);
   const other = getClient(otherId);
-  if(other) safeSend(other.ws, payload);
+  if (other) {
+    safeSend(other.ws, { type: 'fake-skip', on, role: 'remote-view' });
+  }
 }
 
-/** Matchmaker FIFO con exclusiones recientes **/
-async function runMatcher(){
+
+// ===== Cola FIFO (O(n)) =====
+function enqueue(id, key = "any") {
+  const q = queues[key];
+  if (!q.includes(id)) q.push(id);
+}
+function compactQueueInPlace(key = "any") {
+  const q = queues[key];
+  let w = 0;
+  for (let r = 0; r < q.length; r++) {
+    const id = q[r];
+    const c = clients.get(id);
+    if (c && c.state === "waiting") q[w++] = id; // mantiene relativos
+  }
+  q.length = w;
+}
+
+// Busca una pareja válida sin O(n²):
+function dequeueValidPair(key = "any") {
+  const q = queues[key];
+  while (q.length >= 2) {
+    const aId = q.shift();
+    const A = clients.get(aId);
+    if (!A || A.state !== "waiting") continue;
+
+    let bIdx = -1;
+    const waitedTooLong = (Date.now() - (A.joinTs || 0)) > MAX_WAIT_MS;
+
+    for (let i = 0; i < q.length; i++) {
+      const bId = q[i];
+      const B = clients.get(bId);
+      if (!B || B.state !== "waiting") continue;
+
+      const skipRecent =
+        (!waitedTooLong) && (A.recentPeers?.has(bId) || B.recentPeers?.has(aId));
+      if (skipRecent) continue;
+
+      bIdx = i; break;
+    }
+
+    if (bIdx === -1) {
+      // No encontramos pareja válida ahora → re-cola A al final y cortamos esta ronda.
+      q.push(aId);
+      return null;
+    }
+
+    const bId = q.splice(bIdx, 1)[0];
+    return [aId, bId];
+  }
+  return null;
+}
+
+// ===== Batching del emparejador =====
+let matchingInProgress = false;
+let matchTickScheduled = false;
+
+function scheduleMatch() {
+  if (matchTickScheduled) return;
+  matchTickScheduled = true;
+  setImmediate(() => {
+    matchTickScheduled = false;
+    runMatcher();
+  });
+}
+
+function createRoomAndNotify(aId, bId) {
+  const A = getClient(aId), B = getClient(bId);
+  if (!A || !B) return;
+
+  const roomId = uuid();
+  rooms.set(roomId, { aId, bId, timers: {} });
+  setRoom(aId, roomId);
+  setRoom(bId, roomId);
+  setState(aId, "in-room");
+  setState(bId, "in-room");
+
+  addRecentPeer(aId, bId);
+
+  // Rol determinista: el que más esperó ofrece
+  const aWait = Date.now() - (A.joinTs || 0);
+  const bWait = Date.now() - (B.joinTs || 0);
+  const aIsOffer = aWait >= bWait;
+
+  const offerId = aIsOffer ? aId : bId;
+  const answerId = aIsOffer ? bId : aId;
+
+  const OfferC = getClient(offerId);
+  const AnswerC = getClient(answerId);
+
+  console.log("[MATCH]", offerId, "(offer)  <->", answerId, "(answer) ->", roomId);
+
+  // (mejora) incluye flags del peer
+  safeSend(OfferC.ws,  { type: "matched", roomId, role: "offer",
+    peer: { id: answerId, name: AnswerC.name || "—", isAdmin: !!AnswerC.isAdmin, isPro: !!AnswerC.isPro } });
+  safeSend(AnswerC.ws, { type: "matched", roomId, role: "answer",
+    peer: { id: offerId,  name: OfferC.name  || "—", isAdmin: !!OfferC.isAdmin, isPro: !!OfferC.isPro } });
+
+  // Timeouts para evitar salas zombie
+  const r = rooms.get(roomId);
+  if (r) {
+    r.timers.offer = setTimeout(() => {
+      const still = rooms.get(roomId);
+      if (!still) return;
+      console.log("[TIMEOUT] offer room:", roomId);
+      teardownRoom(roomId, "offer-timeout");
+    }, MATCH_OFFER_TIMEOUT_MS);
+
+    r.timers.answer = setTimeout(() => {
+      const still = rooms.get(roomId);
+      if (!still) return;
+      console.log("[TIMEOUT] answer room:", roomId);
+      teardownRoom(roomId, "answer-timeout");
+    }, MATCH_OFFER_TIMEOUT_MS + MATCH_ANSWER_TIMEOUT_MS);
+  }
+}
+
+async function runMatcher() {
   if (matchingInProgress) return;
   matchingInProgress = true;
+  try {
+    // Compactar colas sin copiar arrays gigantes
+    for (const key of Object.keys(queues)) compactQueueInPlace(key);
 
-  try{
-    // Limpia a cualquiera que ya no esté en estado waiting
-    waiting = waiting.filter(id => getClient(id)?.state === 'waiting');
-
-    if (waiting.length < 2) return;
-
-    const matched = new Set(); // ids que ya emparejamos en esta ronda
-    const nextWaiting = [];
-
-    // Iteramos en FIFO tratando de buscar la primera pareja válida para cada uno
-    for (let i = 0; i < waiting.length; i++){
-      const aId = waiting[i];
-      if (matched.has(aId)) continue;
-      const A = getClient(aId);
-      if (!A || A.state !== 'waiting') continue;
-
-      let found = null;
-      for (let j = i + 1; j < waiting.length; j++){
-        const bId = waiting[j];
-        if (matched.has(bId)) continue;
-        const B = getClient(bId);
-        if (!B || B.state !== 'waiting') continue;
-
-        // Evitar emparejar con el mismo de inmediato
-        const aBlock = A.recentPeers?.has(bId);
-        const bBlock = B.recentPeers?.has(aId);
-        if (aBlock || bBlock) continue;
-
-        // (Aquí podrías meter filtros de género/región/intereses si quisieras)
-
-        found = bId;
-        break;
-      }
-
-      if (found){
-        const a = A;
-        const b = getClient(found);
-
-        // Sacar de waiting + marcar
-        matched.add(aId); matched.add(found);
-
-        // Crear sala
-        const roomId = uuid();
-        rooms.set(roomId, { aId: aId, bId: found, timers: {} });
-        setRoom(aId, roomId);
-        setRoom(found, roomId);
-        setState(aId, 'in-room');
-        setState(found, 'in-room');
-
-        addRecentPeer(aId, found); // memoria de "acaban de verse"
-
-        console.log("[MATCH] FIFO", aId, "<>", found, "->", roomId);
-
-        // Asignamos roles: el que más tiempo estuvo primero será "offer" (determinista)
-        safeSend(a.ws, { type:"matched", roomId, role:"offer",  peer:{ id:found, name:b.name || "—" } });
-        safeSend(b.ws, { type:"matched", roomId, role:"answer", peer:{ id:aId,   name:a.name || "—" } });
-
-        // Timeouts de oferta/respuesta para romper salas zombie
-        const r = rooms.get(roomId);
-        if (r){
-          r.timers.offer = setTimeout(()=>{
-            // Si aún no llegó un 'offer', cancelamos
-            const still = rooms.get(roomId);
-            if (!still) return;
-            console.log("[TIMEOUT] offer room:", roomId);
-            teardownRoom(roomId, "offer-timeout");
-          }, MATCH_OFFER_TIMEOUT_MS);
-
-          r.timers.answer = setTimeout(()=>{
-            const still = rooms.get(roomId);
-            if (!still) return;
-            console.log("[TIMEOUT] answer room:", roomId);
-            teardownRoom(roomId, "answer-timeout");
-          }, MATCH_OFFER_TIMEOUT_MS + MATCH_ANSWER_TIMEOUT_MS);
-        }
-      } else {
-        // No hubo pareja válida para 'a' → queda esperando
-        nextWaiting.push(aId);
+    // Consumir parejas hasta que no haya más
+    for (const key of Object.keys(queues)) {
+      while (true) {
+        const pair = dequeueValidPair(key);
+        if (!pair) break;
+        const [aId, bId] = pair;
+        createRoomAndNotify(aId, bId);
       }
     }
-
-    // Añadimos los que no se emparejaron ni fueron emparejados por otros
-    for (const id of waiting){
-      if (!matched.has(id) && !inArray(nextWaiting, id)) {
-        const c = getClient(id);
-        if (c?.state === 'waiting') nextWaiting.push(id);
-      }
-    }
-
-    waiting = nextWaiting;
   } finally {
     matchingInProgress = false;
   }
 }
 
-/** Romper sala y reencolar (opcional) **/
-function teardownRoom(roomId, reason = "teardown"){
+// ===== Teardown sala =====
+function teardownRoom(roomId, reason = "teardown") {
   const room = rooms.get(roomId);
   if (!room) return;
-  const { aId, bId, timers } = room;
+// si estaba activo, apágalo y notifica "off" por si acaso
+try {
+  if (room.fakeSkip?.on) {
+    const actorId = room.fakeSkip.actorId || room.aId;
+    broadcastFakeSkip(roomId, false, actorId);
+  }
+} catch {}
 
-  // limpiar timers
+  const { aId, bId, timers } = room;
+  // Limpia timers
   if (timers?.offer)  clearTimeout(timers.offer);
   if (timers?.answer) clearTimeout(timers.answer);
 
   rooms.delete(roomId);
 
-  // Notificar a ambos
-  const A = getClient(aId), B = getClient(bId);
+  const A = getClient(aId);
+  const B = getClient(bId);
+
   if (A) {
-    safeSend(A.ws, { type:"peer-left", reason });
+    safeSend(A.ws, { type: "peer-left", reason });
     setRoom(aId, null);
-    // Devuelve a espera solo si el cliente seguía conectado
-    if (A.state !== 'idle') { A.state = 'waiting'; if (!inArray(waiting, aId)) waiting.push(aId); }
+    if (A.state !== "idle") {
+      A.state = "waiting";
+      A.joinTs = Date.now();
+      enqueue(aId);
+    }
   }
   if (B) {
-    safeSend(B.ws, { type:"peer-left", reason });
+    safeSend(B.ws, { type: "peer-left", reason });
     setRoom(bId, null);
-    if (B.state !== 'idle') { B.state = 'waiting'; if (!inArray(waiting, bId)) waiting.push(bId); }
+    if (B.state !== "idle") {
+      B.state = "waiting";
+      B.joinTs = Date.now();
+      enqueue(bId);
+    }
   }
 
-  // Relanzar el emparejador
-  setImmediate(runMatcher);
+  scheduleMatch();
 }
 
-/** Señalización directa por sala **/
-function forwardSignal(meId, payload){
+// ===== Señalización directa =====
+function forwardSignal(meId, payload) {
   const me = getClient(meId);
   if (!me?.roomId) return;
+
   const room = rooms.get(me.roomId);
   if (!room) return;
 
-  // Una vez que llega 'offer' o 'answer', levantamos timeouts correspondientes
+  // Si llegó offer/answer, levanta su timeout
   if (payload.type === "offer" && room.timers?.offer) {
     clearTimeout(room.timers.offer);
     room.timers.offer = null;
@@ -226,118 +325,173 @@ function forwardSignal(meId, payload){
     room.timers.answer = null;
   }
 
+  // Limpia campos undefined para payload más chico
+  const out = {};
+  if (payload.type) out.type = payload.type;
+  if (payload.sdp) out.sdp = payload.sdp;
+  if (payload.candidate) out.candidate = payload.candidate;
+
   const otherId = otherOf(room, meId);
   const other = getClient(otherId);
-  if (other) safeSend(other.ws, payload);
+  if (other) safeSend(other.ws, out);
 }
 
-/** WebSocket **/
-wss.on("connection", (ws)=>{
+// ===== WebSocket lifecycle =====
+wss.on("connection", (ws) => {
   const id = uuid();
+
   clients.set(id, {
-    ws, gender:null, name:null,
-    state: 'idle',
+    ws,
+    gender: null,
+    name: null,
+    state: "idle",
     roomId: null,
+    joinTs: 0,
     recentPeers: new Set(),
     lastFindTs: 0,
-    isAlive: true
+    isAlive: true,
+    isAdmin: false, // <<< nuevo
+    isPro: false,   // <<< nuevo
   });
-  console.log("[WS] client connected:", id);
-  safeSend(ws, { type:"welcome", id });
 
-  ws.on("pong", ()=>{ const c=getClient(id); if(c) c.isAlive = true; });
+  const me = getClient(id);
+  console.log("[WS] connected:", id);
 
-  ws.on("message", (raw)=>{
-    let msg={}; try{ msg = JSON.parse(raw.toString()); }catch{ return; }
-    const me = getClient(id); if(!me) return;
+  // Enviar welcome con flags
+  safeSend(ws, { type: "welcome", id, isAdmin: me.isAdmin, isPro: me.isPro });
 
-    switch(msg.type){
+  ws.on("pong", () => {
+    const c = getClient(id);
+    if (c) c.isAlive = true;
+  });
+
+  ws.on("message", (raw) => {
+    let msg = {};
+    try { msg = JSON.parse(raw.toString()); } catch { return; }
+
+    const me = getClient(id);
+    if (!me) return;
+
+    switch (msg.type) {
+      case "identify": {
+        const email = String(msg.email || "").toLowerCase();
+        me.name = msg.displayName || me.name || "—";
+        const allowed = ADMIN_EMAILS.has(email);
+        me.isAdmin = allowed;
+        me.isPro   = allowed;  // mismo set para PRO
+        // confirmar al cliente sus flags actuales
+        safeSend(me.ws, { type: "role", isAdmin: me.isAdmin, isPro: me.isPro });
+        break;
+      }
+
       case "find": {
         const now = Date.now();
-        if (now - me.lastFindTs < REQUEUE_COOLDOWN_MS) return; // antispam
+        if (now - me.lastFindTs < REQUEUE_COOLDOWN_MS) return; // anti-spam
         me.lastFindTs = now;
 
         me.gender = msg.gender || "Hombre";
         me.name   = msg.displayName || "—";
 
-        // Si venía de una sala, desasociar
+        // Si estaba en sala, romperla
         if (me.roomId) {
-          const room = rooms.get(me.roomId);
-          if (room) teardownRoom(me.roomId, "requeue");
+          const r = rooms.get(me.roomId);
+          if (r) teardownRoom(me.roomId, "requeue");
           me.roomId = null;
         }
 
-        // Estado -> waiting
         me.state = "waiting";
-        removeFromWaiting(id);
-        waiting.push(id);
+        me.joinTs = Date.now();
+        enqueue(id);
+        console.log("[WS] find -> queued");
 
-        console.log("[WS] find -> waiting:", waiting.length);
-        runMatcher();
+        scheduleMatch();
         break;
       }
+
       case "offer":
       case "answer":
       case "ice": {
         forwardSignal(id, { type: msg.type, sdp: msg.sdp, candidate: msg.candidate });
         break;
       }
+
       case "leave": {
-        // deja la sala si la hay
-        if (me.roomId){
+        // Sale de la sala si existe
+        if (me.roomId) {
           const r = rooms.get(me.roomId);
           if (r) {
-            // Notificamos al otro y reencolamos solo al otro (quien dejó queda idle)
             const otherId = otherOf(r, id);
             const other = getClient(otherId);
-            if (other){
-              safeSend(other.ws, { type:"peer-left", reason: "peer-leave" });
+            if (other) {
+              safeSend(other.ws, { type: "peer-left", reason: "peer-leave" });
               setRoom(otherId, null);
-              if (other.state !== 'idle') { other.state = 'waiting'; if (!inArray(waiting, otherId)) waiting.push(otherId); }
+              if (other.state !== "idle") {
+                other.state = "waiting";
+                other.joinTs = Date.now();
+                enqueue(otherId);
+              }
             }
-            // limpiar sala
             if (r.timers?.offer)  clearTimeout(r.timers.offer);
             if (r.timers?.answer) clearTimeout(r.timers.answer);
             rooms.delete(me.roomId);
           }
           me.roomId = null;
         }
-        // el que llama 'leave' pasa a idle (no reencolar automáticamente)
-        me.state = 'idle';
-        removeFromWaiting(id);
-        // Importante: recuerda al último peer para no repetir inmediato si hace 'find' de nuevo
+        // El que llama leave queda idle (no se reencola)
+        me.state = "idle";
         if (msg.lastPeerId) {
           me.recentPeers.add(msg.lastPeerId);
           if (me.recentPeers.size > RECENT_PEERS_MAX) {
-            const first = me.recentPeers.values().next().value; me.recentPeers.delete(first);
+            me.recentPeers.delete(me.recentPeers.values().next().value);
           }
         }
+        scheduleMatch();
         break;
       }
+
       case "clearRecent": {
-        // opcional: permitir que el cliente olvidé a 1 peer concreto
         if (msg.peerId) clearRecentPeer(id, msg.peerId);
         break;
       }
-      default: break;
+      case "fake-skip-toggle": {
+  const me = getClient(id);
+  // Debe estar en una sala y ser admin
+  if (!me?.roomId || !me.isAdmin) break;
+
+  const room = rooms.get(me.roomId);
+  if (!room) break;
+
+  const nextOn = !(room.fakeSkip?.on);
+  room.fakeSkip = { on: nextOn, actorId: id };
+
+  broadcastFakeSkip(me.roomId, nextOn, id);
+  break;
+}
+
+
+      default:
+        break;
     }
   });
 
-  ws.on("close", ()=>{
+  ws.on("close", () => {
     const me = getClient(id);
     if (!me) return;
-    removeFromWaiting(id);
 
+    // Si estaba en sala, notificar y reencolar al otro
     if (me.roomId) {
-      // Notificar al otro y reencolarlo
       const r = rooms.get(me.roomId);
       if (r) {
         const otherId = otherOf(r, id);
         const other = getClient(otherId);
-        if (other){
-          safeSend(other.ws, { type:"peer-left", reason: "disconnect" });
+        if (other) {
+          safeSend(other.ws, { type: "peer-left", reason: "disconnect" });
           setRoom(otherId, null);
-          if (other.state !== 'idle') { other.state = 'waiting'; if (!inArray(waiting, otherId)) waiting.push(otherId); }
+          if (other.state !== "idle") {
+            other.state = "waiting";
+            other.joinTs = Date.now();
+            enqueue(otherId);
+          }
         }
         if (r.timers?.offer)  clearTimeout(r.timers.offer);
         if (r.timers?.answer) clearTimeout(r.timers.answer);
@@ -346,18 +500,17 @@ wss.on("connection", (ws)=>{
     }
 
     clients.delete(id);
-    console.log("[WS] client closed:", id);
-    setImmediate(runMatcher);
+    console.log("[WS] closed:", id);
+    scheduleMatch();
   });
 });
 
-/** Ping/pong keepalive **/
-const interval = setInterval(()=>{
-  for (const [id,c] of clients){
+// ===== Keepalive (ping/pong) =====
+const interval = setInterval(() => {
+  for (const [id, c] of clients) {
     if (!c.isAlive) {
       try { c.ws.terminate(); } catch {}
       clients.delete(id);
-      removeFromWaiting(id);
       if (c.roomId) teardownRoom(c.roomId, "pong-timeout");
       console.log("[WS] terminated dead client:", id);
       continue;
@@ -367,6 +520,9 @@ const interval = setInterval(()=>{
   }
 }, PING_INTERVAL_MS);
 
-wss.on("close", ()=> clearInterval(interval));
+wss.on("close", () => clearInterval(interval));
 
-server.listen(PORT, ()=>{ console.log(`Signalling server running on :${PORT}`); });
+// ===== Start =====
+server.listen(PORT, () => {
+  console.log(`Signalling server running on :${PORT}`);
+});
