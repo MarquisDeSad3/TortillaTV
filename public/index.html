@@ -456,7 +456,10 @@
           <button id="btn-google" class="mt-6 rounded-xl border-2 border-neutral-900/40 bg-white/90 px-7 py-3.5 font-semibold shadow disabled:opacity-50" disabled>
             Iniciar con Google
           </button>
-
+           <button id="btn-guest"
+  class="mt-3 rounded-xl border-2 border-neutral-900/40 bg-white/90 px-7 py-3.5 font-semibold shadow">
+  Entrar como invitado
+</button>
           <svg class="scribble mt-6" viewBox="0 0 1200 100" preserveAspectRatio="none" aria-hidden="true">
             <path d="M10,70 C200,20 400,120 600,60 C800,0 1000,120 1190,50"/>
           </svg>
@@ -782,6 +785,37 @@
       const mustShow = isMobile() && isPageChatVisible() && !isQueuing && !inCall && idleRemoteVisible;
       setGhostVisible(mustShow);
     }
+ // === Invitado ===
+const btnGuest = qs('#btn-guest');
+let isGuest = false;
+
+function proceedToChatAfterLoginLikeFlow(displayName='Invitado'){
+  // Crea un “usuario” local (sin Firebase)
+  currentUser = { displayName };
+  isGuest = true;
+  localStorage.setItem('ttv_guest', '1');
+  youBadge.classList.remove('hidden');
+
+  const n = inpNombre.value || localStorage.getItem('ttv_name') || displayName || '—';
+  const a = inpEdad.value    || localStorage.getItem('ttv_age')  || '—';
+  youBadge.textContent = `Tú: ${n} (${a}) · ${chosenGender||'—'}`;
+
+  show('chat');
+  initLayoutForDevice();
+
+  // Restaurar zoom local guardado (PC)
+  zoomState.local = getSavedLocalZoom();
+  applyZoom('local');
+
+  // Activar efectos de sala en móvil
+  mobilePanEnabled = true;
+  startIdlePanIfMobile();
+
+  // Encender cam/mic
+  ensureMedia(true).catch(()=>{});
+  setIdleUI();
+  updateGhostHandVisibility();
+}
 
     /* ===== Estado WebRTC/WS ===== */
     let ws=null, wsOpen=false, myId=null, roomId=null, role=null;
@@ -1050,7 +1084,7 @@ applyZoom('remote');
     }
 
     async function joinQueue(){
-      if(!currentUser){ alert('Inicia sesión con Google'); return; }
+       if(!currentUser && !isGuest){ alert('Inicia sesión con Google o entra como invitado'); return; }
       if(isQueuing) return;
       isQueuing = true; autoCycle = true; userHardStop = false;
       overlayShow(true);
@@ -1186,9 +1220,35 @@ applyZoom('remote');
 
     // MÓVIL: dos botones fijos (UI general)
     btnBuscarM?.addEventListener('click', ()=>{ if(inCall){ nextMatch(); } else if(isQueuing){ stopAll(); } else { joinQueue(); } });
-    btnSalirM ?.addEventListener('click', ()=>{ stopAll(); auth.signOut(); });
-    btnSalirChat?.addEventListener('click', ()=>{ stopAll(); auth.signOut(); });
+   // === Botones de SALIR (móvil y PC) ===
 
+btnSalirChat?.addEventListener('click', ()=>{
+  // Detén todo y limpia emparejamientos
+  stopAll();
+  // cierra WS y libera cámara/mic
+  cleanupPeer({ keepLocal:false, closeWsToo:true });
+
+  // Si fue sesión de invitado, limpia la marca
+  localStorage.removeItem('ttv_guest');
+  isGuest = false;
+  currentUser = null;
+
+  // Si había login Google, cierra sesión (si no, no hace nada)
+  if (auth.currentUser) auth.signOut();
+
+  // Volver a la landing y resetear UI móvil
+  show('landing');
+  mobilePanEnabled = false;
+  stopIdlePan();
+  setGhostVisible(false);
+
+  // Muestra idles (para que se vea la portada “normal”)
+  showIdleRemote(true);
+  showIdleLocal(true);
+
+  // Restablece estados de botones
+  setIdleUI();
+});
     // MÓVIL: engranaje ajustes (mute)
     gearBtn?.addEventListener('click', ()=>{ gearSheet.classList.toggle('show'); });
     swMute?.addEventListener('change', (e)=>{ micMuted = !!e.target.checked; applyMuteAndCam(); });
@@ -1398,7 +1458,12 @@ applyZoom('local');
       }
     });
     
-  
+  btnGuest?.addEventListener('click', ()=>{
+  if(!chosenGender){ alert('Elige tu género primero'); return; }
+  const name = inpNombre.value || localStorage.getItem('ttv_name') || 'Invitado';
+  localStorage.setItem('ttv_gender', chosenGender);
+  proceedToChatAfterLoginLikeFlow(name);
+});
   </script>
 </body>
 </html>
