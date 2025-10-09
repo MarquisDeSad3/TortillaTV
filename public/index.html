@@ -479,20 +479,6 @@
 .admin-badge:active{
   transform: translateY(1px);
 }
-/* === Banner FAKE SKIP (sobre tu panel local) === */
-.fake-banner{
-  position:absolute;
-  left:12px; top:12px;
-  z-index:30;
-  font-weight:800;
-  padding:.4rem .7rem;
-  border-radius:.7rem;
-  background:rgba(17,24,39,.85);
-  color:#fff;
-  border:2px solid rgba(255,255,255,.25);
-  box-shadow:0 8px 18px rgba(0,0,0,.25);
-  pointer-events:none;
-}
   </style>
 </head>
 <body class="font-sans ar-1-1">
@@ -623,7 +609,6 @@
 
             <div class="tile local" id="localTile">
               <video id="localVideo" autoplay playsinline muted class="mirror"></video>
-              <div id="fakeBannerD" class="fake-banner hide">Buscando…</div>
               <!-- CONTROLES DE ZOOM (PC) LOCAL -->
               <div class="zoom-controls sm:flex hidden" aria-label="Zoom local">
                 <button id="resetLocal" class="zoom-btn" title="Reset">⟲</button>
@@ -662,7 +647,6 @@
             <div class="pane" id="pane-local">
               <div id="idle-local" class="idle static-noise"><div>Preparando cámara…</div></div>
               <video id="localVideoM" autoplay playsinline muted class="mirror"></video>
-              <div id="fakeBannerM" class="fake-banner hide">Buscando…</div>
             </div>
           </div>
         </div>
@@ -927,8 +911,6 @@ function proceedToChatAfterLoginLikeFlow(displayName='Invitado'){
     let isQueuing=false, inCall=false, autoCycle=false, userHardStop=false;
     let layoutMode='split'; // 'split' | 'mobile-fixed'
     let micMuted=false, camOff=false;
-    // === Fake Skip (estado local)
-let fakeSkipOn = false;
     let currentFacing = 'user'; // móvil
     const iceServers = [
   { urls: 'stun:stun.l.google.com:19302' },
@@ -1109,20 +1091,6 @@ function saveLocalZoom(z){
           if(data.type==='answer'){ await pc.setRemoteDescription(new RTCSessionDescription(data.sdp)); }
           if(data.type==='ice'){ try{ await pc.addIceCandidate(data.candidate); }catch(e){} }
           if(data.type==='peer-left'){ handleCallEnded('peer-left'); }
-          // === Recibir FAKE SKIP (se aplica en QUIEN LO RECIBE: muestra "Buscando…" en su remoto)
-if (data.type === 'fx' && data.cmd === 'fake-skip') {
-  const on = !!data.on;
-  if (on) {
-    overlayShow(true);     // cartel "Buscando…" en el remoto
-    showIdleRemote(true);  // ruido/idle detrás
-    setStatus('Buscando…');
-  } else {
-    overlayShow(false);
-    showIdleRemote(false);
-    setStatus(inCall ? 'Conectado' : 'Listo');
-  }
-}
-
         };
       });
     }
@@ -1191,8 +1159,6 @@ applyZoom('remote');
     // Auto-cycle
     function handleCallEnded(){
       cleanupPeer({ keepLocal:true, closeWsToo:false });
-      fakeSkipOn = false;
-showFakeLocal(false);
       if(autoCycle && !userHardStop){
         setStatus('Buscando siguiente…'); overlayShow(true); setSearchingUI();
         setTimeout(()=>{ findNext(); }, 400);
@@ -1252,9 +1218,6 @@ showFakeLocal(false);
       userHardStop = true; autoCycle = false; isQueuing = false;
       try{ send({type:'leave'}); }catch{}
       cleanupPeer({ keepLocal:true, closeWsToo:false });
-      fakeSkipOn = false;
-showFakeLocal(false);
-
       overlayShow(false);
       setStatus('Detenido'); setIdleUI();
       updateGhostHandVisibility();
@@ -1295,27 +1258,6 @@ showFakeLocal(false);
     btnStart ?.addEventListener('click', joinQueue);
     btnNext  ?.addEventListener('click', nextMatch);
     btnStop  ?.addEventListener('click', stopAll);
-    // === Toggle FAKE SKIP con Enter (solo admin, solo en llamada)
-window.addEventListener('keydown', (e) => {
-  if (e.key !== 'Enter') return;
-  if (!IS_ADMIN || !inCall) return;
-
-  // Evita si está escribiendo en inputs/textareas
-  const tag = (document.activeElement?.tagName || '').toLowerCase();
-  if (tag === 'input' || tag === 'textarea' || document.activeElement?.isContentEditable) return;
-
-  // Alterna
-  fakeSkipOn = !fakeSkipOn;
-
-  // LOCAL (TU pantalla): solo tu panel local muestra indicador; el remoto se queda normal
-  showFakeLocal(fakeSkipOn);
-
-  // Enviar a la PAREJA: ellos verán overlay/idle en su “remoto”
-  try {
-    send({ type: 'fx', cmd: 'fake-skip', on: fakeSkipOn });
-  } catch {}
-});
-
 
     // Botones nuevos: mute/cam (PC)
     btnMute?.addEventListener('click', ()=>{
@@ -1499,18 +1441,6 @@ btnSalirChat?.addEventListener('click', ()=>{
 }
     }
     function showIdleLocal(show){ if(idleLocal) idleLocal.classList.toggle('hide', !show); }
-    // Muestra/oculta indicador de fake skip SOLO en TU panel local
-function showFakeLocal(on){
-  // Idle en tu panel local (móvil ya tiene #idle-local; en PC no hay idle-local, pero no pasa nada)
-  showIdleLocal(!!on);
-
-  // Banner según layout
-  const d = document.getElementById('fakeBannerD'); // PC
-  const m = document.getElementById('fakeBannerM'); // móvil
-  if (d) d.classList.toggle('hide', !on);
-  if (m) m.classList.toggle('hide', !on);
-}
-
 
     // estado inicial (landing): idle visible pero SIN paneo (mobilePanEnabled=false)
     showIdleRemote(true); 
