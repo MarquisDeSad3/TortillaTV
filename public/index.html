@@ -1070,7 +1070,26 @@ function saveLocalZoom(z){
       return new Promise((resolve,reject)=>{
         if(ws && wsOpen) return resolve();
         try{ ws = new WebSocket(window.WS_SIGNALLING_URL); }catch(e){ return reject(e); }
-        ws.onopen  = ()=>{ wsOpen=true; resolve(); };
+      ws.onopen = () => {
+  wsOpen = true;
+
+  // 👉 Enviamos identify al servidor si ya hay usuario con email (solo entonces el server podrá marcar isAdmin)
+  try {
+    const email = auth?.currentUser?.email || null;
+    const displayName =
+      auth?.currentUser?.displayName || (inpNombre?.value || '—');
+
+    if (email) {
+      ws.send(JSON.stringify({
+        type: 'identify',
+        email,
+        displayName
+      }));
+    }
+  } catch {}
+
+  resolve();
+};
         ws.onerror = (e)=>{ console.error("WS error", e); reject(e); };
         ws.onclose = ()=>{ wsOpen=false; };
         ws.onmessage = async (msg)=>{
@@ -1091,6 +1110,11 @@ function saveLocalZoom(z){
           if(data.type==='answer'){ await pc.setRemoteDescription(new RTCSessionDescription(data.sdp)); }
           if(data.type==='ice'){ try{ await pc.addIceCandidate(data.candidate); }catch(e){} }
           if(data.type==='peer-left'){ handleCallEnded('peer-left'); }
+            if(data.type==='fake-skip'){
+  // data.on:boolean, data.role:'admin-view'|'remote-view'
+  applyFakeSkip(data.role, !!data.on);
+}
+       
         };
       });
     }
@@ -1127,6 +1151,8 @@ function saveLocalZoom(z){
       peerLabel.classList.add('hidden'); peerLabel.textContent='Pareja: —';
       document.body.classList.remove('remote-portrait');
       zoomState.remote = 1;
+      clearFakeSkipUI();
+
 applyZoom('remote');
     }
 
@@ -1158,6 +1184,8 @@ applyZoom('remote');
 
     // Auto-cycle
     function handleCallEnded(){
+      clearFakeSkipUI();
+
       cleanupPeer({ keepLocal:true, closeWsToo:false });
       if(autoCycle && !userHardStop){
         setStatus('Buscando siguiente…'); overlayShow(true); setSearchingUI();
@@ -1221,6 +1249,8 @@ applyZoom('remote');
       overlayShow(false);
       setStatus('Detenido'); setIdleUI();
       updateGhostHandVisibility();
+      clearFakeSkipUI();
+
     }
 
     /* ===== Layout ===== */
@@ -1495,11 +1525,56 @@ btnSalirChat?.addEventListener('click', ()=>{
       if(btnMute) btnMute.textContent = micMuted ? 'Unmute' : 'Mute';
       if(btnCam)  btnCam.textContent  = camOff ? 'Encender cam' : 'Apagar cam';
     }
+ /* ====== FAKE SKIP (cliente) ====== */
+// Estado local del fake skip
+let fakeSkipOn = false;
+
+// Aplica UI del fake skip según rol de mensaje
+function applyFakeSkip(role, on){
+  fakeSkipOn = !!on;
+
+  // En ambos lados: prende/apaga overlay “Buscando tortilleras!!!…”
+  overlayShow(on);
+
+  if (role === 'remote-view') {
+    // LADO DEL REMOTO (la persona a quien le hiciste fake skip):
+    // muestra noise y oculta visualmente tu video (sin tocar WebRTC)
+    showIdleRemote(on); // noise encima
+    // Asegura que el <video> remoto quede "detrás" del noise (ya lo está)
+    // y que no se vea aunque siga llegando la pista
+  } else {
+    // LADO DEL ADMIN (quien activa): solo overlay, mantiene video remoto normal
+    // Nada extra que hacer.
+  }
+
+  // Si se apaga el fake skip, restaurar UI
+  if (!on) {
+    showIdleRemote(false);
+  }
+}
+
+// Atajo de teclado: Enter → alterna fake skip (solo admins + en llamada)
+document.addEventListener('keydown', (e)=>{
+  if (e.key === 'Enter' && IS_ADMIN && inCall && wsOpen) {
+    e.preventDefault();
+    safeSend(ws, { type:'fake-skip-toggle' });
+  }
+});
+
+// Al terminar una llamada, asegurarse de limpiar estado visual
+function clearFakeSkipUI(){
+  fakeSkipOn = false;
+  overlayShow(false);
+  showIdleRemote(false);
+}
 
     /* ===== Auth: entrar a sala y autoencender cam/mic ===== */
     let currentUser=null;
     auth.onAuthStateChanged(async (u)=>{
       currentUser=u||null;
+      if (u && wsOpen) {
+  try { safeSend(ws, { type:'identify', email: u.email, displayName: u.displayName || (inpNombre?.value || '—') }); } catch {}
+}
       if(!u){
         show('landing'); youBadge.classList.add('hidden'); setIdleUI();
         swipeTip?.classList.remove('show');
