@@ -401,9 +401,97 @@
     100% { transform: translateY(-50%) translateX(0) scale(.96); opacity:0; }
   }
 }
+/* ===== Admin Badge ===== */
+.admin-badge{
+  position:fixed; top:12px; right:12px; z-index:1000;
+  border-radius:999px; padding:.45rem .8rem;
+  font-weight:800; font-size:.85rem; line-height:1;
+  border:2px solid rgba(0,0,0,.18);
+  box-shadow:0 10px 26px rgba(0,0,0,.16), inset 0 0 0 9999px rgba(255,255,255,.08);
+  display:flex; align-items:center; gap:.45rem;
+  -webkit-tap-highlight-color: transparent;
+  user-select:none;
+}
+.admin-badge .badge-inner{ position:relative; display:flex; align-items:center; gap:.45rem; }
+.admin-badge .badge-icon{ font-size:1rem; transform:translateY(1px); }
+.admin-badge .badge-text{ letter-spacing:.4px; }
+
+/* Estado: NO admin (gris con candado) */
+.admin-badge.admin-off{
+  background:linear-gradient(180deg,#f3f4f6,#e5e7eb);
+  color:#111827;
+  cursor:pointer;
+}
+.admin-badge.admin-off .badge-icon{ filter:grayscale(1) opacity(.9); }
+
+/* Estado: admin (dorado-morado con brillo + partículas) */
+.admin-badge.admin-on{
+  background: linear-gradient(135deg,#fbbf24 0%, #f59e0b 22%, #a855f7 70%, #7c3aed 100%);
+  color:#fff;
+  border-color: rgba(255,255,255,.28);
+  box-shadow:
+    0 12px 30px rgba(124,58,237,.35),
+    0 0 0 1px rgba(255,255,255,.12) inset,
+    0 0 22px rgba(168,85,247,.55);
+  animation: badgePulse 2.2s ease-in-out infinite;
+}
+@keyframes badgePulse{
+  0%,100%{ transform: translateZ(0) scale(1); }
+  50%    { transform: translateZ(0) scale(1.03); }
+}
+
+/* Efecto “shine” que cruza */
+.admin-badge.admin-on::after{
+  content:""; position:absolute; inset:-2px;
+  background:linear-gradient(120deg, transparent 40%, rgba(255,255,255,.45) 50%, transparent 60%);
+  filter: blur(1px);
+  transform: translateX(-120%);
+  animation: shine 3.6s ease-in-out infinite;
+  border-radius:inherit; pointer-events:none;
+}
+@keyframes shine{
+  0%{ transform: translateX(-120%); opacity:.0; }
+  45%{ opacity:.0; }
+  55%{ opacity:.8; }
+  100%{ transform: translateX(120%); opacity:0; }
+}
+
+/* Partículas sutiles (sólo admin) */
+.sparkles{
+  position:absolute; inset:-6px; pointer-events:none;
+  background:
+    radial-gradient(circle at 12% 30%, rgba(255,255,255,.85) 0 2px, transparent 3px) no-repeat,
+    radial-gradient(circle at 78% 40%, rgba(255,255,255,.75) 0 1.8px, transparent 2.8px) no-repeat,
+    radial-gradient(circle at 52% 18%, rgba(255,255,255,.9) 0 1.6px, transparent 2.6px) no-repeat,
+    radial-gradient(circle at 66% 74%, rgba(255,255,255,.7) 0 2px, transparent 3px) no-repeat,
+    radial-gradient(circle at 28% 68%, rgba(255,255,255,.7) 0 1.6px, transparent 2.6px) no-repeat;
+  animation: twinkle 2.2s linear infinite;
+  opacity:0; /* apagado por defecto, se enciende en .admin-on */
+}
+.admin-badge.admin-on .sparkles{ opacity:1; }
+@keyframes twinkle{
+  0%   { transform: translateY(0);   filter: drop-shadow(0 0 6px rgba(255,255,255,.5)); }
+  50%  { transform: translateY(-1px); filter: drop-shadow(0 0 10px rgba(255,255,255,.9)); }
+  100% { transform: translateY(0);    filter: drop-shadow(0 0 6px rgba(255,255,255,.5)); }
+  
+}
+/* efecto visual de click del badge */
+.admin-badge:active{
+  transform: translateY(1px);
+}
   </style>
 </head>
 <body class="font-sans ar-1-1">
+  <!-- BADGE ADMIN (siempre visible) -->
+<button id="adminBadge" type="button" aria-label="Administrador"
+  class="admin-badge admin-off">
+  <span class="badge-inner">
+    <span class="badge-icon" aria-hidden="true">🔒</span>
+    <span class="badge-text">Admin</span>
+    <!-- partículas sólo para admin -->
+    <span class="sparkles" aria-hidden="true"></span>
+  </span>
+</button>
   <div class="paper-bg">
     <div class="paper-holes"><div class="paper-hole"></div><div class="paper-hole"></div><div class="paper-hole"></div></div>
     
@@ -1441,6 +1529,71 @@ applyZoom('local');
       setIdleUI();
       updateGhostHandVisibility(); // 👈 evaluar mano al entrar a sala
     });
+    // ====== ADMIN BADGE (cliente, súper simple) ======
+const ADMIN_EMAILS_CLIENT = new Set([
+  'fajardomiguelangel50@gmail.com',
+  'marquisdesade3141@gmail.com',
+  'christophergomez6903@gmail.com',
+]);
+
+let IS_ADMIN = false;
+const adminBadgeEl = document.getElementById('adminBadge');
+
+function applyAdminBadgeUI() {
+  if (!adminBadgeEl) return;
+  adminBadgeEl.classList.toggle('admin-on',  !!IS_ADMIN);
+  adminBadgeEl.classList.toggle('admin-off', !IS_ADMIN);
+  // icono/texto
+  const icon = adminBadgeEl.querySelector('.badge-icon');
+  const text = adminBadgeEl.querySelector('.badge-text');
+  if (IS_ADMIN) {
+    icon.textContent = '👑';
+    text.textContent = 'Admin';
+    adminBadgeEl.style.cursor = 'pointer';
+    adminBadgeEl.title = 'Panel de admin';
+  } else {
+    icon.textContent = '🔒';
+    text.textContent = 'Admin';
+    adminBadgeEl.style.cursor = 'not-allowed';
+    adminBadgeEl.title = 'No disponible';
+  }
+}
+
+// click del badge
+adminBadgeEl?.addEventListener('click', (e) => {
+  e.preventDefault();
+  // Si no es admin, muestra mensaje
+  if (!IS_ADMIN) {
+    alert('Disponible pronto');
+    return;
+  }
+
+  // Si es admin, puedes dirigir a tu panel o acción
+  // Por ejemplo:
+  // location.href = '/admin';
+  console.log('Acceso admin');
+});
+
+
+
+// Al arrancar (sin login) → gris
+applyAdminBadgeUI();
+
+// AÑADE sólo este mini-set a tu flujo de auth (en paralelo al tuyo):
+auth.onAuthStateChanged((u) => {
+  IS_ADMIN = !!(u?.email && ADMIN_EMAILS_CLIENT.has(String(u.email).toLowerCase()));
+  applyAdminBadgeUI();
+});
+
+// Si entra como invitado, asegúrate de que quede NO admin
+if (typeof proceedToChatAfterLoginLikeFlow === 'function') {
+  const __origProceed = proceedToChatAfterLoginLikeFlow;
+  window.proceedToChatAfterLoginLikeFlow = function(...args){
+    IS_ADMIN = false;
+    applyAdminBadgeUI();
+    return __origProceed.apply(this, args);
+  }
+}
 
     // Login Google (con fallback redirect para Safari)
     const btnGoogleel=qs('#btn-google');
