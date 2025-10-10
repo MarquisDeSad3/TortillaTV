@@ -569,9 +569,8 @@
 
             <div class="ml-auto flex items-center gap-2">
               <button id="btn-ar" class="btn">AR: 1:1</button>
-              <button id="btn-cupido" class="btn" disabled>Modo Cupido</button>
-</div>
-            
+            </div>
+
             <div class="flex items-center gap-2 text-sm w-full">
               <span id="status" class="text-neutral-700">Listo</span>
               <span id="peerLabel" class="text-neutral-700 hidden">Pareja: —</span>
@@ -610,9 +609,7 @@
 
             <div class="tile local" id="localTile">
               <video id="localVideo" autoplay playsinline muted class="mirror"></video>
- <!-- Modo Cupido: remoto DERECHO (se muestra cuando Cupido está ON) -->
-  <video id="remoteVideoR" autoplay playsinline style="display:none;"></video>
-              <!-- CONTROL DE ZOOM (PC) LOCAL -->
+              <!-- CONTROLES DE ZOOM (PC) LOCAL -->
               <div class="zoom-controls sm:flex hidden" aria-label="Zoom local">
                 <button id="resetLocal" class="zoom-btn" title="Reset">⟲</button>
                 <button id="zoomOutLocal" class="zoom-btn" title="Alejar">−</button>
@@ -847,15 +844,6 @@
     /* ===== Refs ===== */
     const btnStart=qs('#btn-start'), btnNext=qs('#btn-next'), btnStop=qs('#btn-stop'), btnSalirChat=qs('#btn-salir-chat');
     const btnMute=qs('#btn-mute'), btnCam=qs('#btn-cam');
-    const btnCupido = qs('#btn-cupido');
-btnCupido?.addEventListener('click', ()=>{
-  if (!inCall || !IS_ADMIN) { alert('Necesitas estar en una llamada y ser admin'); return; }
-  setCupidoUI(true);
-  // Promueve la 1:1 a “modo cupido” y pide llenar la derecha
-  send({ type:'cupido-toggle', on:true });
-  send({ type:'cupido-next', side:'R' });
-});
-
 
     const localVideo=qs('#localVideo'), remoteVideo=qs('#remoteVideo'), pip=qs('#pip'), pipVideo=qs('#pipVideo');
     const localVideoM=qs('#localVideoM'), remoteVideoM=qs('#remoteVideoM');
@@ -919,45 +907,6 @@ function proceedToChatAfterLoginLikeFlow(displayName='Invitado'){
 
     /* ===== Estado WebRTC/WS ===== */
     let ws=null, wsOpen=false, myId=null, roomId=null, role=null;
-    /* ======= CUPIDO (cliente) ======= */
-let CUPIDO_ON = false;
-let currentPeerId = null;   // peer del lado IZQUIERDO (1:1 actual)
-let pcR = null;             // RTCPeerConnection del lado DERECHO
-let remoteStreamRight = null;
-let peers = new Map();      // peerId -> { side:'L'|'R', pc?, stream? }
-
-function setCupidoUI(on){
-  CUPIDO_ON = !!on;
-  const localV = document.getElementById('localVideo');
-  const rightV = document.getElementById('remoteVideoR');
-
-  if (on){
-    if (pip) pip.style.display = '';   // tu cámara al PiP
-    if (localV) localV.style.display = 'none';
-    if (rightV) rightV.style.display = '';
-  }else{
-    if (pip) pip.style.display = 'none';
-    if (localV) localV.style.display = '';
-    if (rightV){
-      rightV.srcObject = null;
-      rightV.style.display = 'none';
-    }
-  }
-}
-
-function attachRemoteSide(side, stream){
-  if (side === 'L'){
-    remoteStreamRef = stream;
-    attachRemote(); // reutiliza el flujo general
-  } else {
-    remoteStreamRight = stream;
-    const v = document.getElementById('remoteVideoR');
-    if (v){
-      v.srcObject = remoteStreamRight;
-      safePlay(v);
-    }
-  }
-}
     let pc=null, localStream=null, remoteStreamRef=null;
     let isQueuing=false, inCall=false, autoCycle=false, userHardStop=false;
     let layoutMode='split'; // 'split' | 'mobile-fixed'
@@ -1067,10 +1016,6 @@ function saveLocalZoom(z){
         attachLocal(localStream, autoPlay);
         applyMuteAndCam();
         return localStream;
-        // Habilita Cupido (PC) cuando ya tenemos cámara/mic
-const btnCupido = document.getElementById('btn-cupido');
-if (btnCupido && !isMobile()) btnCupido.disabled = false;
-
       }catch(e){
         alert("Permite cámara y micrófono para continuar.\n" + (e?.message||e));
         throw e;
@@ -1115,8 +1060,6 @@ if (btnCupido && !isMobile()) btnCupido.disabled = false;
       pc.onconnectionstatechange = ()=> {
         const st = pc.connectionState;
         if(st==='connected'){ inCall = true; setStatus('Conectado'); overlayShow(false); enableControls(); }
-        const btnCupidoEl = document.getElementById('btn-cupido');
-    if (btnCupidoEl) btnCupidoEl.disabled = !(IS_ADMIN && !isMobile());
         if(st==='disconnected' || st==='failed'){ handleCallEnded('conn:'+st); }
         if(st==='closed'){ setStatus('Cerrado'); }
       };
@@ -1153,9 +1096,6 @@ if (btnCupido && !isMobile()) btnCupido.disabled = false;
           const data = JSON.parse(msg.data);
           if(data.type==='welcome'){ myId=data.id; }
           if(data.type==='matched'){
-            currentPeerId = data?.peer?.id || null;
-peers.set(currentPeerId, { side:'L' });
-
             roomId=data.roomId; role=data.role;
             setStatus('Pareja encontrada · Conectando…');
             overlayShow(true);
@@ -1179,57 +1119,6 @@ peers.set(currentPeerId, { side:'L' });
   // data.on:boolean, data.role:'admin-view'|'remote-view'
   applyFakeSkip(data.role, !!data.on);
 }
-  // === Cupido: nuevo match en el lado derecho
-if (data.type === 'cupido-matched') {
-  // data: { roomIdR, role, peer:{id,name}, side:'R' }
-  setStatus('Conectando derecha…');
-  setCupidoUI(true);
-
-  await ensureMedia(); // por si acaso
-
-  pcR = new RTCPeerConnection({ iceServers });
-  localStream.getTracks().forEach(t=> pcR.addTrack(t, localStream));
-  tuneSender();
-
-  pcR.onicecandidate = (e)=>{ if(e.candidate) send({ type:'iceR', candidate:e.candidate }); };
-  pcR.ontrack = (e)=>{ attachRemoteSide('R', e.streams[0]); };
-
-  peers.set(data.peer?.id, { side:'R', pc: pcR });
-
-  if (data.role === 'offer'){
-    const offer = await pcR.createOffer(); await pcR.setLocalDescription(offer);
-    send({ type:'offerR', sdp: offer });
-  }
-  overlayShow(true);
-}
-
-// Señalización espejo para R
-if (data.type === 'offerR') {
-  if (!pcR) {
-    pcR = new RTCPeerConnection({ iceServers });
-    localStream.getTracks().forEach(t=> pcR.addTrack(t, localStream));
-    pcR.onicecandidate = (e)=>{ if(e.candidate) send({ type:'iceR', candidate:e.candidate }); };
-    pcR.ontrack = (e)=>{ attachRemoteSide('R', e.streams[0]); };
-  }
-  await pcR.setRemoteDescription(new RTCSessionDescription(data.sdp));
-  const answer = await pcR.createAnswer(); await pcR.setLocalDescription(answer);
-  send({ type:'answerR', sdp: answer });
-}
-if (data.type === 'answerR') {
-  if (pcR) await pcR.setRemoteDescription(new RTCSessionDescription(data.sdp));
-}
-if (data.type === 'iceR') {
-  try { if (pcR) await pcR.addIceCandidate(data.candidate); } catch {}
-}
-
-// El peer DERECHO se fue
-if (data.type === 'cupido-right-left'){
-  try { pcR?.close(); } catch {}
-  pcR = null;
-  attachRemoteSide('R', null);
-  setStatus('Derecha libre');
-}
-
        
         };
       });
@@ -1270,18 +1159,6 @@ if (data.type === 'cupido-right-left'){
       clearFakeSkipUI();
 
 applyZoom('remote');
-// Cupido: limpia el lado R también
-try { pcR?.close(); } catch {}
-pcR = null;
-remoteStreamRight = null;
-const vR = document.getElementById('remoteVideoR');
-if (vR) { vR.srcObject = null; vR.style.display = CUPIDO_ON ? '' : 'none'; }
-setCupidoUI(false);
-peers.clear();
-currentPeerId = null;
-const btnCupidoEl = document.getElementById('btn-cupido');
-if (btnCupidoEl) btnCupidoEl.disabled = true;
-
     }
 
     /* ===== Control de botones según estado ===== */
@@ -1323,9 +1200,6 @@ if (btnCupidoEl) btnCupidoEl.disabled = true;
       }
       // Volvemos al idle → si estamos en SALA (móvil), reactivar paneo
       showIdleRemote(true);
-      const btnCupidoEl = document.getElementById('btn-cupido');
-if (btnCupidoEl) btnCupidoEl.disabled = true;
-
       // 👇 y evaluar la mano fantasma
       updateGhostHandVisibility();
     }

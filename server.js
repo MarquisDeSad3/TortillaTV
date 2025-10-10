@@ -77,12 +77,6 @@ const clients = new Map();
  * rooms: roomId -> { aId, bId, timers: { offer?:Timeout, answer?:Timeout } }
  */
 const rooms = new Map();
-// AdminId -> { leftRoomId, leftPeerId, rightRoomId?:string, rightPeerId?:string }
-const cupidoMeta = new Map();
-
-function otherOfRoom(room, meId){
-  return room.aId === meId ? room.bId : room.aId;
-}
 
 /**
  * Colas de emparejamiento por “bucket”.
@@ -312,46 +306,7 @@ try {
 
   scheduleMatch();
 }
-function teardownRightRoom(roomIdR, reason = 'teardownR'){
-  const r = rooms.get(roomIdR);
-  if (!r) return;
 
-  const { aId, bId, timers } = r;
-  if (timers?.offer)  clearTimeout(timers.offer);
-  if (timers?.answer) clearTimeout(timers.answer);
-
-  rooms.delete(roomIdR);
-
-  const A = getClient(aId);
-  const B = getClient(bId);
-
-  // Determinar quién es el admin por flags del cliente
-  const adminIsA = !!A?.isAdmin;
-  const adminId  = adminIsA ? aId : (B?.isAdmin ? bId : null);
-  const userId   = adminIsA ? bId : aId;
-
-  const adminC = adminId ? getClient(adminId) : null;
-  const userC  = userId ? getClient(userId) : null;
-
-  // Limpia puntero roomIdR del admin
-  if (adminC && adminC.roomIdR === roomIdR) adminC.roomIdR = null;
-
-  // Notifica al admin que la derecha se fue/liberó
-  if (adminC) safeSend(adminC.ws, { type:'cupido-right-left', reason });
-
-  // Al usuario derecho: peer se fue y re-encólalo si procede
-  if (userC) {
-    safeSend(userC.ws, { type:'peer-left', reason });
-    setRoom(userId, null);
-    if (userC.state !== 'idle') {
-      userC.state = 'waiting';
-      userC.joinTs = Date.now();
-      enqueue(userId);
-    }
-  }
-
-  scheduleMatch();
-}
 // ===== Señalización directa =====
 function forwardSignal(meId, payload) {
   const me = getClient(meId);
@@ -397,7 +352,6 @@ wss.on("connection", (ws) => {
     isAlive: true,
     isAdmin: false, // <<< nuevo
     isPro: false,   // <<< nuevo
-    roomIdR: null, // <<< sala derecha (Cupido)
   });
 
   const me = getClient(id);
@@ -434,11 +388,6 @@ wss.on("connection", (ws) => {
         const now = Date.now();
         if (now - me.lastFindTs < REQUEUE_COOLDOWN_MS) return; // anti-spam
         me.lastFindTs = now;
-            // Si es admin y ya tiene sala IZQ activa, permitir; si además tiene DERECHA activa, no lo metas en cola
-if (me.isAdmin && me.roomId && me.roomIdR) {
-  // ya está en doble sala, ignora find
-  break;
-}
 
         me.gender = msg.gender || "Hombre";
         me.name   = msg.displayName || "—";
@@ -497,11 +446,6 @@ if (me.isAdmin && me.roomId && me.roomIdR) {
           }
         }
         scheduleMatch();
-        // Si este cliente además tiene sala derecha, ciérrala también
-if (me.roomIdR) {
-  teardownRightRoom(me.roomIdR, "peer-leave");
-}
-
         break;
       }
 
@@ -523,133 +467,7 @@ if (me.roomIdR) {
   broadcastFakeSkip(me.roomId, nextOn, id);
   break;
 }
-      case 'cupido-toggle': {
-  const me = getClient(id);
-  if (!me?.isAdmin) break;
-  if (!me?.roomId) break; // debe estar ya en 1:1
 
-  const r = rooms.get(me.roomId);
-  if (!r) break;
-
-  const leftPeerId = otherOf(r, id);
-  cupidoMeta.set(id, {
-    leftRoomId: me.roomId,
-    leftPeerId,
-    rightRoomId: null,
-    rightPeerId: null
-  });
-
-  // confirma flags (opcional)
-  safeSend(me.ws, { type:'role', isAdmin: me.isAdmin, isPro: me.isPro });
-  break;
-}
-case 'cupido-next': {
-  const me = getClient(id);
-  if (!me?.isAdmin) break;
-
-  const meta = cupidoMeta.get(id);
-  if (!meta?.leftRoomId) break;     // requiere toggle previo
-  if (me.roomIdR) break;            // ya hay una derecha activa
-
-  // Saca un candidato de la cola principal que esté "waiting", no sea el admin y no sea su peer izquierdo actual
-  let candId = null;
-  for (let i = 0; i < queues.any.length; i++) {
-    const tryId = queues.any[i];
-    const C = getClient(tryId);
-    if (!C || C.state !== 'waiting') continue;
-    if (tryId === id) continue;
-    if (tryId === meta.leftPeerId) continue;
-
-    candId = tryId;
-    queues.any.splice(i,1);
-    break;
-  }
-  if (!candId) {
-    // no hay candidatos ahora mismo
-    break;
-  }
-
-  const C = getClient(candId);
-  // C y admin crean sala nueva (derecha)
-  const roomIdR = uuid();
-  rooms.set(roomIdR, { aId: id, bId: candId, timers: {} });
-
-  // No cambiamos el estado del admin (sigue en-room por su sala izquierda)
-  me.roomIdR = roomIdR;
-
-  // El candidato entra "in-room" (normal)
-  C.roomId = roomIdR;
-  C.state = 'in-room';
-
-  // Roles: el que más esperó ofrece
-  const aWait = 0; // no usamos joinTs del admin porque no está en cola para R
-  const bWait = Date.now() - (C.joinTs || 0);
-  const adminIsOffer = aWait >= bWait;
-
-  const offerId = adminIsOffer ? id : candId;
-  const answerId = adminIsOffer ? candId : id;
-
-  // Notifica al admin con evento especial cupido-matched (lado R)
-  const OfferC = getClient(offerId);
-  const AnswerC = getClient(answerId);
-  safeSend(me.ws, {
-    type: 'cupido-matched',
-    roomIdR,
-    role: (offerId === id) ? 'offer' : 'answer',
-    side: 'R',
-    peer: { id: candId, name: C.name || '—', isAdmin: !!C.isAdmin, isPro: !!C.isPro }
-  });
-
-  // Notifica al candidato como un "matched" normal (para que su cliente no tenga que saber de R)
-  safeSend(C.ws, {
-    type: 'matched',
-    roomId: roomIdR,
-    role: (offerId === candId) ? 'offer' : 'answer',
-    peer: { id, name: me.name || '—', isAdmin: !!me.isAdmin, isPro: !!me.isPro }
-  });
-
-  // Timers anti-zombie para la sala derecha
-  const r = rooms.get(roomIdR);
-  if (r) {
-    r.timers.offer = setTimeout(()=> {
-      const still = rooms.get(roomIdR); if (!still) return;
-      teardownRightRoom(roomIdR, 'offer-timeout');
-    }, MATCH_OFFER_TIMEOUT_MS);
-
-    r.timers.answer = setTimeout(()=> {
-      const still = rooms.get(roomIdR); if (!still) return;
-      teardownRightRoom(roomIdR, 'answer-timeout');
-    }, MATCH_OFFER_TIMEOUT_MS + MATCH_ANSWER_TIMEOUT_MS);
-  }
-
-  break;
-}
-case 'offerR':
-case 'answerR':
-case 'iceR': {
-  const me = getClient(id);
-  if (!me?.roomIdR) break;           // debe existir sala derecha
-  const room = rooms.get(me.roomIdR);
-  if (!room) break;
-
-  // levantar timers
-  if (msg.type === 'offerR' && room.timers?.offer){ clearTimeout(room.timers.offer); room.timers.offer = null; }
-  if (msg.type === 'answerR' && room.timers?.answer){ clearTimeout(room.timers.answer); room.timers.answer = null; }
-
-  const otherId = otherOfRoom(room, id);
-  const other = getClient(otherId);
-  if (!other) break;
-
-  const out = {};
-  if (msg.type === 'offerR')  out.type = 'offerR';
-  if (msg.type === 'answerR') out.type = 'answerR';
-  if (msg.type === 'iceR')    out.type = 'iceR';
-  if (msg.sdp) out.sdp = msg.sdp;
-  if (msg.candidate) out.candidate = msg.candidate;
-
-  safeSend(other.ws, out);
-  break;
-}
 
       default:
         break;
@@ -680,10 +498,7 @@ case 'iceR': {
         rooms.delete(me.roomId);
       }
     }
-      // Si tenía sala derecha, ciérrala
-if (me.roomIdR) {
-  teardownRightRoom(me.roomIdR, "disconnect");
-}
+
     clients.delete(id);
     console.log("[WS] closed:", id);
     scheduleMatch();
@@ -697,10 +512,7 @@ const interval = setInterval(() => {
       try { c.ws.terminate(); } catch {}
       clients.delete(id);
       if (c.roomId) teardownRoom(c.roomId, "pong-timeout");
-      if (c.roomIdR) teardownRightRoom(c.roomIdR, "pong-timeout");
       console.log("[WS] terminated dead client:", id);
-      
-
       continue;
     }
     c.isAlive = false;
