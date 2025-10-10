@@ -1533,30 +1533,22 @@ btnSalirChat?.addEventListener('click', ()=>{
  /* ====== FAKE SKIP (cliente) ====== */
 // Estado local del fake skip
 let fakeSkipOn = false;
-
-// Aplica UI del fake skip según rol de mensaje
 function applyFakeSkip(role, on){
   fakeSkipOn = !!on;
 
-  // En ambos lados: prende/apaga overlay “Buscando tortilleras!!!…”
-  overlayShow(on);
-
-  if (role === 'remote-view') {
-    // LADO DEL REMOTO (la persona a quien le hiciste fake skip):
-    // muestra noise y oculta visualmente tu video (sin tocar WebRTC)
-    showIdleRemote(on); // noise encima
-    // Asegura que el <video> remoto quede "detrás" del noise (ya lo está)
-    // y que no se vea aunque siga llegando la pista
-  } else {
-    // LADO DEL ADMIN (quien activa): solo overlay, mantiene video remoto normal
-    // Nada extra que hacer.
+  if (role === 'admin-view') {
+    
+    overlayShow(on);          
+    showIdleRemote(false);   
+  } else { 
+   
+    showIdleRemote(on);
+    overlayShow(false);
   }
 
-  // Si se apaga el fake skip, restaurar UI
-  if (!on) {
-    showIdleRemote(false);
-  }
+  if (!on) overlayShow(false);
 }
+
 
 // Atajo de teclado: Enter → alterna fake skip (solo admins + en llamada)
 document.addEventListener('keydown', (e)=>{
