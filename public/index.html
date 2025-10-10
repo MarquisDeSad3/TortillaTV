@@ -1115,6 +1115,8 @@ if (btnCupido && !isMobile()) btnCupido.disabled = false;
       pc.onconnectionstatechange = ()=> {
         const st = pc.connectionState;
         if(st==='connected'){ inCall = true; setStatus('Conectado'); overlayShow(false); enableControls(); }
+        const btnCupidoEl = document.getElementById('btn-cupido');
+    if (btnCupidoEl) btnCupidoEl.disabled = !(IS_ADMIN && !isMobile());
         if(st==='disconnected' || st==='failed'){ handleCallEnded('conn:'+st); }
         if(st==='closed'){ setStatus('Cerrado'); }
       };
@@ -1277,6 +1279,9 @@ if (vR) { vR.srcObject = null; vR.style.display = CUPIDO_ON ? '' : 'none'; }
 setCupidoUI(false);
 peers.clear();
 currentPeerId = null;
+const btnCupidoEl = document.getElementById('btn-cupido');
+if (btnCupidoEl) btnCupidoEl.disabled = true;
+
     }
 
     /* ===== Control de botones según estado ===== */
@@ -1318,6 +1323,9 @@ currentPeerId = null;
       }
       // Volvemos al idle → si estamos en SALA (móvil), reactivar paneo
       showIdleRemote(true);
+      const btnCupidoEl = document.getElementById('btn-cupido');
+if (btnCupidoEl) btnCupidoEl.disabled = true;
+
       // 👇 y evaluar la mano fantasma
       updateGhostHandVisibility();
     }
