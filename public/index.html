@@ -1170,6 +1170,41 @@ function saveLocalZoom(z){
     }catch{}
   };
 }
+// Rectángulo del CONTENIDO de video dentro del <video> (compensa object-fit)
+function getVideoContentRect(videoEl){
+  const elRect = videoEl.getBoundingClientRect();
+  const vw = videoEl.videoWidth  || 0;
+  const vh = videoEl.videoHeight || 0;
+  if (!vw || !vh) return elRect;
+
+  const style = getComputedStyle(videoEl);
+  const fit = (style.objectFit || 'fill').trim(); // 'contain' | 'cover' | ...
+
+  const arVideo = vw / vh;
+  const arBox   = elRect.width / elRect.height;
+
+  let w = elRect.width, h = elRect.height;
+  let x = elRect.left,  y = elRect.top;
+
+  if (fit === 'contain' || fit === 'scale-down') {
+    if (arVideo > arBox) {           // bandas arriba/abajo
+      h = elRect.width / arVideo;
+      y = elRect.top + (elRect.height - h) / 2;
+    } else {                         // bandas izq/der
+      w = elRect.height * arVideo;
+      x = elRect.left + (elRect.width - w) / 2;
+    }
+  } else if (fit === 'cover') {      // recorte del contenido
+    if (arVideo > arBox) {           // recorte izq/der
+      w = elRect.height * arVideo;
+      x = elRect.left + (elRect.width - w) / 2;
+    } else {                         // recorte arriba/abajo
+      h = elRect.width / arVideo;
+      y = elRect.top + (elRect.height - h) / 2;
+    }
+  }
+  return { left:x, top:y, width:w, height:h };
+}
 async function startSendingGazeAuto(){
   if (sendingGaze) return;
   sendingGaze = true;
@@ -1182,9 +1217,9 @@ async function startSendingGazeAuto(){
 
     const pred = await getGazePrediction(); if (!pred) return;
 
-    const rect = vidEl.getBoundingClientRect();
-    const u = clamp01((pred.x - rect.left) / rect.width);
-    const v = clamp01((pred.y - rect.top)  / rect.height);
+   const crect = getVideoContentRect(vidEl);
+const u = clamp01((pred.x - crect.left) / crect.width);
+const v = clamp01((pred.y - crect.top)  / crect.height);
 
     try{
       gazeDC.send(JSON.stringify({ t:'guv', u:+u.toFixed(4), v:+v.toFixed(4) }));
