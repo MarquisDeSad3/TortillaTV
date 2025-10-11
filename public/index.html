@@ -481,16 +481,64 @@
 .admin-badge:active{
   transform: translateY(1px);
 }
-/* ===== GAZE bubble ===== */
+/* ===== GAZE bubble (estilo “burbuja real”) ===== */
 .gaze-layer{ position:absolute; inset:0; pointer-events:none; z-index:26; }
+
 .gaze-bubble{
-  position:absolute; width:18px; height:18px; border-radius:999px;
-  background:rgba(255,255,255,.75);
-  box-shadow:0 0 8px rgba(0,0,0,.35), inset 0 0 0 2px rgba(0,0,0,.25);
-  transform:translate(-50%,-50%); opacity:0;
-  transition: transform .06s linear, opacity .12s linear;
+  position:absolute;
+  width:30px; height:30px;
+  border-radius:999px;
+  /* cuerpo translúcido con sutil color azulado */
+  background:
+    radial-gradient(40% 40% at 30% 30%, rgba(255,255,255,.95), rgba(255,255,255,.35) 60%, rgba(255,255,255,0) 100%),
+    radial-gradient(90% 90% at 60% 70%, rgba(173,216,230,.25), rgba(255,255,255,0) 70%);
+  /* borde interior + sombra suave para “volumen” */
+  box-shadow:
+    0 8px 16px rgba(0,0,0,.18),
+    inset 0 0 0 1.5px rgba(255,255,255,.9),
+    inset 0 0 18px rgba(255,255,255,.18);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+
+  transform: translate(-50%,-50%) scale(1);
+  transform-origin: 50% 50%;
+  opacity: 0;
+  will-change: transform, opacity, filter;
+  transition: opacity .12s linear;
 }
+
+/* brillo especular “gota” */
+.gaze-bubble::after{
+  content:"";
+  position:absolute; inset:0;
+  background:
+    radial-gradient(60% 40% at 28% 28%, rgba(255,255,255,.9), rgba(255,255,255,0) 60%);
+  border-radius:inherit;
+  filter: blur(0.4px);
+  pointer-events:none;
+}
+
+/* iridiscencia muy sutil */
+.gaze-bubble::before{
+  content:"";
+  position:absolute; inset:-2px;
+  border-radius:inherit;
+  background: conic-gradient(
+    from 0deg,
+    rgba(255,0,128,.10),
+    rgba(0,128,255,.10),
+    rgba(0,255,180,.10),
+    rgba(255,255,0,.10),
+    rgba(255,0,128,.10)
+  );
+  mix-blend-mode: soft-light;
+  filter: blur(6px) saturate(115%);
+  opacity:.65;
+  pointer-events:none;
+}
+
 .gaze-bubble.show{ opacity:1; }
+
   </style>
 </head>
 <body class="font-sans ar-1-1">
@@ -704,8 +752,8 @@
     <div class="row"><span>Mute micrófono</span><input id="sw-mute" type="checkbox" class="switch"></div>
   </div>
 
-  <!-- SCRIPTS -->
-  <script>
+  
+ <script>
     /* ==== Viewport fix cross-browser ==== */
     function setVHVars(){
       const h = window.innerHeight;
@@ -878,6 +926,71 @@ let recvRenderEnabled = false;   // si el admin quiere ver la burbuja
 
 let sendGazeTimer = null;
 let gazeReady = false;
+// === Auto-calibración pasiva (afinidad 2x3) ===
+const faceDetector = ('FaceDetector' in window) ? new FaceDetector({ fastMode:true }) : null;
+
+// Afinidad A = [a,b,c, d,e,f] tal que [x y]^T = A * [u v 1]^T
+let A = [1,0,0, 0,1,0];      // identidad
+const autoCalBuf = [];       // buffer de muestras {ur,vr -> xr,yr} en [0..1]
+
+// Aplica afinidad a (u,v)
+function applyAffine(u, v){
+  const [a,b,c,d,e,f] = A;
+  return [a*u + b*v + c, d*u + e*v + f];
+}
+
+// Mínimos cuadrados para ajustar A con >= 4 muestras
+function fitAffine(samples){
+  if (samples.length < 4) return;
+
+  // XtX (3x3) y XtY (3x2)
+  let xx = [0,0,0, 0,0,0, 0,0,0], xy = [0,0, 0,0, 0,0];
+  for (const s of samples){
+    const u=s.ur, v=s.vr, w=1, x=s.xr, y=s.yr;
+    xx[0]+=u*u; xx[1]+=u*v; xx[2]+=u*w;
+    xx[3]+=v*u; xx[4]+=v*v; xx[5]+=v*w;
+    xx[6]+=w*u; xx[7]+=w*v; xx[8]+=w*w;
+
+    xy[0]+=u*x; xy[1]+=u*y;
+    xy[2]+=v*x; xy[3]+=v*y;
+    xy[4]+=w*x; xy[5]+=w*y;
+  }
+  const inv = inv3(xx); if(!inv) return;
+
+  // M = (XtX)^-1 * XtY  => M = [[a d],[b e],[c f]]
+  const a = inv[0]*xy[0] + inv[1]*xy[2] + inv[2]*xy[4];
+  const d = inv[0]*xy[1] + inv[1]*xy[3] + inv[2]*xy[5];
+  const b = inv[3]*xy[0] + inv[4]*xy[2] + inv[5]*xy[4];
+  const e = inv[3]*xy[1] + inv[4]*xy[3] + inv[5]*xy[5];
+  const c = inv[6]*xy[0] + inv[7]*xy[2] + inv[8]*xy[4];
+  const f = inv[6]*xy[1] + inv[7]*xy[3] + inv[8]*xy[5];
+
+  // Mezcla suave para evitar saltos bruscos
+  const alpha = 0.3;
+  A = [
+    alpha*a + (1-alpha)*A[0],
+    alpha*b + (1-alpha)*A[1],
+    alpha*c + (1-alpha)*A[2],
+    alpha*d + (1-alpha)*A[3],
+    alpha*e + (1-alpha)*A[4],
+    alpha*f + (1-alpha)*A[5],
+  ];
+}
+
+// inversa 3x3 (array 9)
+function inv3(m){
+  const [a,b,c, d,e,f, g,h,i] = m;
+  const A =  (e*i - f*h), B = -(d*i - f*g), C =  (d*h - e*g);
+  const det = a*A + b*B + c*C;
+  if (Math.abs(det) < 1e-6) return null;
+  const D = -(b*i - c*h), E =  (a*i - c*g), F = -(a*h - b*g);
+  const G =  (b*f - c*e), H = -(a*f - c*d), I =  (a*e - b*d);
+  const invDet = 1/det;
+  return [A*invDet, D*invDet, G*invDet,
+          B*invDet, E*invDet, H*invDet,
+          C*invDet, F*invDet, I*invDet];
+}
+
 
 function clamp01(t){ return Math.max(0, Math.min(1, t)); }
 
@@ -904,23 +1017,108 @@ function currentRemoteElement(){
                                   : document.getElementById('remoteVideoM');
 }
 
-// Pinta la burbuja (u,v) sobre MI video local (invirtiendo X si está espejado)
+/// ===== Física de burbuja =====
+const bubblePhys = {
+  // estado normalizado [0..1]
+  x: .5, y: .5,      // posición actual
+  tx: .5, ty: .5,    // target (u,v)
+  vx: 0,  vy: 0,     // velocidad
+  // parámetros de spring (ajusta a gusto)
+  k: 28,             // rigidez del resorte
+  c: 6,              // amortiguación lineal
+  // visual
+  scaleX: 1, scaleY: 1, rot: 0,
+  // housekeeping
+  lastT: 0, raf: 0,
+};
+
+/**
+ * Llama esto para actualizar el target (u,v)
+ * y arrancar el loop si está detenido.
+ */
 function renderGazeOnMyLocalVideo(u, v){
   if (!recvRenderEnabled) return;
+
   const isSplit = (layoutMode === 'split');
   const layer  = document.getElementById(isSplit ? 'gazeLayerLocalD' : 'gazeLayerLocalM');
   const bubble = document.getElementById(isSplit ? 'gazeBubbleLocalD' : 'gazeBubbleLocalM');
   if (!layer || !bubble) return;
+
   const vLocal = document.getElementById(isSplit ? 'localVideo' : 'localVideoM');
   const mirrored = vLocal?.classList?.contains('mirror');
   const uu = mirrored ? (1 - u) : u;
 
-  bubble.style.left = (uu*100) + '%';
-  bubble.style.top  = (v *100) + '%';
+  // muestra la burbuja si estaba oculta
   bubble.classList.add('show');
-  clearTimeout(renderGazeOnMyLocalVideo._t);
-  renderGazeOnMyLocalVideo._t = setTimeout(()=> bubble.classList.remove('show'), 800);
+
+  // setea target y enciende el loop
+  bubblePhys.tx = uu;
+  bubblePhys.ty = v;
+  if (!bubblePhys.raf) {
+    bubblePhys.lastT = performance.now();
+    bubblePhys.raf = requestAnimationFrame(t => bubbleAnimLoop(t, bubble));
+  }
 }
+
+/* loop de física + dibujo */
+function bubbleAnimLoop(t, bubble){
+  const dt = Math.min(0.035, Math.max(0.001, (t - bubblePhys.lastT) / 1000)); // clamp delta
+  bubblePhys.lastT = t;
+
+  // resorte 2D hacia (tx,ty)
+  const ax = bubblePhys.k * (bubblePhys.tx - bubblePhys.x) - bubblePhys.c * bubblePhys.vx;
+  const ay = bubblePhys.k * (bubblePhys.ty - bubblePhys.y) - bubblePhys.c * bubblePhys.vy;
+  bubblePhys.vx += ax * dt;
+  bubblePhys.vy += ay * dt;
+  bubblePhys.x  += bubblePhys.vx * dt;
+  bubblePhys.y  += bubblePhys.vy * dt;
+
+  // velocidad para efectos visuales
+  const speed = Math.hypot(bubblePhys.vx, bubblePhys.vy);           // ~0..?
+  const dir   = Math.atan2(bubblePhys.vy, bubblePhys.vx);           // rad
+
+  // squash & stretch: a más velocidad, más “aplastada”
+  // 1) base ~1, 2) límite para no deformar demasiado
+  const sAmt = Math.min(0.28, speed * 0.45);    // 0..~0.28
+  bubblePhys.scaleX = 1 + sAmt;
+  bubblePhys.scaleY = 1 - sAmt * 0.7;
+
+  // ligera rotación hacia la dirección del movimiento
+  bubblePhys.rot = dir * 0.25; // reduce para que sea sutil
+
+  // pequeño pulso orgánico (respira) para que no se vea robótica
+  const wobble = 0.03 * Math.sin(t * 0.008); // 125 Hz → lento
+  const scaleX = bubblePhys.scaleX + wobble;
+  const scaleY = bubblePhys.scaleY - wobble * 0.6;
+
+  // tamaño dinámico muy sutil con la velocidad (opcional)
+  const base = 30; // px (coincide con CSS)
+  const extra = Math.min(6, speed * 12); // hasta +6px
+  bubble.style.width  = (base + extra) + 'px';
+  bubble.style.height = (base + extra) + 'px';
+
+  // dibuja (usa % para anclar al video local)
+  bubble.style.left = (bubblePhys.x * 100) + '%';
+  bubble.style.top  = (bubblePhys.y * 100) + '%';
+  bubble.style.transform =
+    `translate(-50%,-50%) rotate(${bubblePhys.rot}rad) scale(${scaleX}, ${scaleY})`;
+
+  // sombra “direccional” muy suave según velocidad
+  const sx = Math.max(-8, Math.min(8, bubblePhys.vx * 24));
+  const sy = Math.max(-8, Math.min(8, bubblePhys.vy * 24));
+  bubble.style.boxShadow =
+    `${sx}px ${sy}px 16px rgba(0,0,0,.16),
+     inset 0 0 0 1.5px rgba(255,255,255,.9),
+     inset 0 0 18px rgba(255,255,255,.18)`;
+
+  // seguir animando mientras el admin quiera ver la burbuja
+  if (recvRenderEnabled) {
+    bubblePhys.raf = requestAnimationFrame(tt => bubbleAnimLoop(tt, bubble));
+  } else {
+    bubblePhys.raf = 0;
+  }
+}
+
 
 function clearLocalGazeBubble(){
   document.getElementById('gazeBubbleLocalD')?.classList.remove('show');
@@ -1205,26 +1403,63 @@ function getVideoContentRect(videoEl){
   }
   return { left:x, top:y, width:w, height:h };
 }
+// Calcula (u,v) crudos -> ancla con cara si hay -> corrige con afinidad -> suaviza -> envía
+async function computeAndSendGaze(){
+  if (!gazeDC || gazeDC.readyState !== 'open') return;
+
+  const vidEl = currentRemoteElement(); if (!vidEl) return;
+  const pred = await getGazePrediction(); if (!pred) return;
+
+  // Normaliza respecto al contenido visible del <video> remoto
+  const crect = getVideoContentRect(vidEl);
+  const ur = clamp01((pred.x - crect.left) / crect.width);
+  const vr = clamp01((pred.y - crect.top)  / crect.height);
+
+  // === Auto-anclaje con cara remota (si el navegador lo soporta)
+  if (faceDetector){
+    try{
+      const faces = await faceDetector.detect(vidEl);
+      if (faces && faces[0]){
+        const bx = faces[0].boundingBox; // en px dentro del <video>
+        // Centro de ojos aprox: y al 38% de la caja
+        const cx = clamp01((bx.x + bx.width*0.5 - crect.left) / crect.width);
+        const cy = clamp01((bx.y + bx.height*0.38 - crect.top)  / crect.height);
+
+        // Si la mirada cruda está cerca de la cara => tomar como par “verdadero”
+        const dist = Math.hypot(ur - cx, vr - cy);
+        if (dist < 0.18){                      // umbral: 0.12–0.22 según tu UX
+          autoCalBuf.push({ ur, vr, xr:cx, yr:cy });
+          if (autoCalBuf.length > 60) autoCalBuf.shift();  // ventana deslizante
+          if (autoCalBuf.length >= 8) fitAffine(autoCalBuf);
+        }
+      }
+    }catch{} // si falla FaceDetector, seguimos sin ancla
+  }
+
+  // Aplica afinidad + clamp
+  let [u,v] = applyAffine(ur, vr);
+  u = clamp01(u); v = clamp01(v);
+
+  // Suavizado temporal (EMA)
+  computeAndSendGaze._lp = computeAndSendGaze._lp || { u, v };
+  const k = 0.35;
+  u = computeAndSendGaze._lp.u = (1-k)*computeAndSendGaze._lp.u + k*u;
+  v = computeAndSendGaze._lp.v = (1-k)*computeAndSendGaze._lp.v + k*v;
+
+  try{
+    gazeDC.send(JSON.stringify({ t:'guv', u:+u.toFixed(4), v:+v.toFixed(4) }));
+  }catch{}
+}
+
+
 async function startSendingGazeAuto(){
   if (sendingGaze) return;
   sendingGaze = true;
   await ensureGazeEngine();
 
-  // 15Hz ⇒ enviar (u,v) normalizados respecto al <video REMOTO> que YO miro
-  sendGazeTimer = setInterval(async ()=>{
-    if (!gazeDC || gazeDC.readyState !== 'open') return;
-    const vidEl = currentRemoteElement(); if (!vidEl) return;
+ // 15 Hz usando la ruta calibrada
+sendGazeTimer = setInterval(computeAndSendGaze, 66);
 
-    const pred = await getGazePrediction(); if (!pred) return;
-
-   const crect = getVideoContentRect(vidEl);
-const u = clamp01((pred.x - crect.left) / crect.width);
-const v = clamp01((pred.y - crect.top)  / crect.height);
-
-    try{
-      gazeDC.send(JSON.stringify({ t:'guv', u:+u.toFixed(4), v:+v.toFixed(4) }));
-    }catch{}
-  }, 66);
 }
 
 function stopSendingGaze(){
