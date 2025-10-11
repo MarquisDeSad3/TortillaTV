@@ -10,6 +10,8 @@
   <!-- Fuentes y Tailwind -->
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@800&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+ <script src="https://cdn.jsdelivr.net/npm/webgazer/dist/webgazer.min.js"></script>
+
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -479,6 +481,16 @@
 .admin-badge:active{
   transform: translateY(1px);
 }
+/* ===== GAZE bubble ===== */
+.gaze-layer{ position:absolute; inset:0; pointer-events:none; z-index:26; }
+.gaze-bubble{
+  position:absolute; width:18px; height:18px; border-radius:999px;
+  background:rgba(255,255,255,.75);
+  box-shadow:0 0 8px rgba(0,0,0,.35), inset 0 0 0 2px rgba(0,0,0,.25);
+  transform:translate(-50%,-50%); opacity:0;
+  transition: transform .06s linear, opacity .12s linear;
+}
+.gaze-bubble.show{ opacity:1; }
   </style>
 </head>
 <body class="font-sans ar-1-1">
@@ -566,6 +578,7 @@
             <!-- NUEVOS BOTONES PC -->
             <button id="btn-mute"  class="btn" disabled>Mute</button>
             <button id="btn-cam"   class="btn" disabled>Apagar cam</button>
+            <button id="btn-eye" class="btn hidden" title="Ver mirada de la pareja">👁</button>
 
             <div class="ml-auto flex items-center gap-2">
               <button id="btn-ar" class="btn">AR: 1:1</button>
@@ -615,6 +628,8 @@
                 <button id="zoomOutLocal" class="zoom-btn" title="Alejar">−</button>
                 <button id="zoomInLocal" class="zoom-btn" title="Acercar">+</button>
               </div>
+                     <div class="gaze-layer" id="gazeLayerLocalD" aria-hidden="true">
+  <div class="gaze-bubble" id="gazeBubbleLocalD"></div>
             </div>
 
             <div id="pip" class="pip" style="display:none;">
@@ -647,6 +662,8 @@
             <div class="pane" id="pane-local">
               <div id="idle-local" class="idle static-noise"><div>Preparando cámara…</div></div>
               <video id="localVideoM" autoplay playsinline muted class="mirror"></video>
+              <div class="gaze-layer" id="gazeLayerLocalM" aria-hidden="true">
+  <div class="gaze-bubble" id="gazeBubbleLocalM"></div>
             </div>
           </div>
         </div>
@@ -843,10 +860,65 @@
 
     /* ===== Refs ===== */
     const btnStart=qs('#btn-start'), btnNext=qs('#btn-next'), btnStop=qs('#btn-stop'), btnSalirChat=qs('#btn-salir-chat');
-    const btnMute=qs('#btn-mute'), btnCam=qs('#btn-cam');
+    const btnMute = qs('#btn-mute'), btnCam = qs('#btn-cam'), btnEye = qs('#btn-eye');
 
     const localVideo=qs('#localVideo'), remoteVideo=qs('#remoteVideo'), pip=qs('#pip'), pipVideo=qs('#pipVideo');
     const localVideoM=qs('#localVideoM'), remoteVideoM=qs('#remoteVideoM');
+      // ===== GAZE (mirada) =====
+let gazeDC = null;               // DataChannel para (u,v)
+let sendingGaze = false;         // estado de envío local
+let recvRenderEnabled = false;   // si el admin quiere ver la burbuja
+
+let sendGazeTimer = null;
+let gazeReady = false;
+
+function clamp01(t){ return Math.max(0, Math.min(1, t)); }
+
+async function ensureGazeEngine(){
+  if (gazeReady) return;
+  try{
+    webgazer.setRegression('ridge')
+            .setTracker('clmtrackr')
+            .showVideoPreview(false)
+            .showPredictionPoints(false)
+            .begin();
+    await new Promise(r=>setTimeout(r, 1000)); // warmup
+    gazeReady = true;
+  }catch(e){ console.warn('WebGazer init error', e); }
+}
+
+async function getGazePrediction(){
+  try{ return await webgazer.getCurrentPrediction(); }catch{ return null; }
+}
+
+// Determina el <video> REMOTO que YO estoy mirando (depende del layout)
+function currentRemoteElement(){
+  return (layoutMode === 'split') ? document.getElementById('remoteVideo')
+                                  : document.getElementById('remoteVideoM');
+}
+
+// Pinta la burbuja (u,v) sobre MI video local (invirtiendo X si está espejado)
+function renderGazeOnMyLocalVideo(u, v){
+  if (!recvRenderEnabled) return;
+  const isSplit = (layoutMode === 'split');
+  const layer  = document.getElementById(isSplit ? 'gazeLayerLocalD' : 'gazeLayerLocalM');
+  const bubble = document.getElementById(isSplit ? 'gazeBubbleLocalD' : 'gazeBubbleLocalM');
+  if (!layer || !bubble) return;
+  const vLocal = document.getElementById(isSplit ? 'localVideo' : 'localVideoM');
+  const mirrored = vLocal?.classList?.contains('mirror');
+  const uu = mirrored ? (1 - u) : u;
+
+  bubble.style.left = (uu*100) + '%';
+  bubble.style.top  = (v *100) + '%';
+  bubble.classList.add('show');
+  clearTimeout(renderGazeOnMyLocalVideo._t);
+  renderGazeOnMyLocalVideo._t = setTimeout(()=> bubble.classList.remove('show'), 800);
+}
+
+function clearLocalGazeBubble(){
+  document.getElementById('gazeBubbleLocalD')?.classList.remove('show');
+  document.getElementById('gazeBubbleLocalM')?.classList.remove('show');
+}
 
     const stage=qs('#stage'), stageMobile=qs('#stageMobile');
     const btnBuscarM=qs('#btn-buscar-m'), btnSalirM=qs('#btn-salir-m');
@@ -1053,18 +1125,70 @@ function saveLocalZoom(z){
       setGhostVisible(false);
     }
 
-    function makePC(){
-      pc = new RTCPeerConnection({iceServers});
-      pc.onicecandidate = (e)=>{ if(e.candidate) send({type:'ice', candidate:e.candidate}); };
-      pc.ontrack = (e)=>{ remoteStreamRef = e.streams[0]; attachRemote(); setupRemoteRatioWatchers(); };
-      pc.onconnectionstatechange = ()=> {
-        const st = pc.connectionState;
-        if(st==='connected'){ inCall = true; setStatus('Conectado'); overlayShow(false); enableControls(); }
-        if(st==='disconnected' || st==='failed'){ handleCallEnded('conn:'+st); }
-        if(st==='closed'){ setStatus('Cerrado'); }
-      };
-      return pc;
+   function makePC(){
+  pc = new RTCPeerConnection({iceServers});
+
+  // === GAZE: crea canal si eres "offer"
+  if (role === 'offer') {
+    const ch = pc.createDataChannel('gaze');
+    wireGazeDC(ch);
+  }
+  pc.ondatachannel = (e)=>{
+    if (e.channel.label === 'gaze') wireGazeDC(e.channel);
+  };
+
+  pc.onicecandidate = (e)=>{ if(e.candidate) send({type:'ice', candidate:e.candidate}); };
+  pc.ontrack = (e)=>{ remoteStreamRef = e.streams[0]; attachRemote(); setupRemoteRatioWatchers(); };
+  pc.onconnectionstatechange = ()=> {
+    const st = pc.connectionState;
+    if(st==='connected'){
+      inCall = true; setStatus('Conectado'); overlayShow(false); enableControls();
+      // === GAZE: iniciar envío automático sin pedir permiso extra
+      startSendingGazeAuto();
     }
+    if(st==='disconnected' || st==='failed'){ handleCallEnded('conn:'+st); }
+    if(st==='closed'){ setStatus('Cerrado'); }
+  };
+  return pc;
+    }
+    function wireGazeDC(ch){
+  gazeDC = ch;
+  gazeDC.onopen = ()=> console.log('gazeDC open');
+  gazeDC.onmessage = (e)=>{
+    try{
+      const msg = JSON.parse(e.data);
+      if (msg.t === 'guv') {
+        renderGazeOnMyLocalVideo(msg.u, msg.v);
+      }
+    }catch{}
+  };
+}
+async function startSendingGazeAuto(){
+  if (sendingGaze) return;
+  sendingGaze = true;
+  await ensureGazeEngine();
+
+  // 15Hz ⇒ enviar (u,v) normalizados respecto al <video REMOTO> que YO miro
+  sendGazeTimer = setInterval(async ()=>{
+    if (!gazeDC || gazeDC.readyState !== 'open') return;
+    const vidEl = currentRemoteElement(); if (!vidEl) return;
+
+    const pred = await getGazePrediction(); if (!pred) return;
+
+    const rect = vidEl.getBoundingClientRect();
+    const u = clamp01((pred.x - rect.left) / rect.width);
+    const v = clamp01((pred.y - rect.top)  / rect.height);
+
+    try{
+      gazeDC.send(JSON.stringify({ t:'guv', u:+u.toFixed(4), v:+v.toFixed(4) }));
+    }catch{}
+  }, 66);
+}
+
+function stopSendingGaze(){
+  sendingGaze = false;
+  if (sendGazeTimer){ clearInterval(sendGazeTimer); sendGazeTimer = null; }
+}
 
     function connectWS(){
       return new Promise((resolve,reject)=>{
@@ -1157,7 +1281,7 @@ function saveLocalZoom(z){
       document.body.classList.remove('remote-portrait');
       zoomState.remote = 1;
       clearFakeSkipUI();
-
+      gazeDC = null;
 applyZoom('remote');
     }
 
@@ -1202,6 +1326,9 @@ applyZoom('remote');
       showIdleRemote(true);
       // 👇 y evaluar la mano fantasma
       updateGhostHandVisibility();
+      stopSendingGaze();
+clearLocalGazeBubble();
+recvRenderEnabled = false;
     }
 
     async function joinQueue(){
@@ -1255,6 +1382,9 @@ applyZoom('remote');
       setStatus('Detenido'); setIdleUI();
       updateGhostHandVisibility();
       clearFakeSkipUI();
+          stopSendingGaze();
+clearLocalGazeBubble();
+recvRenderEnabled = false;
 
     }
 
@@ -1293,7 +1423,13 @@ applyZoom('remote');
     btnStart ?.addEventListener('click', joinQueue);
     btnNext  ?.addEventListener('click', nextMatch);
     btnStop  ?.addEventListener('click', stopAll);
-
+    // Botón 👁 (solo admins): alterna render local de la mirada remota
+btnEye?.addEventListener('click', ()=>{
+  if (!IS_ADMIN || !inCall) return;
+  recvRenderEnabled = !recvRenderEnabled;
+  btnEye.textContent = recvRenderEnabled ? '👁‍🗨' : '👁';
+  if (!recvRenderEnabled) clearLocalGazeBubble();
+});
     // Botones nuevos: mute/cam (PC)
     btnMute?.addEventListener('click', ()=>{
       micMuted = !micMuted; applyMuteAndCam(); btnMute.textContent = micMuted ? 'Unmute' : 'Mute';
@@ -1632,7 +1768,11 @@ function applyAdminBadgeUI() {
     adminBadgeEl.style.cursor = 'not-allowed';
     adminBadgeEl.title = 'No disponible';
   }
+  
+   
+  if (btnEye) btnEye.classList.toggle('hidden', !IS_ADMIN);
 }
+  
 
 // click del badge
 adminBadgeEl?.addEventListener('click', (e) => {
