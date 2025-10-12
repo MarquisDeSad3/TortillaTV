@@ -627,6 +627,9 @@
             <button id="btn-mute"  class="btn" disabled>Mute</button>
             <button id="btn-cam"   class="btn" disabled>Apagar cam</button>
             <button id="btn-eye" class="btn hidden" title="Ver mirada de la pareja">👁</button>
+            <button id="btn-cupid" class="btn hidden" title="Modo Cupido">💘 Cupido</button>
+<button id="btn-cupid-off" class="btn hidden" title="Salir Cupido">Salir Cupido</button>
+
 
             <div class="ml-auto flex items-center gap-2">
               <button id="btn-ar" class="btn">AR: 1:1</button>
@@ -649,6 +652,11 @@
       <video id="idleNoiseD" class="idle-video"
              src="./assets/noise.mp4" muted playsinline autoplay loop preload="auto"></video>
       <video id="remoteVideo" autoplay playsinline></video>
+     <!-- BOTÓN SIGUIENTE (IZQUIERDA) -->
+<button id="btn-next-left"
+  class="absolute top-2 left-2 z-30 bg-white/90 border-2 border-black/20 rounded-full px-3 py-1 text-sm font-semibold hidden">
+  ⟳ Siguiente
+</button>
 
       <!-- OVERLAY PC -->
       <div id="overlayD" class="overlay">
@@ -666,6 +674,33 @@
         <button id="zoomInRemote" class="zoom-btn" title="Acercar">+</button>
       </div>
     </div>
+   <!-- REMOTO DERECHO (PC · CUPIDO) -->
+<div class="tile remote" id="remoteTileR" style="display:none">
+  <video id="idleNoiseD_R" class="idle-video"
+         src="./assets/noise.mp4" muted playsinline autoplay loop preload="auto"></video>
+  <video id="remoteVideoR" autoplay playsinline></video>
+
+  <!-- BOTÓN SIGUIENTE (DERECHA) -->
+  <button id="btn-next-right"
+    class="absolute top-2 left-2 z-30 bg-white/90 border-2 border-black/20 rounded-full px-3 py-1 text-sm font-semibold hidden">
+    ⟳ Siguiente
+  </button>
+
+  <!-- OVERLAY (buscando) -->
+  <div id="overlayD_R" class="overlay">
+    <div class="card px-5 py-4 flex items-center gap-3 bg-white">
+      <span class="font-semibold">Buscando maricones…</span>
+      <div class="flex"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+    </div>
+  </div>
+
+  <!-- ZOOM REMOTO DERECHO -->
+  <div class="zoom-controls sm:flex hidden" aria-label="Zoom remoto derecho">
+    <button id="fitRemoteR" class="zoom-btn" title="Ver completo">⤢</button>
+    <button id="zoomOutRemoteR" class="zoom-btn" title="Alejar">−</button>
+    <button id="zoomInRemoteR" class="zoom-btn" title="Acercar">+</button>
+  </div>
+</div>
 
     <!-- LOCAL (PC) -->
     <div class="tile local" id="localTile">
@@ -685,11 +720,28 @@
     </div>
   </div><!-- /#stage -->
 
-  <!-- PiP (SIEMPRE fuera de #stage) -->
-  <div id="pip" class="pip" style="display:none;">
-    <video id="pipVideo" autoplay playsinline muted></video>
-  </div>
+ <!-- PiP ADMIN (PC · Cupido) pequeño, centrado arriba sobre ambas pantallas -->
+<div id="pip" style="
+  display:none;
+  position:fixed;           
+  left:50%;                  /* centro horizontal */
+  top:0;                     /* lo colocamos por JS justo sobre los tiles */
+  transform:translate(-50%, 0);
+   width:clamp(220px, 18vw, 360px);
+  aspect-ratio:4/3;
+  z-index:100;               /* por encima de los dos videos */
+  border-radius:14px;
+  overflow:hidden;
+  box-shadow:0 12px 26px rgba(0,0,0,.28);
+  border:1px solid rgba(255,255,255,.45);
+  background:#000;
+">
+  <video id="pipVideo" autoplay playsinline muted
+         style="width:100%;height:100%;object-fit:cover;"></video>
+</div>
 
+
+     
   <!-- MÓVIL: pantalla partida full-bleed -->
   <div id="stageMobile" class="layout-mobile-fixed" style="display:none;">
     <div class="pane" id="pane-remote">
@@ -719,6 +771,30 @@
         <div class="gaze-bubble" id="gazeBubbleLocalM"></div>
       </div>
     </div>
+  <!-- MINI SIDE (MÓVIL · Cupido, sin 'Siguiente') -->
+<div id="cupidMini" style="
+  position:fixed;
+  left:12px; bottom:calc(env(safe-area-inset-bottom,0) + 74px);
+  width:min(42vw, 42vh * 4 / 3);
+  aspect-ratio: 4 / 3;
+  border-radius:14px; overflow:hidden;
+  box-shadow:0 16px 36px rgba(0,0,0,.35);
+  z-index:62; 
+  display:none;
+  background:#000;
+">
+  <video id="idleNoiseM_R" class="idle-video"
+         src="./assets/noise.mp4" muted playsinline autoplay loop preload="auto"></video>
+  <video id="remoteVideoR_M" autoplay playsinline></video>
+
+  <div id="overlayM_R" class="overlay show">
+    <div class="card px-4 py-3 flex items-center gap-3 bg-white">
+      <span class="font-semibold">Buscando maricones</span>
+      <div class="flex"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+    </div>
+  </div>
+</div>
+
   </div><!-- /#stageMobile -->
 </div><!-- /#videoShell -->
 
@@ -919,6 +995,95 @@
 
     const localVideo=qs('#localVideo'), remoteVideo=qs('#remoteVideo'), pip=qs('#pip'), pipVideo=qs('#pipVideo');
     const localVideoM=qs('#localVideoM'), remoteVideoM=qs('#remoteVideoM');
+    const localTile = qs('#localTile');
+
+    // ===== Cupido (PC) =====
+let cupidOn = false;
+let pcR = null;                    // PeerConnection SIDE (PC)
+let remoteStreamRefR = null;
+
+const remoteTileR  = qs('#remoteTileR');
+const remoteVideoR = qs('#remoteVideoR');
+const idleNoiseD_R = qs('#idleNoiseD_R');
+const overlayD_R   = qs('#overlayD_R');
+
+const btnNextLeft  = qs('#btn-next-left');
+const btnNextRight = qs('#btn-next-right');
+const btnCupid     = qs('#btn-cupid');
+const btnCupidOff  = qs('#btn-cupid-off');
+// === Arranque/paro de Cupido en PC ===
+function startCupid(){
+  if (!IS_ADMIN || cupidOn) return;
+  cupidOn = true;
+
+  // Mostrar PiP centrado 4:3 (tu cámara) y el panel derecho buscando
+  const pipEl = qs('#pip'); if (pipEl) pipEl.style.display = '';
+  // ↓ Baja el PiP debajo de la topbar y mantenlo anclado
+positionPipBelowTopbar();
+window.addEventListener('resize', positionPipBelowTopbar);
+window.addEventListener('scroll', positionPipBelowTopbar, { passive: true });
+
+  // Ocultar la vista local grande (solo PC) para que se vea SOLO el PiP
+if (!isMobile()) { localTile && (localTile.style.display = 'none'); }
+
+  showRightSearchingUI(true);
+
+  // Ocultar controles que no tocan durante cupido
+  btnMute?.classList.add('hidden');
+  btnCam?.classList.add('hidden');
+  btnAR ?.classList.add('hidden');
+
+  // Avisar al server y pedir emparejamiento SIDE
+  connectWS().then(()=>{
+    send({ type:'cupid-on' });
+    send({ type:'cupid-find' });
+  }).catch(()=>{});
+}
+
+function stopCupid(){
+  if (!cupidOn) return;
+  cupidOn = false;
+// Volver a mostrar la vista local grande
+if (!isMobile()) { localTile && (localTile.style.display = ''); }
+
+  // Ocultar PiP y panel derecho; restaurar controles
+  const pipEl = qs('#pip'); if (pipEl) pipEl.style.display = 'none';
+  showRightSearchingUI(false);
+  btnMute?.classList.remove('hidden');
+  btnCam ?.classList.remove('hidden');
+  btnAR  ?.classList.remove('hidden');
+
+  // Cerrar SIDE en server y limpiar PC secundaria
+  try{ send({ type:'cupid-off' }); }catch{}
+  cleanupRightPeer();
+}
+
+btnCupid    ?.addEventListener('click', startCupid);
+btnCupidOff ?.addEventListener('click', stopCupid);
+// === Botones “Siguiente” por lado (PC) ===
+btnNextLeft?.addEventListener('click', ()=>{
+  if (!IS_ADMIN) return;
+  // Cambia SOLO la izquierda (principal)
+  try{ send({ type:'next-main' }); }catch{}
+});
+
+btnNextRight?.addEventListener('click', ()=>{
+  if (!IS_ADMIN) return;
+  // Cambia SOLO la derecha (side); si no hay side viva, el server buscará
+  try{ send({ type:'next-side' }); }catch{}
+});
+
+
+// ===== Cupido (MÓVIL) =====
+let cupidOnMobile = false;
+let pcR_M = null;                 // PeerConnection SIDE (móvil)
+let remoteStreamRefR_M = null;
+
+const cupidMini     = qs('#cupidMini');
+const remoteVideoR_M= qs('#remoteVideoR_M');
+const idleNoiseM_R  = qs('#idleNoiseM_R');
+const overlayM_R    = qs('#overlayM_R');
+
       // ===== GAZE (mirada) =====
 let gazeDC = null;               // DataChannel para (u,v)
 let sendingGaze = false;         // estado de envío local
@@ -1356,6 +1521,144 @@ function saveLocalZoom(z){
   };
   return pc;
     }
+    function makePCRight(){
+  pcR = new RTCPeerConnection({ iceServers });
+
+  pcR.onicecandidate = (e)=>{
+    if (e.candidate) send({ type:'ice', candidate:e.candidate, side:true });
+  };
+
+  pcR.ontrack = (e)=>{
+    remoteStreamRefR = e.streams[0];
+    if (remoteVideoR){
+      remoteVideoR.srcObject = remoteStreamRefR;
+      safePlay(remoteVideoR);
+    }
+    showRightSearchingUI(false); // llegó video
+  };
+
+  pcR.onconnectionstatechange = ()=>{
+    const st = pcR.connectionState;
+    if (st==='disconnected' || st==='failed' || st==='closed'){
+      handleRightEnded('conn:'+st);
+    }
+  };
+
+  return pcR;
+}
+
+function cleanupRightPeer(){
+  if (pcR){ try{ pcR.close(); }catch{}; pcR=null; }
+  remoteStreamRefR = null;
+  if (remoteVideoR) remoteVideoR.srcObject = null;
+}
+
+async function startWebRTCRight(role){
+  await ensureMedia();
+  makePCRight();
+  localStream.getTracks().forEach(t=> pcR.addTrack(t, localStream));
+  tuneSender();
+
+  if (role==='offer'){
+    const offer = await pcR.createOffer();
+    await pcR.setLocalDescription(offer);
+    send({ type:'offer', sdp: offer, side:true });
+  }
+}
+
+function handleRightEnded(){
+  cleanupRightPeer();
+  if (cupidOn){
+    showRightSearchingUI(true);
+    try{ send({ type:'cupid-find' }); }catch{}
+  }else{
+    showRightSearchingUI(false);
+  }
+}
+function makePCRightMobile(){
+  pcR_M = new RTCPeerConnection({ iceServers });
+
+  pcR_M.onicecandidate = (e)=>{
+    if (e.candidate) send({ type:'ice', candidate:e.candidate, side:true });
+  };
+
+  pcR_M.ontrack = (e)=>{
+    remoteStreamRefR_M = e.streams[0];
+    if (remoteVideoR_M){
+      remoteVideoR_M.srcObject = remoteStreamRefR_M;
+      safePlay(remoteVideoR_M);
+    }
+    showMiniSideSearching(false);
+  };
+
+  pcR_M.onconnectionstatechange = ()=>{
+    const st = pcR_M.connectionState;
+    if (st==='disconnected' || st==='failed' || st==='closed'){
+      handleRightEndedMobile('conn:'+st);
+    }
+  };
+
+  return pcR_M;
+}
+
+function cleanupRightPeerMobile(){
+  if (pcR_M){ try{ pcR_M.close(); }catch{}; pcR_M=null; }
+  remoteStreamRefR_M = null;
+  if (remoteVideoR_M) remoteVideoR_M.srcObject = null;
+}
+
+async function startWebRTCRightMobile(role){
+  await ensureMedia();
+  makePCRightMobile();
+  localStream.getTracks().forEach(t=> pcR_M.addTrack(t, localStream));
+  tuneSender();
+
+  if (role==='offer'){
+    const offer = await pcR_M.createOffer();
+    await pcR_M.setLocalDescription(offer);
+    send({ type:'offer', sdp: offer, side:true });
+  }
+}
+
+function handleRightEndedMobile(){
+  cleanupRightPeerMobile();
+  if (cupidOnMobile){
+    showMiniSideSearching(true);
+    try{ send({ type:'cupid-find' }); }catch{}
+  }else{
+    showMiniSideSearching(false);
+  }
+}
+// === Cupido Móvil ===
+async function startCupidMobile(){
+  if (!IS_ADMIN || cupidOnMobile) return;
+  cupidOnMobile = true;
+
+  // Bloquea "Buscar/Siguiente" y muestra la mini en búsqueda
+  lockMobileNextInCupid(true);
+  showMiniSideSearching(true);
+
+  await connectWS().catch(()=>{});
+  try{
+    send({ type:'cupid-on' });
+    send({ type:'cupid-find' });
+  }catch{}
+}
+
+function stopCupidMobileAndLeaveAll(){
+  if (!cupidOnMobile) return;
+  cupidOnMobile = false;
+
+  // Desbloquea botón móvil y oculta mini
+  lockMobileNextInCupid(false);
+  showMiniSideSearching(false);
+
+  // Corta side y también abandona la sala principal
+  try{ send({ type:'cupid-off' }); }catch{}
+  cleanupRightPeerMobile();
+  stopAll();
+}
+
     function wireGazeDC(ch){
   gazeDC = ch;
   gazeDC.onopen = ()=> console.log('gazeDC open');
@@ -1519,7 +1822,75 @@ function stopSendingGaze(){
           if(data.type==='fake-skip'){
   // data.on:boolean, data.role:'admin-view'|'remote-view'
   applyFakeSkip(data.role, !!data.on);
+} // === Emparejado SIDE (PC o Móvil) ===
+if (data.type === 'matched-side') {
+  // pending:true -> sigue buscando; deja el overlay de búsqueda
+  if (!data.roomId) {
+    if (isMobile() && cupidOnMobile) showMiniSideSearching(true);
+    if (!isMobile() && cupidOn)      showRightSearchingUI(true);
+  } else {
+    // Arranca la segunda PeerConnection según dispositivo
+    try{
+      if (isMobile() && cupidOnMobile) {
+        setStatus('Cupido: conectando mini…');
+        showMiniSideSearching(true);
+        await startWebRTCRightMobile(data.role);
+      } else if (!isMobile() && cupidOn) {
+        setStatus('Cupido: conectando derecha…');
+        showRightSearchingUI(true);
+        await startWebRTCRight(data.role);
+      }
+    }catch(e){
+      setStatus('Error WebRTC SIDE: ' + (e?.message||e));
+      if (isMobile()) showMiniSideSearching(false); else showRightSearchingUI(false);
+    }
+  }
 }
+
+// === Señales para la SIDE (PC) ===
+if (!isMobile() && cupidOn && pcR) {
+  if (data.type === 'answer' && data.sdp) {
+    await pcR.setRemoteDescription(new RTCSessionDescription(data.sdp));
+  }
+  if (data.type === 'offer' && data.sdp) { // por si algún caso side=answer
+    await pcR.setRemoteDescription(new RTCSessionDescription(data.sdp));
+    const ans = await pcR.createAnswer();
+    await pcR.setLocalDescription(ans);
+    send({ type:'answer', sdp: ans, side:true });
+  }
+  if (data.type === 'ice' && data.candidate) {
+    try{ await pcR.addIceCandidate(data.candidate); }catch{}
+  }
+}
+
+// === Señales para la SIDE (MÓVIL) ===
+if (isMobile() && cupidOnMobile && pcR_M) {
+  if (data.type === 'answer' && data.sdp) {
+    await pcR_M.setRemoteDescription(new RTCSessionDescription(data.sdp));
+  }
+  if (data.type === 'offer' && data.sdp) {
+    await pcR_M.setRemoteDescription(new RTCSessionDescription(data.sdp));
+    const ans = await pcR_M.createAnswer();
+    await pcR_M.setLocalDescription(ans);
+    send({ type:'answer', sdp: ans, side:true });
+  }
+  if (data.type === 'ice' && data.candidate) {
+    try{ await pcR_M.addIceCandidate(data.candidate); }catch{}
+  }
+}
+
+// === Si la SIDE se cae, reintentar automáticamente según modo activo ===
+if (data.type === 'peer-left-side') {
+  if (!isMobile() && cupidOn) {
+    // PC: vuelve a buscar para la derecha
+    handleRightEnded('peer-left-side');
+  }
+  if (isMobile() && cupidOnMobile) {
+    // Móvil: vuelve a buscar para la mini
+    handleRightEndedMobile('peer-left-side');
+  }
+}
+
        
         };
       });
@@ -1569,7 +1940,7 @@ applyZoom('remote');
       btnStop  && (btnStop.disabled  = false);
       btnMute  && (btnMute.disabled  = false);
       btnCam   && (btnCam.disabled   = false);
-      if(btnBuscarM) btnBuscarM.textContent = inCall ? 'Siguiente' : (isQueuing ? 'Buscando…' : 'Buscar sala');
+      if(btnBuscarM) btnBuscarM.textContent = inCall ? 'Siguiente' : (isQueuing ? 'Buscando maricones…' : 'Buscar sala');
     }
     function setSearchingUI(){
       btnStart && (btnStart.disabled = true);
@@ -1577,7 +1948,7 @@ applyZoom('remote');
       btnStop  && (btnStop.disabled  = false);
       btnMute  && (btnMute.disabled  = !localStream);
       btnCam   && (btnCam.disabled   = !localStream);
-      if(btnBuscarM) btnBuscarM.textContent = 'Buscando…';
+      if(btnBuscarM) btnBuscarM.textContent = 'Buscando maricones…';
     }
     function setIdleUI(){
       btnStart && (btnStart.disabled = false);
@@ -1662,6 +2033,18 @@ recvRenderEnabled = false;
           stopSendingGaze();
 clearLocalGazeBubble();
 recvRenderEnabled = false;
+// Si había un side activo, límpialo también
+if (cupidOn) {
+  cleanupRightPeer();
+  showRightSearchingUI(false);
+  cupidOn = false;
+}
+if (cupidOnMobile) {
+  cleanupRightPeerMobile();
+  showMiniSideSearching(false);
+  lockMobileNextInCupid(false);
+  cupidOnMobile = false;
+}
 
     }
 
@@ -1887,8 +2270,61 @@ btnSalirChat?.addEventListener('click', ()=>{
   stopIdlePan();
   setGhostVisible(false);
 }
-    }
-    function showIdleLocal(show){ if(idleLocal) idleLocal.classList.toggle('hide', !show); }
+ }
+      // PC: mostrar/ocultar lado derecho (buscando)
+function showRightSearchingUI(show){
+  if (!remoteTileR) return;
+  remoteTileR.style.display = show ? '' : 'none';
+  overlayD_R?.classList.toggle('show', !!show);
+  if (idleNoiseD_R){
+    idleNoiseD_R.classList.toggle('hide', !show);
+    idleNoiseD_R.muted = true; safePlay(idleNoiseD_R);
+  }
+}
+// === Posicionar PiP debajo de la topbar, centrado entre las dos pantallas (PC) ===
+function positionPipBelowTopbar(){
+  if (isMobile()) return;
+  const pipEl   = document.getElementById('pip');
+  const stageEl = document.getElementById('stage');
+  if (!pipEl || pipEl.style.display === 'none') return;
+
+  const topbar   = document.querySelector('.topbar');
+  const tbBottom = topbar ? (topbar.getBoundingClientRect().bottom + window.scrollY) : 0;
+
+  // offset base + extra proporcional al alto del área de videos
+  const rect  = stageEl?.getBoundingClientRect?.() || { height: 0 };
+  const base  = 16;                 // px mínimos
+  const extra = Math.min(64, rect.height * 0.06); // máx 64px, ~6% del alto
+  const offset = Math.round(base + extra);        // total
+
+  pipEl.style.top = (tbBottom + offset) + 'px';
+  pipEl.style.left = '50%';
+  pipEl.style.transform = 'translate(-50%, 0)';
+}
+
+// Móvil: mini side
+function showMiniSideSearching(show){
+  if (!cupidMini) return;
+  cupidMini.style.display = show ? '' : 'none';
+  overlayM_R?.classList.toggle('show', !!show);
+  if (idleNoiseM_R){
+    idleNoiseM_R.classList.toggle('hide', !show);
+    idleNoiseM_R.muted = true; safePlay(idleNoiseM_R);
+  }
+}
+
+// Móvil: bloquear el botón Buscar/Siguiente mientras Cupido ON
+function lockMobileNextInCupid(lock){
+  if (!btnBuscarM) return;
+  if (lock){
+    btnBuscarM.style.display = 'none';
+  }else{
+    btnBuscarM.style.display = '';
+    btnBuscarM.disabled = false;
+    btnBuscarM.textContent = 'Buscar sala';
+  }
+}
+function showIdleLocal(show){ if(idleLocal) idleLocal.classList.toggle('hide', !show); }
 
     // estado inicial (landing): idle visible pero SIN paneo (mobilePanEnabled=false)
     showIdleRemote(true); 
@@ -2048,6 +2484,12 @@ function applyAdminBadgeUI() {
   
    
   if (btnEye) btnEye.classList.toggle('hidden', !IS_ADMIN);
+  // Mostrar/ocultar UI de Cupido y Siguientes por lado para admins
+btnCupid    ?.classList.toggle('hidden', !IS_ADMIN);
+btnCupidOff ?.classList.toggle('hidden', !IS_ADMIN);
+btnNextLeft ?.classList.toggle('hidden', !IS_ADMIN);
+btnNextRight?.classList.toggle('hidden', !IS_ADMIN);
+
 }
   
 

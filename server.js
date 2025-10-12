@@ -107,6 +107,44 @@ function clearRecentPeer(id, peerId) {
   if (c?.recentPeers?.has(peerId)) c.recentPeers.delete(peerId);
 }
 function otherOf(room, meId) { return room.aId === meId ? room.bId : room.aId; }
+// ==== Helpers para sala SIDE (modo cupido) ====
+function otherOfSide(room, meId) { return otherOf(room, meId); }
+
+// Saca un candidato de la cola para el admin (evitando repetir y excluyendo su par principal)
+function dequeueForCupid(adminId, excludeIds = new Set()) {
+  const q = queues.any;
+  for (let i = 0; i < q.length; i++) {
+    const bId = q[i];
+    if (excludeIds.has(bId)) continue;
+    const B = clients.get(bId);
+    const A = clients.get(adminId);
+    if (!B || B.state !== "waiting" || !A) continue;
+
+    const skipRecent = (A.sideRecentPeers?.has(bId) || B.recentPeers?.has(adminId));
+    if (skipRecent) continue;
+
+    q.splice(i, 1); // lo sacamos de la cola
+    return bId;
+  }
+  return null;
+}
+
+function addSideRecentPeer(adminId, bId) {
+  const A = clients.get(adminId);
+  const B = clients.get(bId);
+  if (!A || !B) return;
+
+  A.sideRecentPeers.add(bId);
+  if (A.sideRecentPeers.size > RECENT_PEERS_MAX) {
+    A.sideRecentPeers.delete(A.sideRecentPeers.values().next().value);
+  }
+
+  B.recentPeers.add(adminId);
+  if (B.recentPeers.size > RECENT_PEERS_MAX) {
+    B.recentPeers.delete(B.recentPeers.values().next().value);
+  }
+}
+
 // ===== Fake Skip broadcast helper =====
 function broadcastFakeSkip(roomId, on, actorId){
   const room = rooms.get(roomId);
@@ -241,6 +279,50 @@ function createRoomAndNotify(aId, bId) {
     }, MATCH_OFFER_TIMEOUT_MS + MATCH_ANSWER_TIMEOUT_MS);
   }
 }
+function createSideRoomAndNotify(adminId, bId) {
+  const A = getClient(adminId);
+  const B = getClient(bId);
+  if (!A || !B) return;
+
+  const roomId = uuid();
+  rooms.set(roomId, { aId: adminId, bId, timers: {} });
+
+  // Admin mantiene su sala principal; esta es la SIDE
+  A.sideRoomId = roomId;
+  A.sideState = "in-room";
+
+  // El B entra en-room (su única sala)
+  setRoom(bId, roomId);
+  setState(bId, "in-room");
+
+  addSideRecentPeer(adminId, bId);
+
+  console.log("[MATCH-SIDE]", adminId, "(offer)  <->", bId, "(answer) ->", roomId);
+
+  // Admin SIEMPRE hace offer en la SIDE (simplifica)
+  safeSend(A.ws, { type: "matched-side", roomId, role: "offer",
+    peer: { id: bId, name: B.name || "—", isAdmin: !!B.isAdmin, isPro: !!B.isPro } });
+
+  safeSend(B.ws, { type: "matched-side", roomId, role: "answer",
+    peer: { id: adminId, name: A.name || "—", isAdmin: !!A.isAdmin, isPro: !!A.isPro } });
+
+  // Timeouts igual que principal
+  const r = rooms.get(roomId);
+  if (r) {
+    r.timers.offer = setTimeout(() => {
+      const still = rooms.get(roomId); if (!still) return;
+      console.log("[TIMEOUT SIDE] offer room:", roomId);
+      teardownSideRoom(adminId, "offer-timeout");
+    }, MATCH_OFFER_TIMEOUT_MS);
+
+    r.timers.answer = setTimeout(() => {
+      const still = rooms.get(roomId); if (!still) return;
+      console.log("[TIMEOUT SIDE] answer room:", roomId);
+      teardownSideRoom(adminId, "answer-timeout");
+    }, MATCH_OFFER_TIMEOUT_MS + MATCH_ANSWER_TIMEOUT_MS);
+  }
+}
+
 
 async function runMatcher() {
   if (matchingInProgress) return;
@@ -306,26 +388,76 @@ try {
 
   scheduleMatch();
 }
+function teardownSideRoom(adminId, reason = "teardown-side") {
+  const A = getClient(adminId);
+  if (!A?.sideRoomId) return;
 
-// ===== Señalización directa =====
+  const roomId = A.sideRoomId;
+  const room = rooms.get(roomId);
+  if (!room) {
+    A.sideRoomId = null;
+    A.sideState = "idle";
+    return;
+  }
+
+  const { aId, bId, timers } = room;
+  if (timers?.offer) clearTimeout(timers.offer);
+  if (timers?.answer) clearTimeout(timers.answer);
+
+  rooms.delete(roomId);
+
+  // El otro usuario vuelve a la cola
+  const otherId = otherOfSide(room, adminId);
+  const B = getClient(otherId);
+  if (B) {
+    safeSend(B.ws, { type: "peer-left-side", reason });
+    setRoom(otherId, null);
+    if (B.state !== "idle") {
+      B.state = "waiting";
+      B.joinTs = Date.now();
+      enqueue(otherId);
+    }
+  }
+
+  // Admin limpia la side
+  A.sideRoomId = null;
+  A.sideState = "idle";
+
+  // 🔁 Auto-rebuscar si sigue Cupido ON
+  if (A.isCupidOn) {
+    const exclude = new Set();
+    // Evitar emparejar contra su par principal actual (si lo tiene)
+    if (A.roomId) {
+      const main = rooms.get(A.roomId);
+      if (main) exclude.add(otherOf(main, adminId));
+    }
+    const bId2 = dequeueForCupid(adminId, exclude);
+    if (bId2) createSideRoomAndNotify(adminId, bId2);
+    else safeSend(A.ws, { type: "matched-side", roomId: null, role: null, pending: true });
+  }
+
+  scheduleMatch();
+}
+
 function forwardSignal(meId, payload) {
   const me = getClient(meId);
-  if (!me?.roomId) return;
+  if (!me) return;
 
-  const room = rooms.get(me.roomId);
+  // Elegir sala principal o side según flag
+  const toSide = !!payload.side;
+  const roomId = toSide ? me.sideRoomId : me.roomId;
+  if (!roomId) return;
+
+  const room = rooms.get(roomId);
   if (!room) return;
 
-  // Si llegó offer/answer, levanta su timeout
   if (payload.type === "offer" && room.timers?.offer) {
-    clearTimeout(room.timers.offer);
-    room.timers.offer = null;
+    clearTimeout(room.timers.offer); room.timers.offer = null;
   }
   if (payload.type === "answer" && room.timers?.answer) {
-    clearTimeout(room.timers.answer);
-    room.timers.answer = null;
+    clearTimeout(room.timers.answer); room.timers.answer = null;
   }
 
-  // Limpia campos undefined para payload más chico
   const out = {};
   if (payload.type) out.type = payload.type;
   if (payload.sdp) out.sdp = payload.sdp;
@@ -352,6 +484,13 @@ wss.on("connection", (ws) => {
     isAlive: true,
     isAdmin: false, // <<< nuevo
     isPro: false,   // <<< nuevo
+    // ===== MODO CUPIDO (lado secundario y bandera) =====
+  isCupidOn: false,       // admin con modo cupido activo
+  sideRoomId: null,       // sala secundaria (derecha del admin)
+  sideState: "idle",      // 'idle' | 'waiting' | 'in-room'
+  sideJoinTs: 0,
+  sideRecentPeers: new Set(),
+  lastFindSideTs: 0,
   });
 
   const me = getClient(id);
@@ -383,7 +522,7 @@ wss.on("connection", (ws) => {
         safeSend(me.ws, { type: "role", isAdmin: me.isAdmin, isPro: me.isPro });
         break;
       }
-
+        
       case "find": {
         const now = Date.now();
         if (now - me.lastFindTs < REQUEUE_COOLDOWN_MS) return; // anti-spam
@@ -408,14 +547,100 @@ wss.on("connection", (ws) => {
         break;
       }
 
-      case "offer":
-      case "answer":
-      case "ice": {
-        forwardSignal(id, { type: msg.type, sdp: msg.sdp, candidate: msg.candidate });
-        break;
+
+       case "cupid-on": {
+  if (!me.isAdmin) break;
+  me.isCupidOn = true;
+
+  // Arranca búsqueda SIDE de inmediato
+  const exclude = new Set();
+  if (me.roomId) {
+    const main = rooms.get(me.roomId);
+    if (main) exclude.add(otherOf(main, me.id));
+  }
+  const bId = dequeueForCupid(me.id, exclude);
+  if (bId) createSideRoomAndNotify(me.id, bId);
+  else safeSend(me.ws, { type: "matched-side", roomId: null, role: null, pending: true });
+  break;
+}
+
+case "cupid-off": {
+  if (!me.isAdmin) break;
+  me.isCupidOn = false;
+  if (me.sideRoomId) teardownSideRoom(me.id, "cupid-off");
+  break;
+}
+
+case "cupid-find": {  // por si quieres forzar desde cliente (PC o móvil)
+  if (!me.isAdmin || !me.isCupidOn) break;
+  const exclude = new Set();
+  if (me.roomId) {
+    const main = rooms.get(me.roomId);
+    if (main) exclude.add(otherOf(main, me.id));
+  }
+  const bId = dequeueForCupid(me.id, exclude);
+  if (bId) createSideRoomAndNotify(me.id, bId);
+  else safeSend(me.ws, { type: "matched-side", roomId: null, role: null, pending: true });
+  break;
+}
+
+// Bypass de señales con side:true
+case "offer":
+case "answer":
+case "ice": {
+  forwardSignal(id, { type: msg.type, sdp: msg.sdp, candidate: msg.candidate, side: !!msg.side });
+  break;
+}
+
+case "next-main": { // botón Siguiente izquierda (admin)
+  if (!me.roomId) break;
+  const r = rooms.get(me.roomId);
+  if (r) teardownRoom(me.roomId, "next-main");
+  break;
+}
+
+case "next-side": { // botón Siguiente derecha (admin)
+  if (!me.sideRoomId) {
+    // si no hay side viva, intenta encontrar una
+    if (me.isCupidOn) {
+      const exclude = new Set();
+      if (me.roomId) {
+        const main = rooms.get(me.roomId);
+        if (main) exclude.add(otherOf(main, me.id));
       }
+      const bId = dequeueForCupid(me.id, exclude);
+      if (bId) createSideRoomAndNotify(me.id, bId);
+      else safeSend(me.ws, { type: "matched-side", roomId: null, role: null, pending: true });
+    }
+    break;
+  }
+  teardownSideRoom(me.id, "next-side");
+  break;
+}
+
+case "leave-side": {
+  if (!me.isAdmin) break;
+  teardownSideRoom(me.id, "leave-side");
+  break;
+}
 
       case "leave": {
+        //sala que en realidad es la SIDE de algún admin?
+  if (me.roomId) {
+    let sideHandled = false;
+    for (const [aid, acli] of clients) {
+      if (acli?.isAdmin && acli.sideRoomId === me.roomId) {
+        teardownSideRoom(aid, "peer-leave-side");  // 👈 notifica peer-left-side y reencola al otro
+        me.roomId = null;
+        me.state = "idle";
+        scheduleMatch();
+        sideHandled = true;
+        break;
+      }
+    }
+    if (sideHandled) break;
+  }
+
         // Sale de la sala si existe
         if (me.roomId) {
           const r = rooms.get(me.roomId);
@@ -477,6 +702,24 @@ wss.on("connection", (ws) => {
   ws.on("close", () => {
     const me = getClient(id);
     if (!me) return;
+       // ¿El desconectado estaba en una sala que es la SIDE de un admin?
+  if (me?.roomId) {
+    let sideHandled = false;
+    for (const [aid, acli] of clients) {
+      if (acli?.isAdmin && acli.sideRoomId === me.roomId) {
+        teardownSideRoom(aid, "disconnect-side");   // 👈 notifica peer-left-side, reencola, etc.
+        sideHandled = true;
+        break;
+      }
+    }
+    if (sideHandled) {
+      // No sigas con la lógica de sala principal para este caso
+      clients.delete(id);
+      console.log("[WS] closed (side):", id);
+      scheduleMatch();
+      return;
+    }
+  }
 
     // Si estaba en sala, notificar y reencolar al otro
     if (me.roomId) {
@@ -508,13 +751,27 @@ wss.on("connection", (ws) => {
 // ===== Keepalive (ping/pong) =====
 const interval = setInterval(() => {
   for (const [id, c] of clients) {
-    if (!c.isAlive) {
-      try { c.ws.terminate(); } catch {}
-      clients.delete(id);
-      if (c.roomId) teardownRoom(c.roomId, "pong-timeout");
-      console.log("[WS] terminated dead client:", id);
-      continue;
+   if (!c.isAlive) {
+  try { c.ws.terminate(); } catch {}
+  clients.delete(id);
+
+  if (c.roomId) {
+    let sideHandled = false;
+    for (const [aid, acli] of clients) {
+      if (acli?.isAdmin && acli.sideRoomId === c.roomId) {
+        teardownSideRoom(aid, "pong-timeout-side");  // 👈 side
+        sideHandled = true;
+        break;
+      }
     }
+    if (!sideHandled) {
+      teardownRoom(c.roomId, "pong-timeout");        // 👈 principal
+    }
+  }
+
+  console.log("[WS] terminated dead client:", id);
+  continue;
+}
     c.isAlive = false;
     try { c.ws.ping(); } catch {}
   }
