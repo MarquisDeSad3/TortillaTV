@@ -113,17 +113,20 @@ function otherOfSide(room, meId) { return otherOf(room, meId); }
 // Saca un candidato de la cola para el admin (evitando repetir y excluyendo su par principal)
 function dequeueForCupid(adminId, excludeIds = new Set()) {
   const q = queues.any;
+  const A = clients.get(adminId);
+  const now = Date.now();
   for (let i = 0; i < q.length; i++) {
     const bId = q[i];
     if (excludeIds.has(bId)) continue;
     const B = clients.get(bId);
-    const A = clients.get(adminId);
     if (!B || B.state !== "waiting" || !A) continue;
 
-    const skipRecent = (A.sideRecentPeers?.has(bId) || B.recentPeers?.has(adminId));
-    if (skipRecent) continue;
+    // Relaja recentPeers si B lleva esperando > 6s (anti-atasco)
+    const waitedMs = now - (B.joinTs || 0);
+    const recentBlocked = (A.sideRecentPeers?.has(bId) || B.recentPeers?.has(adminId));
+    if (recentBlocked && waitedMs < 6000) continue;
 
-    q.splice(i, 1); // lo sacamos de la cola
+    q.splice(i, 1);
     return bId;
   }
   return null;
@@ -473,25 +476,28 @@ wss.on("connection", (ws) => {
   const id = uuid();
 
   clients.set(id, {
+    id,                   // 👈 guarda id para usar como me.id
     ws,
     gender: null,
     name: null,
+    email: null,          // 👈 útil para logs
     state: "idle",
     roomId: null,
     joinTs: 0,
     recentPeers: new Set(),
     lastFindTs: 0,
     isAlive: true,
-    isAdmin: false, // <<< nuevo
-    isPro: false,   // <<< nuevo
+    isAdmin: false,
+    isPro: false,
     // ===== MODO CUPIDO (lado secundario y bandera) =====
-  isCupidOn: false,       // admin con modo cupido activo
-  sideRoomId: null,       // sala secundaria (derecha del admin)
-  sideState: "idle",      // 'idle' | 'waiting' | 'in-room'
-  sideJoinTs: 0,
-  sideRecentPeers: new Set(),
-  lastFindSideTs: 0,
+    isCupidOn: false,       // admin con modo cupido activo
+    sideRoomId: null,       // sala secundaria (derecha del admin)
+    sideState: "idle",      // 'idle' | 'waiting' | 'in-room'
+    sideJoinTs: 0,
+    sideRecentPeers: new Set(),
+    lastFindSideTs: 0,
   });
+
 
   const me = getClient(id);
   console.log("[WS] connected:", id);
@@ -512,16 +518,17 @@ wss.on("connection", (ws) => {
     if (!me) return;
 
     switch (msg.type) {
-      case "identify": {
-        const email = String(msg.email || "").toLowerCase();
-        me.name = msg.displayName || me.name || "—";
-        const allowed = ADMIN_EMAILS.has(email);
-        me.isAdmin = allowed;
-        me.isPro   = allowed;  // mismo set para PRO
-        // confirmar al cliente sus flags actuales
-        safeSend(me.ws, { type: "role", isAdmin: me.isAdmin, isPro: me.isPro });
-        break;
-      }
+     case "identify": {
+  const email = String(msg.email || "").toLowerCase();
+  me.name  = msg.displayName || me.name || "—";
+  me.email = email; // 👈 guarda email
+  const allowed = ADMIN_EMAILS.has(email);
+  me.isAdmin = allowed;
+  me.isPro   = allowed;  // mismo set para PRO
+  safeSend(me.ws, { type: "role", isAdmin: me.isAdmin, isPro: me.isPro });
+  break;
+}
+
         
       case "find": {
         const now = Date.now();
@@ -548,11 +555,12 @@ wss.on("connection", (ws) => {
       }
 
 
-       case "cupid-on": {
+      case "cupid-on": {
   if (!me.isAdmin) break;
   me.isCupidOn = true;
+  console.log("[CUPID] ON by", me.id, me.email || "(no-email)", "roomId:", me.roomId);
 
-  // Arranca búsqueda SIDE de inmediato
+  // Arranca búsqueda SIDE de inmediato (aunque no tengas sala principal)
   const exclude = new Set();
   if (me.roomId) {
     const main = rooms.get(me.roomId);
@@ -702,6 +710,10 @@ case "leave-side": {
   ws.on("close", () => {
     const me = getClient(id);
     if (!me) return;
+    // Si el que se va es ADMIN y tiene SIDE viva, derríbala y reencola al otro
+  if (me.isAdmin && me.sideRoomId) {
+    teardownSideRoom(me.id, "admin-disconnect-side");
+  }
        // ¿El desconectado estaba en una sala que es la SIDE de un admin?
   if (me?.roomId) {
     let sideHandled = false;
@@ -753,6 +765,11 @@ const interval = setInterval(() => {
   for (const [id, c] of clients) {
    if (!c.isAlive) {
   try { c.ws.terminate(); } catch {}
+  // Si es admin con SIDE activo, ciérrala primero
+  if (c?.isAdmin && c?.sideRoomId) {
+    teardownSideRoom(id, "pong-timeout-admin-side");
+  }
+
   clients.delete(id);
 
   if (c.roomId) {
