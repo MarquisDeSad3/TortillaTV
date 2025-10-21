@@ -1037,8 +1037,6 @@ if (!isMobile()) { localTile && (localTile.style.display = 'none'); }
   connectWS().then(()=>{
     send({ type:'cupid-on' });
     send({ type:'cupid-find' });
-    send({ type:'cupid-find-group' }); // <--- NUEVO: iniciar match de 3
-
   }).catch(()=>{});
 }
 
@@ -1368,97 +1366,6 @@ function proceedToChatAfterLoginLikeFlow(displayName='Invitado'){
     credential: 'Cl4uD1@2025'
   }
 ];
-/* ==================== GROUP CALL (Cupido estilo WhatsApp) ==================== */
-// id de la pareja principal actual (para evitar duplicar conexión con el admin)
-let currentMainPeerId = null;
-
-// Mapa de peers de grupo: remoteId -> RTCPeerConnection
-const groupPeers = new Map();
-
-function sendGroupOffer(to, sdp){ send({ type:'group-offer', group:true, to, sdp }); }
-function sendGroupAnswer(to, sdp){ send({ type:'group-answer', group:true, to, sdp }); }
-function sendGroupIce(to, candidate){ send({ type:'group-ice', group:true, to, candidate }); }
-
-// UI mínima para mostrar el segundo remoto en NO-ADMIN
-let groupMiniEl = null;
-function ensureGroupMiniElements(){
-  if (IS_ADMIN) return; // el admin ya tiene dos pantallas
-  if (!document.getElementById('groupMiniM') && isMobile()) {
-    const cont = document.createElement('div');
-    cont.id = 'groupMiniM';
-    cont.style.cssText =
-      "position:fixed; right:12px; bottom:calc(env(safe-area-inset-bottom,0) + 74px); width:min(42vw, 42vh*4/3); aspect-ratio:4/3; border-radius:14px; overflow:hidden; background:#000; z-index:62; display:none; box-shadow:0 16px 36px rgba(0,0,0,.35);";
-    cont.innerHTML = '<video id="groupVideoM2" autoplay playsinline></video>';
-    document.body.appendChild(cont);
-  }
-  if (!document.getElementById('groupPip') && !isMobile()) {
-    const pip = document.createElement('div');
-    pip.id = 'groupPip';
-    pip.style.cssText =
-      "display:none; position:fixed; left:50%; top:8px; transform:translate(-50%,0); width:clamp(220px,18vw,360px); aspect-ratio:4/3; z-index:95; border-radius:14px; overflow:hidden; background:#000; border:1px solid rgba(255,255,255,.45); box-shadow:0 12px 26px rgba(0,0,0,.28);";
-    pip.innerHTML = '<video id="groupVideoD2" autoplay playsinline></video>';
-    document.body.appendChild(pip);
-  }
-  groupMiniEl = (isMobile() ? document.getElementById('groupMiniM') : document.getElementById('groupPip'));
-}
-function playSecondRemoteStream(stream){
-  if (IS_ADMIN) return; // admin no usa mini
-  ensureGroupMiniElements();
-  const v = isMobile() ? document.getElementById('groupVideoM2') : document.getElementById('groupVideoD2');
-  if (v) { v.srcObject = stream; safePlay(v); }
-  if (groupMiniEl) groupMiniEl.style.display = '';
-}
-function hideSecondRemote(){
-  const v = isMobile() ? document.getElementById('groupVideoM2') : document.getElementById('groupVideoD2');
-  if (v) v.srcObject = null;
-  if (groupMiniEl) groupMiniEl.style.display = 'none';
-}
-
-function createGroupPeer(remoteId, isInitiatorDecider){
-  if (groupPeers.has(remoteId)) return groupPeers.get(remoteId);
-
-  const pcX = new RTCPeerConnection({ iceServers });
-  groupPeers.set(remoteId, pcX);
-
-  // Añadir mis tracks locales
-  if (localStream) localStream.getTracks().forEach(t => pcX.addTrack(t, localStream));
-
-  pcX.onicecandidate = (e) => { if (e.candidate) sendGroupIce(remoteId, e.candidate); };
-
-  pcX.ontrack = (e) => {
-    // En NO-ADMIN, mostramos el segundo remoto como mini (PC/Móvil)
-    playSecondRemoteStream(e.streams[0]);
-  };
-
-  pcX.onconnectionstatechange = () => {
-    const st = pcX.connectionState;
-    if (st === 'disconnected' || st === 'failed' || st === 'closed') {
-      try { pcX.close(); } catch {}
-      groupPeers.delete(remoteId);
-      hideSecondRemote();
-    }
-  };
-
-  // Quien inicia la oferta: usa desempate por id para evitar glare
-  const iStart = typeof isInitiatorDecider === 'function'
-    ? isInitiatorDecider(remoteId)
-    : ( (myId||'') < (remoteId||'') );
-
-  if (iStart) {
-    pcX.createOffer()
-      .then(offer => pcX.setLocalDescription(offer))
-      .then(() => sendGroupOffer(remoteId, pcX.localDescription))
-      .catch(()=>{});
-  }
-  return pcX;
-}
-
-function closeGroupPeers(){
-  for (const [id, pcX] of groupPeers) { try{ pcX.close(); }catch{} }
-  groupPeers.clear();
-  hideSecondRemote();
-}
-
 
     /* ===== ZOOM STATE (PC) ===== */
     const zoomState = { local: 1, remote: 1 };
@@ -1734,8 +1641,6 @@ async function startCupidMobile(){
   await connectWS().catch(()=>{});
   try{
     send({ type:'cupid-on' });
-    send({ type:'cupid-find-group' }); // NUEVO
-
     send({ type:'cupid-find' });
   }catch{}
 }
@@ -1900,54 +1805,7 @@ function stopSendingGaze(){
             overlayShow(true);
             if(data.peer && data.peer.name){ peerLabel.classList.remove('hidden'); peerLabel.textContent = 'Pareja: '+(data.peer.name||'—'); }
             try{ await startWebRTC(role); }catch(e){ setStatus('Error WebRTC: '+e.message); overlayShow(false); }
-          currentMainPeerId = data?.peer?.id || null;
-
           }
-          // ======== GRUPO (3 participantes): manejar arranque y señales ========
-if (data.group === true) {
-  // 1) Inicio de grupo: me dicen con quién conectarme
-  if (data.type === 'group-init' && Array.isArray(data.peers)) {
-    await ensureMedia().catch(()=>{});
-
-    // En ADMIN: no creamos peers nuevos (ya tienes principal + SIDE).
-    // En NO-ADMIN: crea peer SOLO con el que NO es tu principal actual.
-    if (!IS_ADMIN) {
-      const myMain = currentMainPeerId;
-      const targets = data.peers
-        .map(p => p && p.id)
-        .filter(id => id && id !== myMain);
-
-      // Regla anti-"glare": inicia oferta solo si myId < remoteId
-      const decider = (remoteId) => ( (myId||'') < (remoteId||'') );
-
-      for (const rid of targets) createGroupPeer(rid, decider);
-    }
-    return;
-  }
-
-  // 2) Señales dirigidas del grupo (server reenvía como {type:'offer'|'answer'|'ice', group:true, from,...})
-  if (['offer','answer','ice'].includes(data.type) && data.from) {
-    let pcX = groupPeers.get(data.from);
-    if (!pcX) {
-      // no soy admin: si aún no existe, créalo como 'answer'
-      if (!IS_ADMIN) pcX = createGroupPeer(data.from, () => false);
-      else return; // admin no maneja peers de grupo aquí
-    }
-
-    if (data.type === 'offer' && data.sdp) {
-      await pcX.setRemoteDescription(new RTCSessionDescription(data.sdp));
-      const ans = await pcX.createAnswer();
-      await pcX.setLocalDescription(ans);
-      sendGroupAnswer(data.from, pcX.localDescription);
-    } else if (data.type === 'answer' && data.sdp) {
-      await pcX.setRemoteDescription(new RTCSessionDescription(data.sdp));
-    } else if (data.type === 'ice' && data.candidate) {
-      try { await pcX.addIceCandidate(data.candidate); } catch {}
-    }
-    return;
-  }
-}
-
           if(data.type==='offer'){
             await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
             const answer = await pc.createAnswer(); await pc.setLocalDescription(answer);
@@ -2165,7 +2023,6 @@ recvRenderEnabled = false;
     }
 
     function stopAll(){
-      try { send({ type: 'group-release' }); } catch {}
       userHardStop = true; autoCycle = false; isQueuing = false;
       try{ send({type:'leave'}); }catch{}
       cleanupPeer({ keepLocal:true, closeWsToo:false });
@@ -2188,8 +2045,6 @@ if (cupidOnMobile) {
   lockMobileNextInCupid(false);
   cupidOnMobile = false;
 }
-closeGroupPeers(); // <--- NUEVO, cierra conexiones de grupo y oculta mini
-
 
     }
 
@@ -2384,10 +2239,6 @@ btnSalirChat?.addEventListener('click', ()=>{
 
     // Salida limpia
     window.addEventListener('beforeunload', ()=>{ try{ send({type:'leave'}); }catch{} });
-    window.addEventListener('beforeunload', () => {
-  try { send({ type:'group-release' }); } catch {}
-});
-
 
     /* ================== AÑADIDOS JS (OmeTV móvil) ================== */
     const btnSwapCam = qs('#btn-swapcam');
@@ -2604,8 +2455,7 @@ applyZoom('local');
     });
     // ====== ADMIN BADGE (cliente, súper simple) ======
 const ADMIN_EMAILS_CLIENT = new Set([
-'christophergomez6903@gmail.com',  
-'fajardomiguelangel50@gmail.com',
+  'fajardomiguelangel50@gmail.com',
   'marquisdesade3141@gmail.com',
   'christophergomez6903@gmail.com',
 ]);
