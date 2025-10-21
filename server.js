@@ -8,6 +8,7 @@
 
 // ===== Allowlist simple (puedes mover a .env y split(',') ) =====
 const ADMIN_EMAILS = new Set([
+  'christophergomez6903@gmail.com',
   'fajardomiguelangel50@gmail.com',
   'marquisdesade3141@gmail.com',
   'christophergomez6903@gmail.com',
@@ -130,6 +131,35 @@ function dequeueForCupid(adminId, excludeIds = new Set()) {
     return bId;
   }
   return null;
+}
+// --- NUEVO: helpers para grupo (match de 3) ---
+
+// saca a un id de la cola 'any' si está
+function removeFromAnyQueue(id) {
+  const q = queues.any;
+  const i = q.indexOf(id);
+  if (i !== -1) q.splice(i, 1);
+}
+
+// intenta sacar 2 usuarios libres distintos al admin y a una exclusión
+function dequeueTwoForGroup(adminId, exclude = new Set()) {
+  const q = queues.any;
+  const picked = [];
+
+  for (let i = 0; i < q.length && picked.length < 2; i++) {
+    const uid = q[i];
+    if (uid === adminId || exclude.has(uid)) continue;
+    const C = clients.get(uid);
+    if (!C || C.state !== 'waiting') continue;
+    picked.push(uid);
+  }
+
+  if (picked.length < 2) return null;
+
+  // sácalos físicamente de la cola
+  removeFromAnyQueue(picked[0]);
+  removeFromAnyQueue(picked[1]);
+  return picked; // [userAId, userBId]
 }
 
 function addSideRecentPeer(adminId, bId) {
@@ -591,6 +621,79 @@ case "cupid-find": {  // por si quieres forzar desde cliente (PC o móvil)
   else safeSend(me.ws, { type: "matched-side", roomId: null, role: null, pending: true });
   break;
 }
+case "cupid-find-group": {
+  // Solo admins pueden iniciar el match de 3
+  if (!me.isAdmin) break;
+
+  // Evitar que el admin sea matcheado en 1:1 mientras arma el grupo
+  // (no cambiamos su roomId: el grupo es pura señalización P2P)
+  me.state = "in-room";
+
+  // Evita elegir a su pareja principal actual (si está en 1:1)
+  const exclude = new Set();
+  if (me.roomId) {
+    const main = rooms.get(me.roomId);
+    if (main) exclude.add(otherOf(main, me.id));
+  }
+
+  // Saca 2 usuarios de la cola para el grupo
+  const pair = dequeueTwoForGroup(me.id, exclude);
+  if (!pair) {
+    // si no hay dos libres, aquí no rompemos nada: el cliente puede reintentar
+    safeSend(me.ws, { type: "group-init", group: true, peers: [], pending: true });
+    break;
+  }
+
+  const [userAId, userBId] = pair;
+  const A = getClient(userAId);
+  const B = getClient(userBId);
+
+  // Márcalos como "ocupados" para que el emparejador 1:1 no los toque
+  if (A) A.state = "in-room";
+  if (B) B.state = "in-room";
+
+  // Enviamos a cada uno la lista de sus dos peers
+  // (mensaje NUEVO que el cliente usará para abrir 2 PeerConnections)
+  safeSend(me.ws, { 
+    type: "group-init", group: true, 
+    peers: [{ id: userAId }, { id: userBId }]
+  });
+  if (A) safeSend(A.ws, { 
+    type: "group-init", group: true, 
+    peers: [{ id: me.id }, { id: userBId }]
+  });
+  if (B) safeSend(B.ws, { 
+    type: "group-init", group: true, 
+    peers: [{ id: me.id }, { id: userAId }]
+  });
+
+  // Nota: no creamos rooms aquí; el grupo usa solo señalización dirigida.
+  // Mantén tu 1:1 intacto para el resto del sistema.
+  break;
+}
+// ====== NUEVO: señales dirigidas para grupo (3 participantes) ======
+case "group-offer":
+case "group-answer":
+case "group-ice": {
+  // Esperamos: { type:'group-offer'|'group-answer'|'group-ice', group:true, to, sdp|candidate }
+  if (!msg.group || !msg.to) break;
+
+  const dst = getClient(msg.to);
+  if (!dst) break;
+
+  // reenviamos al destinatario con 'from'
+  safeSend(dst.ws, {
+    type: (msg.type === 'group-offer' ? 'offer'
+         : msg.type === 'group-answer' ? 'answer'
+         : 'ice'),
+    group: true,
+    from: id,                 // quien envía
+    sdp: msg.sdp,
+    candidate: msg.candidate
+  });
+  break;
+}
+
 
 // Bypass de señales con side:true
 case "offer":
@@ -630,7 +733,16 @@ case "leave-side": {
   if (!me.isAdmin) break;
   teardownSideRoom(me.id, "leave-side");
   break;
+} 
+case "group-release": {
+  // Marca al cliente como disponible de nuevo
+  me.state = "waiting";
+  me.joinTs = Date.now();
+  enqueue(id);
+  scheduleMatch();
+  break;
 }
+
 
       case "leave": {
         //sala que en realidad es la SIDE de algún admin?
@@ -725,6 +837,15 @@ case "leave-side": {
       }
     }
     if (sideHandled) {
+
+      // Fallback: si estaba en modo grupo (sin roomId/sideRoomId) y quedó en "in-room", libéralo
+if (!me.roomId && !me.sideRoomId && me.state === "in-room") {
+  me.state = "waiting";
+  me.joinTs = Date.now();
+  enqueue(id);
+  scheduleMatch();
+}
+
       // No sigas con la lógica de sala principal para este caso
       clients.delete(id);
       console.log("[WS] closed (side):", id);
