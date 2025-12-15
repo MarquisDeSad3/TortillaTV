@@ -1443,18 +1443,46 @@ function saveLocalZoom(z){
 
     async function ensureMedia(autoPlay=true){
       try{
+        // ✅ OPTIMIZACIÓN: si ya tenemos stream vivo, NO vuelvas a pedir getUserMedia.
+        // Esto acelera muchísimo el emparejado/"siguiente" y evita timeouts en el server.
+        if (localStream){
+          const v = localStream.getVideoTracks?.()[0];
+          const a = localStream.getAudioTracks?.()[0];
+          const vOk = !!v && v.readyState === 'live';
+          const aOk = !!a && a.readyState === 'live';
+          if (vOk && aOk){
+            attachLocal(localStream, autoPlay);
+            applyMuteAndCam();
+            return localStream;
+          }
+        }
+
         const stream = await getStream({ facing: currentFacing });
+        // primera vez
         if(!localStream){
           localStream = stream;
         }else{
-          const newV = stream.getVideoTracks()[0];
-          const oldV = localStream.getVideoTracks()[0];
-          if(oldV) oldV.stop();
-          localStream.removeTrack(oldV);
-          localStream.addTrack(newV);
-          const sender = pc?.getSenders().find(s=>s.track && s.track.kind==='video');
-          if(sender) await sender.replaceTrack(newV);
+          // reemplazar tracks (por si alguno murió)
+          const newV = stream.getVideoTracks?.()[0];
+          const newA = stream.getAudioTracks?.()[0];
+
+          const oldV = localStream.getVideoTracks?.()[0];
+          const oldA = localStream.getAudioTracks?.()[0];
+
+          if (oldV) { try{ oldV.stop(); }catch{}; try{ localStream.removeTrack(oldV); }catch{} }
+          if (oldA) { try{ oldA.stop(); }catch{}; try{ localStream.removeTrack(oldA); }catch{} }
+
+          if (newV) localStream.addTrack(newV);
+          if (newA) localStream.addTrack(newA);
+
+          // si ya hay PC, reemplazar en caliente
+          const senders = pc?.getSenders?.() || [];
+          const sV = senders.find(s=>s.track && s.track.kind==='video');
+          const sA = senders.find(s=>s.track && s.track.kind==='audio');
+          if (sV && newV) await sV.replaceTrack(newV);
+          if (sA && newA) await sA.replaceTrack(newA);
         }
+
         attachLocal(localStream, autoPlay);
         applyMuteAndCam();
         return localStream;
@@ -1960,15 +1988,38 @@ applyZoom('remote');
     }
 
     // Auto-cycle
-    function handleCallEnded(){
+    // ⚠️ IMPORTANTE:
+    // - Cuando el server manda "peer-left", ÉL MISMO ya re-encola y puede volver a emparejarte.
+    //   Si aquí mandas "find" otra vez, puedes romper un match nuevo que llegue rápido.
+    // - Cuando se cae la conexión WebRTC (conn:failed/disconnected), el server NO lo sabe;
+    //   ahí sí conviene forzar un "find" para tirar la sala y re-encolar.
+    function handleCallEnded(reason=''){ 
       clearFakeSkipUI();
 
       cleanupPeer({ keepLocal:true, closeWsToo:false });
+
       if(autoCycle && !userHardStop){
-        setStatus('Buscando siguiente…'); overlayShow(true); setSearchingUI();
-        setTimeout(()=>{ findNext(); }, 400);
+        setStatus('Buscando siguiente…');
+        overlayShow(true);
+        setSearchingUI();
+
+        const r = String(reason || '');
+
+        // Si fue un corte de WebRTC (conn:...), forzamos requeue en el server.
+        if (r.startsWith('conn:')){
+          setTimeout(()=>{ findNext(); }, 150);
+        } else {
+          // peer-left / timeouts: NO mandes find; espera el próximo "matched".
+          // Fallback: si por algún motivo en 2s no llega nada, reintenta.
+          setTimeout(()=>{
+            if (!inCall && autoCycle && !userHardStop && wsOpen && !roomId) {
+              findNext();
+            }
+          }, 2000);
+        }
       }else{
-        overlayShow(false); setIdleUI();
+        overlayShow(false);
+        setIdleUI();
       }
       // Volvemos al idle → si estamos en SALA (móvil), reactivar paneo
       showIdleRemote(true);
@@ -1991,11 +2042,21 @@ recvRenderEnabled = false;
         const age = (inpEdad.value || localStorage.getItem('ttv_age') || '—');
         await connectWS();
 
-        await ensureMedia();
-        if (!isMobile()) { await applyARConstraints(); }
-
+        // ✅ Entra a cola INMEDIATO (el server empareja al momento)
         send({type:'find', gender: chosenGender, displayName, age});
         setStatus('En cola…');
+
+        // ✅ Cam/mic en paralelo (evita delay + evita timeouts de offer/answer)
+        ensureMedia().then(async()=>{
+          if (!isMobile()) { await applyARConstraints(); }
+        }).catch(()=>{
+          // Si niega permisos, sácalo de la cola para no fastidiar a otros
+          try{ send({type:'leave'}); }catch{}
+          setStatus('Permite cámara y micrófono para continuar');
+          overlayShow(false);
+          isQueuing=false; autoCycle=false;
+          setIdleUI();
+        });
       }catch{
         setStatus('Error de conexión WS'); overlayShow(false); isQueuing=false; autoCycle=false; setIdleUI();
       }

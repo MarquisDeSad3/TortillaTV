@@ -39,7 +39,7 @@ const MATCH_OFFER_TIMEOUT_MS = 5000;  // esperar offer
 const MATCH_ANSWER_TIMEOUT_MS = 5000; // esperar answer
 const REQUEUE_COOLDOWN_MS = 500;      // anti-spam 'find'
 const MAX_WAIT_MS = 10_000;           // anti-starvation (ignora recentPeers temporalmente)
-const RECENT_PEERS_MAX = 5;           // memoria corta para no repetir inmediato
+const RECENT_PEERS_MAX = 20;          // memoria más larga para NO repetir si hay más gente
 
 // Keepalive
 const PING_INTERVAL_MS = 15_000;
@@ -127,7 +127,9 @@ function dequeueForCupid(adminId, excludeIds = new Set()) {
     const recentBlocked = (A.sideRecentPeers?.has(bId) || B.recentPeers?.has(adminId));
     if (recentBlocked && waitedMs < 6000) continue;
 
+    // quítalo de la cola (y marca que ya no está en cola)
     q.splice(i, 1);
+    B.inQueue = false;
     return bId;
   }
   return null;
@@ -138,7 +140,11 @@ function dequeueForCupid(adminId, excludeIds = new Set()) {
 function removeFromAnyQueue(id) {
   const q = queues.any;
   const i = q.indexOf(id);
-  if (i !== -1) q.splice(i, 1);
+  if (i !== -1) {
+    q.splice(i, 1);
+    const c = clients.get(id);
+    if (c) c.inQueue = false;
+  }
 }
 
 // intenta sacar 2 usuarios libres distintos al admin y a una exclusión
@@ -201,7 +207,12 @@ function broadcastFakeSkip(roomId, on, actorId){
 // ===== Cola FIFO (O(n)) =====
 function enqueue(id, key = "any") {
   const q = queues[key];
-  if (!q.includes(id)) q.push(id);
+  const c = clients.get(id);
+  if (!c) return;
+  if (c.state !== "waiting") return;
+  if (c.inQueue) return;
+  c.inQueue = true;
+  q.push(id);
 }
 function compactQueueInPlace(key = "any") {
   const q = queues[key];
@@ -209,7 +220,12 @@ function compactQueueInPlace(key = "any") {
   for (let r = 0; r < q.length; r++) {
     const id = q[r];
     const c = clients.get(id);
-    if (c && c.state === "waiting") q[w++] = id; // mantiene relativos
+    if (c && c.state === "waiting") {
+      c.inQueue = true;
+      q[w++] = id; // mantiene relativos
+    } else {
+      if (c) c.inQueue = false;
+    }
   }
   q.length = w;
 }
@@ -217,12 +233,20 @@ function compactQueueInPlace(key = "any") {
 // Busca una pareja válida sin O(n²):
 function dequeueValidPair(key = "any") {
   const q = queues[key];
-  while (q.length >= 2) {
+  // ⚠️ Importante: NO cortar toda la ronda si el primer A no puede emparejar.
+  // Si cortas aquí, puedes dejar gente esperando aunque existan parejas posibles.
+  const rotations = q.length; // límite para evitar bucles infinitos
+  for (let rot = 0; rot < rotations && q.length >= 2; rot++) {
     const aId = q.shift();
     const A = clients.get(aId);
+    // Siempre que salga de la cola, marca inQueue=false (aunque cambie de estado entre ticks)
+    if (A) A.inQueue = false;
     if (!A || A.state !== "waiting") continue;
 
     let bIdx = -1;
+    let firstWaitingIdx = -1;
+    let waitingCount = 0;
+
     const waitedTooLong = (Date.now() - (A.joinTs || 0)) > MAX_WAIT_MS;
 
     for (let i = 0; i < q.length; i++) {
@@ -230,20 +254,33 @@ function dequeueValidPair(key = "any") {
       const B = clients.get(bId);
       if (!B || B.state !== "waiting") continue;
 
+      waitingCount++;
+      if (firstWaitingIdx === -1) firstWaitingIdx = i;
+
       const skipRecent =
         (!waitedTooLong) && (A.recentPeers?.has(bId) || B.recentPeers?.has(aId));
       if (skipRecent) continue;
 
-      bIdx = i; break;
+      bIdx = i;
+      break;
     }
 
     if (bIdx === -1) {
-      // No encontramos pareja válida ahora → re-cola A al final y cortamos esta ronda.
-      q.push(aId);
-      return null;
+      // ✅ No hay opción NO-reciente.
+      // - Si solo hay 1 candidato esperando (poca gente), empareja igual para que sea "al momento".
+      // - Si A ya esperó mucho, también relaja.
+      if (firstWaitingIdx !== -1 && (waitingCount <= 1 || waitedTooLong)) {
+        bIdx = firstWaitingIdx;
+      } else {
+        // Re-cola A al final y sigue intentando con otros (no frenes el match global)
+        enqueue(aId, key);
+        continue;
+      }
     }
 
     const bId = q.splice(bIdx, 1)[0];
+    const B = clients.get(bId);
+    if (B) B.inQueue = false;
     return [aId, bId];
   }
   return null;
@@ -512,6 +549,7 @@ wss.on("connection", (ws) => {
     name: null,
     email: null,          // 👈 útil para logs
     state: "idle",
+    inQueue: false,        // 👈 evita O(n) con includes() y duplicados en cola
     roomId: null,
     joinTs: 0,
     recentPeers: new Set(),
