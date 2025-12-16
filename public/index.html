@@ -1,3003 +1,1567 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <!-- Bloqueo de zoom/pinch en móvil -->
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>TortillaTV</title>
-  <meta name="theme-color" content="#0b1324" />
 
-  <!-- Fuentes y Tailwind -->
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@800&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
- <script src="https://cdn.jsdelivr.net/npm/webgazer/dist/webgazer.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
 
+  <!-- Tailwind CDN (simple + rápido para estilos en una sola página) -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          fontFamily: { sans: ["Inter","system-ui","Segoe UI","Roboto"], display: ["Caveat","ui-serif"] },
-          colors: { paper: "#faf9f6", rule: "#93c5fd66", marginRed: "#ef4444aa" },
-          keyframes: {
-            pageFlipIn: { "0%": { transform:"rotateY(-90deg) translateX(-20px)", opacity:0 }, "100%": { transform:"rotateY(0) translateX(0)", opacity:1 } },
-            noteSlide: { "0%":{ transform:"translateX(0%)" }, "100%":{ transform:"translateX(-100%)" } },
-            inkSweep: { "0%":{ transform:"translateX(-120%) skewX(-8deg)" , opacity:.0}, "60%":{opacity:.45}, "100%":{ transform:"translateX(120%) skewX(-8deg)", opacity:0 } },
-            scribbleFlow: { "0%":{ strokeDashoffset:0 }, "100%":{ strokeDashoffset:-1400 } },
-            wobbleIn: { "0%":{ transform:"translateY(12px) scale(.98)", opacity:0 }, "100%":{ transform:"translateY(0) scale(1)", opacity:1 } }
-          },
-          animation: {
-            pageFlipIn: "pageFlipIn .6s ease both",
-            noteSlide: "noteSlide .7s cubic-bezier(.22,.61,.36,1) both",
-            inkSweep: "inkSweep 1.4s ease-out .15s 1",
-            scribbleFlow: "scribbleFlow 5s linear 2s infinite",
-            wobbleIn: "wobbleIn .65s ease-out .25s both"
-          },
-          boxShadow: { card: "0 12px 30px rgba(0,0,0,.07)" }
-        }
-      }
-    }
-  </script>
-
-  <!-- Firebase (compat) SOLO login Google -->
-  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-auth-compat.js"></script>
 
   <style>
     :root{
-      --paper:#faf9f6; --rule:#93c5fd66; --margin:#ef4444aa; --hole:#e5e7eb; --ink:#111827;
-      --box-ar: 1/1; /* PC por defecto 1:1 (captura/ventana) */
-      --vh: 1vh; --dvh: 1dvh; /* viewport fix cross-browser */
-    }
-    body.ar-1-1{ --box-ar: 1/1; }
-    body.ar-4-3{ --box-ar: 4/3; }
-    body.ar-16-9{ --box-ar: 16/9; }
-
-    html,body{ height:100%; background:var(--paper); color:var(--ink); -webkit-font-smoothing:antialiased; -webkit-text-size-adjust:100%; }
-
-    /* ( ajuste para alinear el scroller) */
-    #noteScroller { display:flex; justify-content:flex-start; gap:0.2ch; align-items:center; }
-    #noteScroller .slide { font-size: 0.75em; }
-
-    /* Bloquear scroll global cuando estemos en la sala en móvil */
-    body.no-scroll{ position:fixed; inset:0; overflow:hidden; width:100%; height:calc(var(--dvh) * 100); }
-
-    /* Evitar gestos extra de zoom en móvil */
-    * { touch-action: manipulation; }
-
-    /* Papel y adornos (estética) */
-    .paper-bg{ position:relative; min-height:calc(var(--dvh) * 100); background-image:repeating-linear-gradient(0deg, transparent, transparent 32px, var(--rule) 33px, var(--rule) 34px); }
-    .paper-bg::before{ content:""; position:absolute; inset:0; background:linear-gradient(90deg, transparent 56px, var(--margin) 59px, transparent 62px); pointer-events:none }
-    .paper-holes{ position:absolute; left:18px; top:96px; display:flex; flex-direction:column; gap:96px; pointer-events:none }
-    .paper-hole{ width:18px; height:18px; border-radius:999px; background:var(--hole); box-shadow:inset 0 2px 4px rgba(0,0,0,.2) }
-    .book{ perspective:1200px }
-    .page{ transform-origin:left center; backface-visibility:hidden; transform-style:preserve-3d; transition:opacity .4s ease }
-    .page.hidden{ opacity:0; pointer-events:none; transform:rotateY(-90deg) translateX(-20px) }
-    .page.visible{ opacity:1; transform:rotateY(0); animation:pageFlipIn .6s ease both }
-    .card{ background:rgba(255,255,255,.8); border:2px solid rgba(17,24,39,.1); border-radius:20px; padding:12px; box-shadow:0 12px 30px rgba(0,0,0,.07); backdrop-filter:blur(6px) }
-
-    .hero{ position:relative; min-height:78vh; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center }
-    .ttv{ position:relative; display:inline-block }
-    .ttv .word{ display:inline-block; transform-origin:50% 70%; animation:ttv-wobble 2.4s ease-in-out infinite }
-    .ttv .word:nth-child(2){ animation-delay:.15s }
-    .ttv .word:nth-child(3){ animation-delay:.3s }
-    .ttv .accent{ display:inline-block; padding-inline:.15em; transform:rotate(-2deg); text-shadow:0 2px 0 #ffe4e6 }
-
-    .ttv::before{
-      content:""; position:absolute; inset:auto 0 -8px 0; height:28%;
-      background:linear-gradient(90deg, rgba(244,63,94,.28), rgba(244,63,94,.6), rgba(244,63,94,.28));
-      filter:blur(10px); transform-origin:left center; pointer-events:none;
-      animation:inkSweep 1.4s ease-out .15s 1;
+      --bg1:#0b1020;
+      --bg2:#1a0b24;
+      --card:rgba(255,255,255,.06);
+      --card2:rgba(255,255,255,.10);
+      --stroke:rgba(255,255,255,.12);
+      --text:rgba(255,255,255,.92);
+      --muted:rgba(255,255,255,.68);
+      --good:#22c55e;
+      --warn:#f59e0b;
+      --bad:#ef4444;
+      --brand:#a855f7;
     }
 
-    .note{ font-family:"Caveat", ui-serif; font-weight:800; background:#fff7cc; color:#0b1324; border-radius:.5rem; box-shadow:0 4px 0 rgba(0,0,0,.2); transform:rotate(-4deg); overflow:hidden; }
-    .note-tiny{ font-size:clamp(30px,8vw,36px); padding:.05em .35em; min-width:auto; line-height:1.05; }
-    .note-at-title{ position:absolute; left:-10px; top:-14px; z-index:5; }
-
-    @keyframes ttv-wobble{ 0%,100%{ transform:translateY(0) } 25%{ transform:translateY(-4px) } 50%{ transform:translateY(2px) } 75%{ transform:translateY(-2px) } }
-
-    .scribble{ width:min(920px,92vw); height:32px; margin-inline:auto }
-    .scribble path{ stroke:rgba(239,68,68,.82); stroke-width:6; fill:none; stroke-linecap:round; stroke-dasharray:1400; animation:scribble 1.8s ease forwards, scribbleFlow 5s linear 2s infinite; filter: drop-shadow(0 0 6px rgba(239,68,68,.45)); }
-
-    /* ===== Idle de ruido (video) ===== */
-    .idle-video{
-      position:absolute; inset:0;
-      width:100%; height:100%;
-      object-fit:cover;        /* ocupa todo el contenedor */
-      transform:scale(1.22);   /* más de cerca */
-      z-index:2;
-      pointer-events:none;     /* no bloquea clicks */
-    }
-    .hide{ display:none !important; }
-
-    /* ====== VIDEO (REGLAS BASE) ====== */
-    video{ width:100%; height:100%; background:#000; display:block; object-position:center center; -webkit-user-select:none; user-select:none; }
-    video.mirror{ transform: scaleX(-1) }
-
-   /* --- Desktop con aspect-ratio: no dependas de JS para altura --- */
-.stage{ position:relative; width:100%; }
-.layout-split{
-  display:grid; grid-template-columns:1fr 1fr; gap:1rem;
-}
-.layout-split .tile{
-  position:relative;
-  border-radius:16px; overflow:hidden; background:#000;
-  /* la altura la define el aspect-ratio */
-  height:auto; 
-  aspect-ratio: var(--box-ar);
-  display:block;
-}
-/* fija el <video> pegado al tile, sin alterar layout */
-.layout-split .tile video{
-  position:absolute; inset:0; width:100%; height:100%;
-}
-    /* Local: SIEMPRE cubrir (sin bandas) */
-    #stage .tile.local  video{ object-fit: cover; }
-    
-    /* Remoto: por defecto NO recortar */
-    #stage .tile.remote video{ object-fit: contain; background:#000; }
-    body.remote-portrait #stage .tile.remote video{ object-fit: cover; }
-
-    /* ===== MÓVIL: FULL-BLEED MITAD/MITAD ===== */
-    .layout-mobile-fixed{
-      position:fixed; inset:0; height:calc(var(--dvh) * 100);
-      display:grid; grid-template-rows:1fr 1fr; grid-template-columns:1fr;
-      background:#000; z-index:0;
-    }
-    .pane{ position:relative; overflow:hidden; background:#000; }
-    .pane video{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
-    .pane video.contain{ object-fit: contain; background:#000; }
-
-    /* Ocultar PiP en móvil y landing */
-    .pip{ display:none !important; }
-
-    /* Topbar (PC) */
-    .topbar .btn{ border:2px solid rgba(17,24,39,.3); background:rgba(255,255,255,.9); padding:.5rem .9rem; border-radius:999px; font-weight:600; }
-    .topbar .btn:disabled{ opacity:.55 }
-
-    /* Botones fijos (MÓVIL) */
-    .mobile-btn{
-      position:fixed; bottom:calc(env(safe-area-inset-bottom,0) + 14px);
-      z-index:60; border-radius:999px; padding:.78rem 1.05rem;
-      border:2px solid rgba(255,255,255,.25); background:rgba(17,24,39,.7); color:#fff;
-      font-weight:800; backdrop-filter:blur(6px); box-shadow:0 10px 28px rgba(0,0,0,.25);
-    }
-    #btn-buscar-m{ left:14px; }
-    #btn-salir-m{ right:14px; }
-
-   .overlay{
-  position:absolute; inset:0;
-  display:flex; align-items:center; justify-content:center;
-  background:rgba(0,0,0,.25); z-index:20;
-  pointer-events:none;
-  opacity:0; visibility:hidden;
-  transition: opacity .18s linear, visibility 0s linear .18s;
-}
-.overlay.show{
-  opacity:1; visibility:visible;
-  transition: opacity .18s linear;
-}
- .idle-video{
-  position:absolute; inset:0;
-  width:100%; height:100%;
-  object-fit:cover;
-  transform:scale(1.22);
-  z-index:2; pointer-events:none;
-  opacity:1; visibility:visible;
-  transition: opacity .12s linear, visibility 0s linear .12s;
-}
-.idle-video.hide{
-  opacity:0; visibility:hidden;
-  transition: opacity .12s linear;
-}
-    .overlay .card{ pointer-events:auto; } /* por si quieres hacer clic en algo dentro */
-
-    .dot{ width:10px; height:10px; border-radius:999px; background:#ef4444; margin:0 4px; animation:b .9s infinite alternate }
-    .dot:nth-child(2){ animation-delay:.15s } .dot:nth-child(3){ animation-delay:.3s }
-
-    /* PC helpers */
-    .full-bleed{ width:100vw; position:relative; left:50%; right:50%; margin-left:-50vw; margin-right:-50vw; }
-    @media (min-width: 640px){
-      .card.stretch{ height:100%; display:flex; flex-direction:column; }
-      .card.stretch > .tile{ flex:1 1 auto; }
-    }
-
-    /* Móvil: oculta topbar y paddings cuando entras a sala */
-    @media (max-width: 640px){
-      .topbar{ display:none; }
-      main{ padding:0 !important; }
-      .book{ padding:0 !important; }
-      .full-bleed{ margin:0; left:0; right:0; width:100%; }
-    }
-
-    /* ====== CONTROLES DE ZOOM (PC) ====== */
-    .zoom-controls{ position:absolute; right:10px; bottom:10px; display:flex; gap:6px; z-index:20; }
-    .zoom-btn{ width:30px; height:30px; border-radius:999px; display:grid; place-items:center; font-weight:800; background:rgba(255,255,255,.9); border:2px solid rgba(17,24,39,.35); box-shadow:0 8px 18px rgba(0,0,0,.18) }
-    .zoom-btn:active{ transform:translateY(1px) }
-
-    /* Asegura el clipping al hacer zoom */
-    .tile video{ will-change:transform; }
-
-    /* ===== Dock inferior SOLO en móviles ===== */
-    .mobile-dock{
-      position:fixed;
-      left:12px; right:12px;
-      bottom:calc(env(safe-area-inset-bottom,0) + 10px);
-      z-index:60;
-      display:grid; grid-template-columns:1fr 1fr; gap:10px;
-      padding:10px;
-      border-radius:18px;
-      background:rgba(17,24,39,.55);
-      backdrop-filter:blur(10px);
-      box-shadow:0 16px 36px rgba(0,0,0,.35);
-      border:1px solid rgba(255,255,255,.18);
-    }
-    .dock-btn{ padding:.9rem 1rem; border-radius:999px; font-weight:800; border:2px solid transparent; -webkit-tap-highlight-color: transparent; }
-    .dock-btn--primary{ background:#fff; color:#111; border-color:#ddd; }
-    .dock-btn--ghost{ background:transparent; color:#fff; border-color:rgba(255,255,255,.4); }
-    @media (min-width: 641px){ .mobile-dock{ display:none } }
-
-    /* ============== AÑADIDOS (móvil estilo OmeTV) ============== */
-    @media (max-width:640px){
-      .mobile-dock{ display:none !important; }
-      .topbar{ display:none !important; }
-    }
-
-    /* Botón mini cambiar cámara (abajo-izq) */
-    .cam-switch{
-      position:fixed; left:12px;
-      bottom:calc(env(safe-area-inset-bottom,0) + 12px);
-      z-index:70; width:42px; height:42px; border-radius:999px;
-      display:grid; place-items:center; font-size:18px; font-weight:900;
-      background:rgba(17,24,39,.75); color:#fff; border:2px solid rgba(255,255,255,.25);
-      backdrop-filter:blur(8px); box-shadow:0 10px 28px rgba(0,0,0,.28);
-      -webkit-tap-highlight-color: transparent;
-    }
-    @media (min-width:641px){ .cam-switch{ display:none } }
-
-    /* Pantalla estática (cuando no hay stream o esperando) */
-    .idle{
-      position:absolute; inset:0; display:grid; place-items:center;
-      background:#000; color:#fff; text-align:center; font-weight:800;
-      text-shadow:0 2px 10px rgba(0,0,0,.6); z-index:1;
-    }
-    .idle.hide{ display:none; }
-
-    .static-noise{ 
+    html,body{ height:100%; }
+    body{
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif;
+      color: var(--text);
       background:
-        repeating-linear-gradient(0deg, rgba(255,255,255,.05) 0 2px, transparent 2px 4px),
-        repeating-linear-gradient(90deg, rgba(255,255,255,.035) 0 2px, transparent 2px 3px),
-        #000;
-      animation:tvNoise 1s steps(8) infinite;
-    }
-    @keyframes tvNoise{
-      0%{ filter:contrast(140%) brightness(115%); }
-      100%{ filter:contrast(140%) brightness(115%); transform:translateY(-1px); }
+        radial-gradient(1200px 800px at 20% 10%, rgba(168,85,247,.28), transparent 60%),
+        radial-gradient(1000px 700px at 80% 20%, rgba(59,130,246,.22), transparent 62%),
+        radial-gradient(900px 700px at 60% 90%, rgba(34,197,94,.14), transparent 60%),
+        linear-gradient(180deg, var(--bg1), var(--bg2));
+      overflow-x:hidden;
     }
 
-    /* Ocultamos tip "desliza" porque ahora hay cubo + sway */
-    .swipe-tip{ display:none !important; }
-
-    /* ====== Móvil: engranaje ajustes (mute) ====== */
-    .gear-btn{
-  position:fixed; left:12px; top:calc(env(safe-area-inset-top,0) + 12px);
-  z-index:80; width:42px; height:42px; border-radius:999px;
-  display:grid; place-items:center; font-size:18px; font-weight:900;
-  background:rgba(17,24,39,.75); color:#fff; border:2px solid rgba(255,255,255,.25);
-  backdrop-filter:blur(8px); box-shadow:0 10px 28px rgba(0,0,0,.28);
-}
-    @media (min-width:641px){ .gear-btn{ display:none } }
-
-    .sheet{
-      position:fixed; right:12px; top:60px; z-index:81;
-      background:rgba(17,24,39,.92); color:#fff; border-radius:14px;
-      border:1px solid rgba(255,255,255,.2); padding:10px 12px; min-width:180px;
-      box-shadow:0 16px 36px rgba(0,0,0,.35); display:none;
-    }
-    .sheet.show{ display:block; }
-    .sheet .row{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:6px 2px; }
-    .switch{ appearance:none; width:40px; height:22px; border-radius:999px; position:relative; background:#444; outline:none; cursor:pointer; }
-    .switch:checked{ background:#22c55e; }
-    .switch::after{ content:""; position:absolute; top:3px; left:3px; width:16px; height:16px; border-radius:999px; background:#fff; transition:left .2s; }
-    .switch:checked::after{ left:21px; }
-
-    /* Topbar new controls spacing (PC) */
-    .topbar .sep{ width:1px; height:24px; background:rgba(0,0,0,.15); margin:0 6px; }
-
-    /* ====== PAN L↔R del idle en móvil (solo SALA) ====== */
-    @media (max-width:640px){
-      #idleNoiseM.lr-pan{
-        will-change: transform;
-        animation: noisePan 1.8s ease-in-out infinite alternate;
-        -webkit-animation: noisePan 1.8s ease-in-out infinite alternate;
-      }
-      @keyframes noisePan{
-        0%   { transform: scale(1.22) translateX(-6%); }
-        100% { transform: scale(1.22) translateX( 6%); }
-      }
-      @-webkit-keyframes noisePan{
-        0%   { -webkit-transform: scale(1.22) translateX(-6%); }
-        100% { -webkit-transform: scale(1.22) translateX( 6%); }
-      }
+    .glass{
+      background: var(--card);
+      border:1px solid var(--stroke);
+      box-shadow: 0 20px 50px rgba(0,0,0,.35);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
     }
 
-    /* ===== Emojis en overlay ===== */
-    .emoji-layer{
-      position:absolute; inset:0; pointer-events:none; overflow:hidden;
+    .btn{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:.5rem;
+      border:1px solid var(--stroke);
+      background: rgba(255,255,255,.06);
+      padding:.75rem 1rem;
+      border-radius: 14px;
+      font-weight:600;
+      transition: transform .15s ease, background .15s ease, border-color .15s ease, box-shadow .15s ease;
+      user-select:none;
     }
-    .swipe-emoji{
-      position:absolute; font-size:18px;
-      filter: drop-shadow(0 2px 6px rgba(0,0,0,.35));
-      opacity:0; transform: translate3d(0,0,0) scale(0.9) rotate(0deg);
-      animation: emojiFloat .95s ease-out forwards;
+    .btn:hover{ background: rgba(255,255,255,.10); transform: translateY(-1px); }
+    .btn:active{ transform: translateY(0px) scale(.99); }
+    .btn-primary{
+      background: linear-gradient(90deg, rgba(168,85,247,.9), rgba(59,130,246,.85));
+      border-color: rgba(255,255,255,.18);
+      box-shadow: 0 18px 40px rgba(168,85,247,.18);
     }
-    @keyframes emojiFloat{
-      0%   { opacity:0; transform: translateY(6px) scale(.9) rotate(0deg); }
-      20%  { opacity:1; }
-      100% { opacity:0; transform: translateY(-26px) scale(1.06) rotate(12deg); }
-    }
+    .btn-primary:hover{ background: linear-gradient(90deg, rgba(168,85,247,1), rgba(59,130,246,1)); }
+    .btn-danger{ background: rgba(239,68,68,.14); border-color: rgba(239,68,68,.35); }
+    .btn-danger:hover{ background: rgba(239,68,68,.22); }
 
-    /* ===== Cubo 3D + bamboleo remoto (solo móvil) ===== */
-    @media (max-width:640px){
-      .cube-hint{ display:none !important; } /* ← oculto definitivamente en móvil */
-      .cube{
-        --cube: min(44vw, 44vh);
-        --z: calc(var(--cube) / 2);
-        width: var(--cube); height: var(--cube);
-        transform-style: preserve-3d;
-        animation: cubeSpin 3.2s ease-in-out infinite;
-      }
-      .cube .face{
-        position:absolute; inset:0; display:grid; place-items:center;
-        font-size:clamp(22px, 8vw, 36px); font-weight:900; color:#fff;
-        background:rgba(17,24,39,.22); border:1px solid rgba(255,255,255,.15);
-        border-radius:14px; backdrop-filter: blur(6px);
-      }
-      .cube .front  { transform: translateZ(var(--z)); }
-      .cube .back   { transform: rotateY(180deg) translateZ(var(--z)); }
-      .cube .left   { transform: rotateY(-90deg) translateZ(var(--z)); }
-      .cube .right  { transform: rotateY(90deg) translateZ(var(--z)); }
-      .cube .top    { transform: rotateX(90deg) translateZ(var(--z)); }
-      .cube .bottom { transform: rotateX(-90deg) translateZ(var(--z)); }
-
-      @keyframes cubeSpin{
-        0%   { transform: rotateX(-12deg) rotateY(0deg); }
-        50%  { transform: rotateX(12deg)  rotateY(180deg); }
-        100% { transform: rotateX(-12deg) rotateY(360deg); }
-      }
-
-      /* bamboleo del remoto mientras está buscando */
-      #pane-remote.searching{ animation: remoteSway 1.6s ease-in-out infinite; }
-      @keyframes remoteSway{
-        0%   { transform: translateX(-2%) rotateZ(-0.3deg); }
-        50%  { transform: translateX( 2%) rotateZ( 0.3deg); }
-        100% { transform: translateX(-2%) rotateZ(-0.3deg); }
-      }
+    .chip{
+      display:inline-flex; align-items:center; gap:.4rem;
+      padding:.35rem .65rem;
+      border-radius:999px;
+      border:1px solid var(--stroke);
+      background: rgba(255,255,255,.06);
+      color: var(--muted);
+      font-size:.85rem;
     }
 
-    /* ===== Mano fantasma (móvil, idle) ===== */
-    @media (max-width:640px){
-  .swipe-ghost{
-    position:absolute; inset:0; pointer-events:none; z-index:22;
-    display:none; /* .show => visible */
-  }
-  .swipe-ghost.show{ display:block; }
+    .page{
+      display:none;
+      animation: fadeIn .25s ease both;
+    }
+    .page.active{ display:block; }
+    @keyframes fadeIn{
+      from{ opacity:0; transform: translateY(6px); }
+      to{ opacity:1; transform: translateY(0); }
+    }
 
-  .swipe-ghost .hand{
-    position:absolute;
-    left:14px; top:40%;
-    transform: translateY(-50%);
-    width: clamp(160px, 30vw, 240px);
-    opacity:.85;
-    filter: drop-shadow(0 6px 14px rgba(0,0,0,.4));
-    animation: ghostSeq 2.6s ease-in-out infinite;
-    transform-origin: left center;
-  }
+    .card{
+      position:relative;
+      overflow:hidden;
+      border-radius: 18px;
+      border:1px solid var(--stroke);
+      background: rgba(255,255,255,.06);
+      transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+      box-shadow: 0 18px 50px rgba(0,0,0,.25);
+    }
+    .card::before{
+      content:"";
+      position:absolute;
+      inset:-2px;
+      background: radial-gradient(600px 250px at 20% 0%, rgba(168,85,247,.30), transparent 60%),
+                  radial-gradient(600px 250px at 80% 0%, rgba(59,130,246,.22), transparent 60%);
+      opacity:.9;
+      pointer-events:none;
+    }
+    .card > *{ position:relative; }
+    .card:hover{
+      transform: translateY(-3px);
+      border-color: rgba(255,255,255,.22);
+      box-shadow: 0 26px 70px rgba(0,0,0,.36);
+    }
+    .card:active{ transform: translateY(-1px); }
 
-  @keyframes ghostSeq{
-    0%   { transform: translateY(-50%) translateX(0) scale(.9);  opacity:0; }
-    10%  { transform: translateY(-50%) translateX(0) scale(1.05); opacity:.95; }
-    20%  { transform: translateY(-50%) translateX(0) scale(1.0); opacity:.8; }
-    50%  { transform: translateY(-50%) translateX(120px) scale(1); opacity:.4; } /* Izq→Der */
-    60%  { transform: translateY(-50%) translateX(120px) scale(.98); opacity:0; }
-    100% { transform: translateY(-50%) translateX(0) scale(.96); opacity:0; }
-  }
-}
-/* ===== Admin Badge ===== */
-.admin-badge{
-  position:fixed; top:12px; right:12px; z-index:1000;
-  border-radius:999px; padding:.45rem .8rem;
-  font-weight:800; font-size:.85rem; line-height:1;
-  border:2px solid rgba(0,0,0,.18);
-  box-shadow:0 10px 26px rgba(0,0,0,.16), inset 0 0 0 9999px rgba(255,255,255,.08);
-  display:flex; align-items:center; gap:.45rem;
-  -webkit-tap-highlight-color: transparent;
-  user-select:none;
-}
-.admin-badge .badge-inner{ position:relative; display:flex; align-items:center; gap:.45rem; }
-.admin-badge .badge-icon{ font-size:1rem; transform:translateY(1px); }
-.admin-badge .badge-text{ letter-spacing:.4px; }
+    .tile{
+      position:relative;
+      border-radius: 18px;
+      overflow:hidden;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(0,0,0,.35);
+      box-shadow: 0 18px 50px rgba(0,0,0,.35);
+      min-height: 240px;
+    }
+    .tile video{
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      background: #000;
+    }
 
-/* Estado: NO admin (gris con candado) */
-.admin-badge.admin-off{
-  background:linear-gradient(180deg,#f3f4f6,#e5e7eb);
-  color:#111827;
-  cursor:pointer;
-}
-.admin-badge.admin-off .badge-icon{ filter:grayscale(1) opacity(.9); }
+    .overlay{
+      position:absolute;
+      inset:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding: 16px;
+      background: radial-gradient(800px 400px at 20% 20%, rgba(168,85,247,.10), transparent 55%),
+                  rgba(0,0,0,.55);
+      color: rgba(255,255,255,.92);
+      text-align:center;
+      gap: 12px;
+    }
+    .overlay.hidden{ display:none; }
 
-/* Estado: admin (dorado-morado con brillo + partículas) */
-.admin-badge.admin-on{
-  background: linear-gradient(135deg,#fbbf24 0%, #f59e0b 22%, #a855f7 70%, #7c3aed 100%);
-  color:#fff;
-  border-color: rgba(255,255,255,.28);
-  box-shadow:
-    0 12px 30px rgba(124,58,237,.35),
-    0 0 0 1px rgba(255,255,255,.12) inset,
-    0 0 22px rgba(168,85,247,.55);
-  animation: badgePulse 2.2s ease-in-out infinite;
-}
-@keyframes badgePulse{
-  0%,100%{ transform: translateZ(0) scale(1); }
-  50%    { transform: translateZ(0) scale(1.03); }
-}
+    .spinner{
+      width: 18px; height: 18px;
+      border-radius: 999px;
+      border: 2px solid rgba(255,255,255,.22);
+      border-top-color: rgba(255,255,255,.90);
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin{ to{ transform: rotate(360deg); } }
 
-/* Efecto “shine” que cruza */
-.admin-badge.admin-on::after{
-  content:""; position:absolute; inset:-2px;
-  background:linear-gradient(120deg, transparent 40%, rgba(255,255,255,.45) 50%, transparent 60%);
-  filter: blur(1px);
-  transform: translateX(-120%);
-  animation: shine 3.6s ease-in-out infinite;
-  border-radius:inherit; pointer-events:none;
-}
-@keyframes shine{
-  0%{ transform: translateX(-120%); opacity:.0; }
-  45%{ opacity:.0; }
-  55%{ opacity:.8; }
-  100%{ transform: translateX(120%); opacity:0; }
-}
+    .pip{
+      position:absolute;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 240px;
+      aspect-ratio: 16/9;
+      border-radius: 14px;
+      overflow:hidden;
+      border:1px solid rgba(255,255,255,.18);
+      box-shadow: 0 20px 60px rgba(0,0,0,.55);
+      background: rgba(0,0,0,.5);
+      display:none;
+      z-index: 40;
+    }
+    .pip.show{ display:block; }
+    .pip video{ width:100%; height:100%; object-fit:cover; }
 
-/* Partículas sutiles (sólo admin) */
-.sparkles{
-  position:absolute; inset:-6px; pointer-events:none;
-  background:
-    radial-gradient(circle at 12% 30%, rgba(255,255,255,.85) 0 2px, transparent 3px) no-repeat,
-    radial-gradient(circle at 78% 40%, rgba(255,255,255,.75) 0 1.8px, transparent 2.8px) no-repeat,
-    radial-gradient(circle at 52% 18%, rgba(255,255,255,.9) 0 1.6px, transparent 2.6px) no-repeat,
-    radial-gradient(circle at 66% 74%, rgba(255,255,255,.7) 0 2px, transparent 3px) no-repeat,
-    radial-gradient(circle at 28% 68%, rgba(255,255,255,.7) 0 1.6px, transparent 2.6px) no-repeat;
-  animation: twinkle 2.2s linear infinite;
-  opacity:0; /* apagado por defecto, se enciende en .admin-on */
-}
-.admin-badge.admin-on .sparkles{ opacity:1; }
-@keyframes twinkle{
-  0%   { transform: translateY(0);   filter: drop-shadow(0 0 6px rgba(255,255,255,.5)); }
-  50%  { transform: translateY(-1px); filter: drop-shadow(0 0 10px rgba(255,255,255,.9)); }
-  100% { transform: translateY(0);    filter: drop-shadow(0 0 6px rgba(255,255,255,.5)); }
-  
-}
-/* efecto visual de click del badge */
-.admin-badge:active{
-  transform: translateY(1px);
-}
-/* ===== GAZE bubble (estilo “burbuja real”) ===== */
-.gaze-layer{ position:absolute; inset:0; pointer-events:none; z-index:26; }
+    /* Mobile layout */
+    .m-stage{
+      position: relative;
+      border-radius: 18px;
+      overflow:hidden;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(0,0,0,.35);
+      box-shadow: 0 18px 50px rgba(0,0,0,.35);
+    }
+    .m-top{ height: 52vh; }
+    .m-bottom{ height: 36vh; border-top:1px solid rgba(255,255,255,.12); }
+    .m-mini{
+      position:absolute;
+      right: 12px;
+      bottom: 12px;
+      width: 36%;
+      max-width: 190px;
+      aspect-ratio: 9/16;
+      border-radius: 14px;
+      overflow:hidden;
+      border:1px solid rgba(255,255,255,.18);
+      box-shadow: 0 18px 40px rgba(0,0,0,.55);
+      background:#000;
+      display:none;
+      z-index: 35;
+    }
+    .m-mini.show{ display:block; }
 
-.gaze-bubble{
-  position:absolute;
-  width:30px; height:30px;
-  border-radius:999px;
-  /* cuerpo translúcido con sutil color azulado */
-  background:
-    radial-gradient(40% 40% at 30% 30%, rgba(255,255,255,.95), rgba(255,255,255,.35) 60%, rgba(255,255,255,0) 100%),
-    radial-gradient(90% 90% at 60% 70%, rgba(173,216,230,.25), rgba(255,255,255,0) 70%);
-  /* borde interior + sombra suave para “volumen” */
-  box-shadow:
-    0 8px 16px rgba(0,0,0,.18),
-    inset 0 0 0 1.5px rgba(255,255,255,.9),
-    inset 0 0 18px rgba(255,255,255,.18);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
-
-  transform: translate(-50%,-50%) scale(1);
-  transform-origin: 50% 50%;
-  opacity: 0;
-  will-change: transform, opacity, filter;
-  transition: opacity .12s linear;
-}
-
-/* brillo especular “gota” */
-.gaze-bubble::after{
-  content:"";
-  position:absolute; inset:0;
-  background:
-    radial-gradient(60% 40% at 28% 28%, rgba(255,255,255,.9), rgba(255,255,255,0) 60%);
-  border-radius:inherit;
-  filter: blur(0.4px);
-  pointer-events:none;
-}
-
-/* iridiscencia muy sutil */
-.gaze-bubble::before{
-  content:"";
-  position:absolute; inset:-2px;
-  border-radius:inherit;
-  background: conic-gradient(
-    from 0deg,
-    rgba(255,0,128,.10),
-    rgba(0,128,255,.10),
-    rgba(0,255,180,.10),
-    rgba(255,255,0,.10),
-    rgba(255,0,128,.10)
-  );
-  mix-blend-mode: soft-light;
-  filter: blur(6px) saturate(115%);
-  opacity:.65;
-  pointer-events:none;
-}
-
-.gaze-bubble.show{ opacity:1; }
-
+    .toast{
+      position: fixed;
+      left: 50%;
+      bottom: 16px;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,.7);
+      border:1px solid rgba(255,255,255,.18);
+      padding: 10px 12px;
+      border-radius: 14px;
+      font-weight: 600;
+      color: rgba(255,255,255,.92);
+      display:none;
+      z-index: 60;
+    }
+    .toast.show{ display:block; animation: toastIn .25s ease both; }
+    @keyframes toastIn{
+      from{ opacity:0; transform: translateX(-50%) translateY(10px); }
+      to{ opacity:1; transform: translateX(-50%) translateY(0); }
+    }
   </style>
 </head>
-<body class="font-sans ar-1-1">
-  <!-- BADGE ADMIN (siempre visible) -->
-<button id="adminBadge" type="button" aria-label="Administrador"
-  class="admin-badge admin-off">
-  <span class="badge-inner">
-    <span class="badge-icon" aria-hidden="true">🔒</span>
-    <span class="badge-text">Admin</span>
-    <!-- partículas sólo para admin -->
-    <span class="sparkles" aria-hidden="true"></span>
-  </span>
-</button>
-  <div class="paper-bg">
-    <div class="paper-holes"><div class="paper-hole"></div><div class="paper-hole"></div><div class="paper-hole"></div></div>
-    
-    <main class="book mx-auto max-w-5xl px-6 py-10">
-      <!-- LANDING -->
-      <section id="page-landing" class="page visible">
-        <div class="hero">
-          <h1 class="font-display font-extrabold select-none ttv animate-wobbleIn" style="font-size:clamp(56px,10vw,140px); line-height:.9; text-shadow:0 1px 0 #fff, 0 10px 18px rgba(0,0,0,.15)">
-            <span class="note note-tiny note-at-title">
-              <span class="scroller" id="noteScroller">
-                <span class="slide" id="noteCurr">anal</span>
-                <span class="slide" id="noteNext" style="margin-left:1ch">—</span>
-              </span>
-            </span>
-            <span class="word">Tortilla</span><span class="accent text-rose-600">TV</span>
-          </h1>
+<body>
 
-          <p class="mt-4 text-neutral-700 text-lg">Video chat aleatorio</p>
+  <div class="max-w-5xl mx-auto px-4 py-10">
+    <header class="flex items-center justify-between gap-4 mb-8">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-2xl glass flex items-center justify-center">
+          <span class="text-xl">🥞</span>
+        </div>
+        <div>
+          <div class="text-2xl sm:text-3xl font-extrabold tracking-tight">TortillaTV</div>
+          <div class="text-sm text-white/60">Chat aleatorio por video — Solo / Cupido</div>
+        </div>
+      </div>
 
-          <!-- Género -->
-          <div class="mt-6 grid grid-cols-3 gap-3 max-w-md">
-            <button data-gen="Hombre" class="gen card py-4 flex flex-col items-center gap-2">
-              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M14.5 3H21v6" stroke="#111827" stroke-width="1.8" stroke-linecap="round"/><path d="M21 3l-7.5 7.5" stroke="#111827" stroke-width="1.8" stroke-linecap="round"/><circle cx="9" cy="15" r="5.5" stroke="#111827" stroke-width="1.8"/></svg>
-              <span class="font-semibold">Macho</span>
-            </button>
-            <button data-gen="Tortillera" class="gen card py-4 flex flex-col items-center gap-2">
-              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="8" r="5.5" stroke="#111827" stroke-width="1.8"/><path d="M12 13.5v6M9.5 17h5" stroke="#111827" stroke-width="1.8" stroke-linecap="round"/></svg>
-              <span class="font-semibold">Tortillera</span>
-            </button>
-            <button data-gen="Lada" class="gen card py-4 flex flex-col items-center gap-2">
-              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 14l2-5h12l2 5v4a1 1 0 0 1-1 1h-1" stroke="#111827" stroke-width="1.8" stroke-linejoin="round"/><circle cx="8" cy="19" r="1.6" fill="#111827"/><circle cx="18" cy="19" r="1.6" fill="#111827"/><path d="M6 14h12" stroke="#111827" stroke-width="1.8" stroke-linecap="round"/></svg>
-              <span class="font-semibold">Un Lada</span>
-            </button>
+      <div class="flex items-center gap-2">
+        <span id="chipUser" class="chip hidden"></span>
+        <span id="chipAdmin" class="chip hidden">⭐ Admin</span>
+      </div>
+    </header>
+
+    <!-- PAGE: LANDING -->
+    <section id="pageLanding" class="page active">
+      <div class="glass rounded-2xl p-6 sm:p-8">
+        <div class="flex flex-col sm:flex-row gap-6 sm:gap-10">
+          <div class="flex-1">
+            <h2 class="text-2xl font-extrabold mb-2">Entra rápido</h2>
+            <p class="text-white/70 mb-6">Elige tu género, tu nombre y edad. Luego puedes entrar con Google o como invitado.</p>
+
+            <div class="mb-6">
+              <div class="text-sm font-semibold text-white/80 mb-2">Género</div>
+              <div class="flex flex-wrap gap-2">
+                <button id="btnGenderM" class="btn" type="button">👨 Hombre</button>
+                <button id="btnGenderF" class="btn" type="button">👩 Mujer</button>
+                <button id="btnGenderO" class="btn" type="button">🧑 Otro</button>
+              </div>
+              <div id="genderHint" class="text-xs text-white/55 mt-2">Selecciona una opción.</div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+              <div>
+                <label class="text-sm font-semibold text-white/80">Nombre</label>
+                <input id="inpName" class="mt-1 w-full rounded-xl bg-white/5 border border-white/10 px-4 py-3 outline-none focus:border-white/25" placeholder="Tu nombre..." maxlength="24" />
+              </div>
+              <div>
+                <label class="text-sm font-semibold text-white/80">Edad</label>
+                <input id="inpAge" type="number" inputmode="numeric" min="13" max="99" class="mt-1 w-full rounded-xl bg-white/5 border border-white/10 px-4 py-3 outline-none focus:border-white/25" placeholder="18" />
+              </div>
+            </div>
+
+            <div class="flex flex-col sm:flex-row gap-3">
+              <button id="btnGoogle" class="btn btn-primary" type="button">🔐 Entrar con Google</button>
+              <button id="btnGuest" class="btn" type="button">🚪 Entrar como invitado</button>
+            </div>
+
+            <p class="text-xs text-white/55 mt-4">
+              Nota: te pedirá cámara y micrófono al iniciar un modo de chat.
+            </p>
           </div>
-          <p id="genElegido" class="mt-2 text-sm text-neutral-600"></p>
 
-          <!-- Form extra: nombre y edad (aparece tras elegir sexo) -->
-          <div id="extraForm" class="mt-4 max-w-md w-full grid grid-cols-1 gap-3" style="display:none">
-            <label class="card flex items-center gap-3">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="8" r="4" stroke="#111827" stroke-width="1.6"/><path d="M4 20c1.6-3.2 4.7-5 8-5s6.4 1.8 8 5" stroke="#111827" stroke-width="1.6" stroke-linecap="round"/></svg>
-              <input id="inpNombre" class="w-full bg-transparent outline-none" type="text" placeholder="Tu nombre" maxlength="32">
-            </label>
-            <label class="card flex items-center gap-3">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 7h10M7 12h10M7 17h6" stroke="#111827" stroke-width="1.6" stroke-linecap="round"/><rect x="3" y="4" width="18" height="16" rx="2" stroke="#111827" stroke-width="1.6"/></svg>
-              <input id="inpEdad" class="w-full bg-transparent outline-none" type="number" inputmode="numeric" min="18" max="99" placeholder="Edad (18+)" />
-            </label>
+          <div class="flex-1">
+            <div class="card p-6">
+              <div class="text-sm font-semibold text-white/70">¿Cómo funciona?</div>
+              <ul class="mt-3 space-y-2 text-white/75">
+                <li>✅ <b>Modo Solo</b>: 1 vs 1 aleatorio.</li>
+                <li>💘 <b>Modo Cupido</b>: Kristoff (admin) arma una llamada de <b>3</b>.</li>
+                <li>⭐ <b>Admin</b>: puede hostear Cupido y usar herramientas (ej: fake skip en Solo).</li>
+              </ul>
+              <div class="mt-6 p-4 rounded-xl bg-white/5 border border-white/10">
+                <div class="text-sm font-semibold">Tip</div>
+                <div class="text-sm text-white/70 mt-1">Si estás en Cupido y se va alguien, se reemplaza por otra persona si hay en cola.</div>
+              </div>
+            </div>
           </div>
+        </div>
+      </div>
+    </section>
 
-          <!-- Google login -->
-          <button id="btn-google" class="mt-6 rounded-xl border-2 border-neutral-900/40 bg-white/90 px-7 py-3.5 font-semibold shadow disabled:opacity-50" disabled>
-            Iniciar con Google
+    <!-- PAGE: MODE SELECT -->
+    <section id="pageMode" class="page">
+      <div class="glass rounded-2xl p-6 sm:p-8">
+        <div class="flex items-start justify-between gap-4 mb-6">
+          <div>
+            <h2 class="text-2xl font-extrabold">Elige un modo</h2>
+            <p id="modeSubtitle" class="text-white/70 mt-1">Puedes cambiar de modo cuando quieras.</p>
+          </div>
+          <div class="flex gap-2">
+            <button id="btnLogout" class="btn hidden" type="button">Cerrar sesión</button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <button id="cardSolo" class="card text-left p-6" type="button">
+            <div class="text-2xl">🎲</div>
+            <div class="mt-3 text-xl font-extrabold">Modo Solo</div>
+            <div class="mt-1 text-sm text-white/70">Llamada 1 vs 1 aleatoria. No repite si hay más gente.</div>
+            <div class="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-white/80">
+              <span>Entrar</span> <span>→</span>
+            </div>
           </button>
-           <button id="btn-guest"
-  class="mt-3 rounded-xl border-2 border-neutral-900/40 bg-white/90 px-7 py-3.5 font-semibold shadow">
-  Entrar como invitado
-</button>
-          <svg class="scribble mt-6" viewBox="0 0 1200 100" preserveAspectRatio="none" aria-hidden="true">
-            <path d="M10,70 C200,20 400,120 600,60 C800,0 1000,120 1190,50"/>
-          </svg>
+
+          <button id="cardCupid" class="card text-left p-6" type="button">
+            <div class="text-2xl">💘</div>
+            <div class="mt-3 text-xl font-extrabold">Modo Cupido</div>
+            <div id="cupidDesc" class="mt-1 text-sm text-white/70">Te unes a la cola y Kristoff arma una llamada de 3 (tú + él + otra persona).</div>
+            <div class="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-white/80">
+              <span id="cupidEnterLabel">Entrar</span> <span>→</span>
+            </div>
+          </button>
+
+          <button id="cardKristoff" class="card text-left p-6" type="button">
+            <div class="text-2xl">⭐</div>
+            <div class="mt-3 text-xl font-extrabold">Soy Kristoff</div>
+            <div id="kristoffDesc" class="mt-1 text-sm text-white/70">Login admin (email + contraseña). Si ya estás logueado como admin, aquí lo verás.</div>
+            <div class="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-white/80">
+              <span id="kristoffEnterLabel">Abrir login</span> <span>→</span>
+            </div>
+          </button>
         </div>
-      </section>
 
-      <!-- SALA -->
-      <section id="page-chat" class="page hidden">
-        <!-- Topbar PC -->
-        <div class="card p-3 mb-4 topbar">
-          <div class="flex flex-wrap items-center gap-2">
-            <button id="btn-start" class="btn">Buscar</button>
-            <button id="btn-next"  class="btn" disabled>Siguiente</button>
-            <button id="btn-stop"  class="btn" disabled>Detener</button>
-            <span class="sep"></span>
-            <!-- NUEVOS BOTONES PC -->
-            <button id="btn-mute"  class="btn" disabled>Mute</button>
-            <button id="btn-cam"   class="btn" disabled>Apagar cam</button>
-            <button id="btn-eye" class="btn hidden" title="Ver mirada de la pareja">👁</button>
-            <button id="btn-cupid" class="btn hidden" title="Modo Cupido">💘 Cupido</button>
-<button id="btn-cupid-off" class="btn hidden" title="Salir Cupido">Salir Cupido</button>
+        <div class="mt-6 flex flex-wrap items-center justify-between gap-3">
+          <div class="text-sm text-white/60">
+            <span class="font-semibold text-white/75">Atajo admin:</span> en Modo Solo, presiona <span class="chip">Enter</span> para fake skip.
+          </div>
+        </div>
+      </div>
+    </section>
 
+    <!-- PAGE: CHAT -->
+    <section id="pageChat" class="page">
+      <div class="glass rounded-2xl p-4 sm:p-6">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <div>
+            <div class="flex items-center gap-2">
+              <span id="modePill" class="chip">Modo: —</span>
+              <span id="statusPill" class="chip">Estado: —</span>
+            </div>
+            <div id="statusText" class="text-white/80 mt-2 text-sm">Preparando…</div>
+          </div>
 
-            <div class="ml-auto flex items-center gap-2">
-              <button id="btn-ar" class="btn">AR: 1:1</button>
+          <div class="flex flex-wrap gap-2 justify-start sm:justify-end">
+            <button id="btnNext" class="btn" type="button">Siguiente</button>
+            <button id="btnStop" class="btn btn-danger" type="button">Detener</button>
+            <button id="btnMic" class="btn" type="button">🎙️ Mic</button>
+            <button id="btnCam" class="btn" type="button">🎥 Cam</button>
+            <button id="btnBackModes" class="btn" type="button">↩︎ Modos</button>
+          </div>
+        </div>
+
+        <!-- Desktop stage -->
+        <div class="relative hidden sm:block">
+          <div id="pip" class="pip">
+            <video id="pipVideo" autoplay playsinline muted></video>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <!-- Remote 0 (siempre visible) -->
+            <div class="tile">
+              <video id="remoteVideo0" autoplay playsinline></video>
+              <div id="ovRemote0" class="overlay">
+                <div class="spinner"></div>
+                <div>
+                  <div class="font-extrabold text-lg">Buscando…</div>
+                  <div id="ovRemote0Sub" class="text-sm text-white/70 mt-1">Conectando</div>
+                </div>
+              </div>
             </div>
 
-            <div class="flex items-center gap-2 text-sm w-full">
-              <span id="status" class="text-neutral-700">Listo</span>
-              <span id="peerLabel" class="text-neutral-700 hidden">Pareja: —</span>
-              <span id="you-badge" class="ml-auto text-xs px-2 py-1 rounded-full border border-black/20 bg-white/70 hidden">Tú: —</span>
+            <!-- Remote 1 (solo Cupido) -->
+            <div id="tileRemote1" class="tile hidden">
+              <video id="remoteVideo1" autoplay playsinline></video>
+              <div id="ovRemote1" class="overlay">
+                <div class="spinner"></div>
+                <div>
+                  <div class="font-extrabold text-lg">Buscando…</div>
+                  <div id="ovRemote1Sub" class="text-sm text-white/70 mt-1">Esperando segunda persona</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Local (solo Solo) -->
+            <div id="tileLocal" class="tile">
+              <video id="localVideo" autoplay playsinline muted></video>
+              <div id="ovLocal" class="overlay hidden">
+                <div class="spinner"></div>
+                <div>
+                  <div class="font-extrabold text-lg">Cámara apagada</div>
+                  <div class="text-sm text-white/70 mt-1">Activa la cámara para verte.</div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-       <!-- Video PC y contenedor móvil -->
-<div id="videoShell" class="full-bleed">
-  <!-- PC: 50/50 -->
-  <div id="stage" class="stage layout-split">
-    <!-- REMOTO (PC) -->
-    <div class="tile remote" id="remoteTile">
-      <video id="idleNoiseD" class="idle-video"
-             src="./assets/noise.mp4" muted playsinline autoplay loop preload="auto"></video>
-      <video id="remoteVideo" autoplay playsinline></video>
-     <!-- BOTÓN SIGUIENTE (IZQUIERDA) -->
-<button id="btn-next-left"
-  class="absolute top-2 left-2 z-30 bg-white/90 border-2 border-black/20 rounded-full px-3 py-1 text-sm font-semibold hidden">
-  ⟳ Siguiente
-</button>
+        <!-- Mobile stage -->
+        <div class="sm:hidden">
+          <div class="m-stage">
+            <div class="m-top">
+              <video id="remoteVideoM" autoplay playsinline></video>
+              <div id="ovRemoteM" class="overlay">
+                <div class="spinner"></div>
+                <div>
+                  <div class="font-extrabold text-lg">Buscando…</div>
+                  <div id="ovRemoteMSub" class="text-sm text-white/70 mt-1">Conectando</div>
+                </div>
+              </div>
+            </div>
 
-      <!-- OVERLAY PC -->
-      <div id="overlayD" class="overlay">
-        <div class="card px-5 py-4 flex items-center gap-3 bg-white">
-          <span class="font-semibold">Buscando tortilleras!!!…</span>
-          <div class="flex"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
-        </div>
-        <div class="emoji-layer" aria-hidden="true"></div>
-      </div>
+            <div class="m-bottom">
+              <video id="localVideoM" autoplay playsinline muted></video>
+            </div>
 
-      <!-- ZOOM REMOTO (PC) -->
-      <div class="zoom-controls sm:flex hidden" aria-label="Zoom remoto">
-        <button id="fitRemote" class="zoom-btn" title="Ver completo">⤢</button>
-        <button id="zoomOutRemote" class="zoom-btn" title="Alejar">−</button>
-        <button id="zoomInRemote" class="zoom-btn" title="Acercar">+</button>
-      </div>
-    </div>
-   <!-- REMOTO DERECHO (PC · CUPIDO) -->
-<div class="tile remote" id="remoteTileR" style="display:none">
-  <video id="idleNoiseD_R" class="idle-video"
-         src="./assets/noise.mp4" muted playsinline autoplay loop preload="auto"></video>
-  <video id="remoteVideoR" autoplay playsinline></video>
-
-  <!-- BOTÓN SIGUIENTE (DERECHA) -->
-  <button id="btn-next-right"
-    class="absolute top-2 left-2 z-30 bg-white/90 border-2 border-black/20 rounded-full px-3 py-1 text-sm font-semibold hidden">
-    ⟳ Siguiente
-  </button>
-
-  <!-- OVERLAY (buscando) -->
-  <div id="overlayD_R" class="overlay">
-    <div class="card px-5 py-4 flex items-center gap-3 bg-white">
-      <span class="font-semibold">Buscando maricones…</span>
-      <div class="flex"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
-    </div>
-  </div>
-
-  <!-- ZOOM REMOTO DERECHO -->
-  <div class="zoom-controls sm:flex hidden" aria-label="Zoom remoto derecho">
-    <button id="fitRemoteR" class="zoom-btn" title="Ver completo">⤢</button>
-    <button id="zoomOutRemoteR" class="zoom-btn" title="Alejar">−</button>
-    <button id="zoomInRemoteR" class="zoom-btn" title="Acercar">+</button>
-  </div>
-</div>
-
-    <!-- LOCAL (PC) -->
-    <div class="tile local" id="localTile">
-      <video id="localVideo" autoplay playsinline muted class="mirror"></video>
-
-      <!-- ZOOM LOCAL (PC) -->
-      <div class="zoom-controls sm:flex hidden" aria-label="Zoom local">
-        <button id="resetLocal" class="zoom-btn" title="Reset">⟲</button>
-        <button id="zoomOutLocal" class="zoom-btn" title="Alejar">−</button>
-        <button id="zoomInLocal" class="zoom-btn" title="Acercar">+</button>
-      </div>
-
-      <!-- GAZE bubble (PC) -->
-      <div class="gaze-layer" id="gazeLayerLocalD" aria-hidden="true">
-        <div class="gaze-bubble" id="gazeBubbleLocalD"></div>
-      </div>
-    </div>
-  </div><!-- /#stage -->
-
- <!-- PiP ADMIN (PC · Cupido) pequeño, centrado arriba sobre ambas pantallas -->
-<div id="pip" style="
-  display:none;
-  position:fixed;           
-  left:50%;                  /* centro horizontal */
-  top:0;                     /* lo colocamos por JS justo sobre los tiles */
-  transform:translate(-50%, 0);
-   width:clamp(220px, 18vw, 360px);
-  aspect-ratio:4/3;
-  z-index:100;               /* por encima de los dos videos */
-  border-radius:14px;
-  overflow:hidden;
-  box-shadow:0 12px 26px rgba(0,0,0,.28);
-  border:1px solid rgba(255,255,255,.45);
-  background:#000;
-">
-  <video id="pipVideo" autoplay playsinline muted
-         style="width:100%;height:100%;object-fit:cover;"></video>
-</div>
-
-
-     
-  <!-- MÓVIL: pantalla partida full-bleed -->
-  <div id="stageMobile" class="layout-mobile-fixed" style="display:none;">
-    <div class="pane" id="pane-remote">
-      <video id="idleNoiseM" class="idle-video"
-             src="./assets/noise.mp4" muted playsinline autoplay loop preload="auto"></video>
-      <video id="remoteVideoM" autoplay playsinline></video>
-
-      <div id="overlayM" class="overlay">
-        <div class="card px-5 py-4 flex items-center gap-3 bg-white">
-          <span class="font-semibold">Buscando tortilleras!!!…</span>
-          <div class="flex"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
-        </div>
-        <div class="emoji-layer" aria-hidden="true"></div>
-      </div>
-
-      <div id="swipe-ghost" class="swipe-ghost sm:hidden" aria-hidden="true">
-        <img src="assets/hand.png" alt="hand" class="hand" />
-      </div>
-    </div>
-
-    <div class="pane" id="pane-local">
-      <div id="idle-local" class="idle static-noise"><div>Preparando cámara…</div></div>
-      <video id="localVideoM" autoplay playsinline muted class="mirror"></video>
-
-      <!-- GAZE bubble (Móvil) -->
-      <div class="gaze-layer" id="gazeLayerLocalM" aria-hidden="true">
-        <div class="gaze-bubble" id="gazeBubbleLocalM"></div>
-      </div>
-    </div>
-  <!-- MINI SIDE (MÓVIL · Cupido, sin 'Siguiente') -->
-<div id="cupidMini" style="
-  position:fixed;
-  left:12px; bottom:calc(env(safe-area-inset-bottom,0) + 74px);
-  width:min(42vw, 42vh * 4 / 3);
-  aspect-ratio: 4 / 3;
-  border-radius:14px; overflow:hidden;
-  box-shadow:0 16px 36px rgba(0,0,0,.35);
-  z-index:62; 
-  display:none;
-  background:#000;
-">
-  <video id="idleNoiseM_R" class="idle-video"
-         src="./assets/noise.mp4" muted playsinline autoplay loop preload="auto"></video>
-  <video id="remoteVideoR_M" autoplay playsinline></video>
-
-  <div id="overlayM_R" class="overlay show">
-    <div class="card px-4 py-3 flex items-center gap-3 bg-white">
-      <span class="font-semibold">Buscando maricones</span>
-      <div class="flex"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
-    </div>
-  </div>
-</div>
-
-  </div><!-- /#stageMobile -->
-</div><!-- /#videoShell -->
-
-
-        <!-- Dock inferior SOLO en móviles (queda en DOM pero se oculta en móvil) -->
-        <div class="mobile-dock sm:hidden" role="toolbar" aria-label="Controles de sala">
-          <button id="btn-buscar-m" class="dock-btn dock-btn--primary">Buscar sala</button>
-          <button id="btn-salir-m" class="dock-btn dock-btn--ghost">Salir</button>
+            <div id="mobileMini" class="m-mini">
+              <video id="remoteVideoMini" autoplay playsinline></video>
+            </div>
+          </div>
         </div>
 
-        <!-- Botón salir extra (PC / fallback) -->
-        <div class="mt-6 flex items-center justify-center">
-          <button id="btn-salir-chat" class="rounded-full border-2 border-neutral-900/30 bg-white/80 px-5 py-2 text-sm font-semibold shadow">Salir</button>
+        <div class="mt-4 text-xs text-white/55">
+          * Cupido = llamada de 3 (Kristoff + tú + otra persona). Si no hay gente suficiente, puede tardar o completar asientos cuando entren.
+        </div>
+      </div>
+    </section>
+
+    <!-- Admin login modal -->
+    <div id="modalKristoff" class="fixed inset-0 hidden items-center justify-center z-50">
+      <div class="absolute inset-0 bg-black/60"></div>
+      <div class="relative w-[92%] max-w-md glass rounded-2xl p-6">
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <div class="text-xl font-extrabold">Login Kristoff (Admin)</div>
+            <div class="text-sm text-white/70 mt-1">Email permitido + contraseña.</div>
+          </div>
+          <button id="btnCloseModal" class="btn" type="button">✕</button>
         </div>
 
-        <!-- Tip de gesto (móvil) — oculto por CSS -->
-        <div id="swipe-tip" class="swipe-tip sm:hidden">
-          <div class="swipe-hand" aria-hidden="true"></div>
-          <span>Desliza → empezar / siguiente — ← detener</span>
+        <div class="mt-4 space-y-3">
+          <div>
+            <label class="text-sm font-semibold text-white/80">Email</label>
+            <input id="inpAdminEmail" class="mt-1 w-full rounded-xl bg-white/5 border border-white/10 px-4 py-3 outline-none focus:border-white/25" placeholder="christophergomez6903@gmail.com" />
+          </div>
+          <div>
+            <label class="text-sm font-semibold text-white/80">Contraseña</label>
+            <input id="inpAdminPass" type="password" class="mt-1 w-full rounded-xl bg-white/5 border border-white/10 px-4 py-3 outline-none focus:border-white/25" placeholder="••••••••" />
+          </div>
         </div>
-      </section>
-    </main>
+
+        <div class="mt-5 flex gap-2">
+          <button id="btnKristoffLogin" class="btn btn-primary flex-1" type="button">Entrar</button>
+          <button id="btnKristoffCancel" class="btn flex-1" type="button">Cancelar</button>
+        </div>
+
+        <div id="adminLoginHint" class="text-xs text-white/60 mt-3"></div>
+      </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
   </div>
 
-  <!-- Botón mini: cambiar cámara (móvil) -->
-  <button id="btn-swapcam" class="cam-switch" aria-label="Cambiar cámara">↻</button>
+  <!-- Firebase (compat) -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 
-  <!-- Engranaje ajustes (móvil) -->
-  <button id="btn-gear" class="gear-btn" aria-label="Ajustes">⚙</button>
-  <div id="gear-sheet" class="sheet">
-    <div class="row"><span>Mute micrófono</span><input id="sw-mute" type="checkbox" class="switch"></div>
-  </div>
-
-  
- <script>
-    /* ==== Viewport fix cross-browser ==== */
-    function setVHVars(){
-      const h = window.innerHeight;
-      document.documentElement.style.setProperty('--dvh', h / 100 + 'px');
-    }
-    setVHVars();
-    window.addEventListener('resize', setVHVars);
-    window.addEventListener('orientationchange', setVHVars);
-
-    // Limpiar highlight por hash
-    window.addEventListener('DOMContentLoaded', () => {
-      if (location.hash) history.replaceState(null, document.title, location.pathname + location.search);
-    });
-
-    // WS dinámico
-    (function(){
-      const p = new URLSearchParams(location.search);
-      const wsOverride = p.get('ws');
-      window.WS_SIGNALLING_URL = wsOverride || ((location.protocol === 'https:') ? `wss://${location.host}` : `ws://${location.host}`);
-    })();
-
-    // Firebase
+  <script>
+    /*****************
+     * Config
+     *****************/
     const firebaseConfig = {
-      apiKey: "AIzaSyBVuvV7NOaqkN6arT3xPTBdxMZg7TTPhlM",
-      authDomain: "tortillatv-bf0c6.firebaseapp.com",
-      projectId: "tortillatv-bf0c6",
-      storageBucket: "tortillatv-bf0c6.firebasestorage.app",
-      messagingSenderId: "193994912181",
-      appId: "1:193994912181:web:03464c47f30fc5ac4d69fc"
+      apiKey: "AIzaSyC8Xyx4FYuDxPQJwh1y5mioKWm2asZNylU",
+      authDomain: "tortillatv1.firebaseapp.com",
+      projectId: "tortillatv1",
+      storageBucket: "tortillatv1.appspot.com",
+      messagingSenderId: "925489874907",
+      appId: "1:925489874907:web:525fe80196db0198423504",
+      measurementId: "G-ZL16XR8S01"
     };
+
+    // ICE servers (STUN + TURN). Si no tienes TURN, puedes borrar el bloque TURN.
+    const ICE_SERVERS = [
+      { urls: "stun:stun.l.google.com:19302" },
+      { urls: "stun:stun1.l.google.com:19302" },
+      // TURN (opcional) - mantenlo si ya es tuyo y funciona.
+      { urls: "turn:35.222.84.159:3478", username: "MiEspuma", credential: "Cl4uD1@2025" }
+    ];
+
+    /*****************
+     * DOM helpers
+     *****************/
+    const $ = (id) => document.getElementById(id);
+
+    const pageLanding = $("pageLanding");
+    const pageMode = $("pageMode");
+    const pageChat = $("pageChat");
+
+    const chipUser = $("chipUser");
+    const chipAdmin = $("chipAdmin");
+
+    const btnGenderM = $("btnGenderM");
+    const btnGenderF = $("btnGenderF");
+    const btnGenderO = $("btnGenderO");
+    const genderHint = $("genderHint");
+    const inpName = $("inpName");
+    const inpAge = $("inpAge");
+
+    const btnGoogle = $("btnGoogle");
+    const btnGuest = $("btnGuest");
+
+    const btnLogout = $("btnLogout");
+
+    const cardSolo = $("cardSolo");
+    const cardCupid = $("cardCupid");
+    const cardKristoff = $("cardKristoff");
+    const cupidDesc = $("cupidDesc");
+    const cupidEnterLabel = $("cupidEnterLabel");
+    const kristoffDesc = $("kristoffDesc");
+    const kristoffEnterLabel = $("kristoffEnterLabel");
+
+    const modePill = $("modePill");
+    const statusPill = $("statusPill");
+    const statusText = $("statusText");
+
+    const btnNext = $("btnNext");
+    const btnStop = $("btnStop");
+    const btnMic = $("btnMic");
+    const btnCam = $("btnCam");
+    const btnBackModes = $("btnBackModes");
+
+    // Desktop videos
+    const remoteVideo0 = $("remoteVideo0");
+    const remoteVideo1 = $("remoteVideo1");
+    const localVideo = $("localVideo");
+    const tileRemote1 = $("tileRemote1");
+    const tileLocal = $("tileLocal");
+    const ovRemote0 = $("ovRemote0");
+    const ovRemote1 = $("ovRemote1");
+    const ovRemote0Sub = $("ovRemote0Sub");
+    const ovRemote1Sub = $("ovRemote1Sub");
+
+    const pip = $("pip");
+    const pipVideo = $("pipVideo");
+
+    // Mobile videos
+    const remoteVideoM = $("remoteVideoM");
+    const localVideoM = $("localVideoM");
+    const mobileMini = $("mobileMini");
+    const remoteVideoMini = $("remoteVideoMini");
+    const ovRemoteM = $("ovRemoteM");
+    const ovRemoteMSub = $("ovRemoteMSub");
+
+    // Modal
+    const modalKristoff = $("modalKristoff");
+    const btnCloseModal = $("btnCloseModal");
+    const btnKristoffCancel = $("btnKristoffCancel");
+    const btnKristoffLogin = $("btnKristoffLogin");
+    const inpAdminEmail = $("inpAdminEmail");
+    const inpAdminPass = $("inpAdminPass");
+    const adminLoginHint = $("adminLoginHint");
+
+    // Toast
+    const toast = $("toast");
+
+    function showToast(msg, ms = 2200){
+      toast.textContent = msg;
+      toast.classList.add("show");
+      clearTimeout(showToast._t);
+      showToast._t = setTimeout(()=>toast.classList.remove("show"), ms);
+    }
+
+    function showPage(page){
+      [pageLanding, pageMode, pageChat].forEach(p=>p.classList.remove("active"));
+      page.classList.add("active");
+      window.scrollTo({top:0, behavior:"smooth"});
+    }
+
+    function isMobile(){
+      return window.matchMedia("(max-width: 640px)").matches;
+    }
+
+    function setActiveGender(g){
+      window._gender = g;
+      [btnGenderM, btnGenderF, btnGenderO].forEach(b=>b.classList.remove("btn-primary"));
+      if(g==="m") btnGenderM.classList.add("btn-primary");
+      if(g==="f") btnGenderF.classList.add("btn-primary");
+      if(g==="o") btnGenderO.classList.add("btn-primary");
+      genderHint.textContent = g ? "Listo ✅" : "Selecciona una opción.";
+    }
+
+    btnGenderM.onclick = ()=>setActiveGender("m");
+    btnGenderF.onclick = ()=>setActiveGender("f");
+    btnGenderO.onclick = ()=>setActiveGender("o");
+
+    /*****************
+     * State
+     *****************/
     firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();
 
-    /* ===== Helpers UI ===== */
-    const pages = { landing: qs('#page-landing'), chat: qs('#page-chat') };
-    function qs(s,root=document){ return root.querySelector(s) }
-    function show(k){ Object.values(pages).forEach(p=>{p.classList.add('hidden');p.classList.remove('visible')}); pages[k].classList.remove('hidden'); pages[k].classList.add('visible'); window.scrollTo({top:0,behavior:'smooth'}) }
-    function setStatus(t){ const el=qs('#status'); if(el) el.textContent=t }
-    function safePlay(v){ try{ const p=v?.play?.(); if(p?.catch) p.catch(()=>{}); }catch{} }
+    let currentUser = null; // firebase user OR guest object
+    let isGuest = false;
 
-    // === Overlay acoplado al REMOTO (PC/Móvil) ===
-    function overlayEl(){
-      return (layoutMode === 'split')
-        ? document.getElementById('overlayD')
-        : document.getElementById('overlayM');
-    }
-    function overlayEmojiLayer(){
-      const root = overlayEl();
-      return root ? root.querySelector('.emoji-layer') : null;
-    }
-    let searchEmojiTimer = null;
-    const EMOJIS = ['👋','💬','🎭','🎥','✨','😄','🤝','🍀','🧑‍🤝‍🧑','🌟'];
-    function spawnSearchEmoji(){
-      const layer = overlayEmojiLayer(); if(!layer) return;
-      const span = document.createElement('span');
-      span.className = 'swipe-emoji';
-      span.textContent = EMOJIS[Math.floor(Math.random()*EMOJIS.length)];
+    // Perfil local (lo manda al server para mostrar nombres, etc.)
+    const profile = {
+      gender: null,
+      name: "",
+      age: ""
+    };
 
-      // posición aleatoria dentro del overlay remoto
-      const rect = layer.getBoundingClientRect();
-      const x = Math.random() * rect.width;
-      const y = Math.random() * rect.height * 0.6 + rect.height*0.2;
-      span.style.left = x + 'px';
-      span.style.top  = y + 'px';
+    // WebSocket
+    let ws = null;
+    let wsOpen = false;
+    let myId = null;
 
-      // ligera deriva horizontal
-      const dir = Math.random() < .5 ? -1 : 1;
-      span.animate(
-        [
-          { transform:`translate(${dir*4}px, 6px) scale(.9)`, opacity:0 },
-          { transform:`translate(${dir*14}px, -26px) scale(1.06) rotate(12deg)`, opacity:1 },
-          { transform:`translate(${dir*20}px, -36px) scale(1.06) rotate(18deg)`, opacity:0 }
-        ],
-        { duration: 950, easing: 'ease-out', fill: 'forwards' }
-      );
+    // Roles
+    let IS_ADMIN = false;
+    let IS_PRO = false;
 
-      layer.appendChild(span);
-      setTimeout(()=> span.remove(), 980);
-    }
-    function startSearchEmojis(){
-      stopSearchEmojis();
-      // ritmo agradable mientras se busca
-      searchEmojiTimer = setInterval(spawnSearchEmoji, 420);
-    }
-    function stopSearchEmojis(){
-      if(searchEmojiTimer){ clearInterval(searchEmojiTimer); searchEmojiTimer=null; }
-    }
-    function overlayShow(show){
-      const ov = overlayEl(); if(!ov) return;
-      ov.classList.toggle('show', !!show);
-      if(show) startSearchEmojis(); else stopSearchEmojis();
+    // Mode
+    let mode = null; // "solo" | "cupid" | null
+    let cupidRole = null; // "host" | "guest" | null
 
-      // bamboleo del remoto en móvil mientras se busca
-      const pane = document.getElementById('pane-remote');
-      if(pane){ pane.classList.toggle('searching', !!show); }
+    // Media
+    let localStream = null;
+    let micOn = true;
+    let camOn = true;
 
-      // 👇 Mano fantasma: si aparece overlay (buscando), ocultar; si se cierra, reevaluar
-      if (show) setGhostVisible(false); else updateGhostHandVisibility();
-    }
+    // SOLO WebRTC
+    let soloPC = null;
+    let soloRoomId = null;
+    let soloRole = null;
+    let soloPeer = null;
 
-    const peerLabel = qs('#peerLabel');
-    const youBadge  = qs('#you-badge');
+    // GROUP (CUPID) WebRTC
+    let groupActive = false;
+    let groupSessionId = null;
+    const groupPCs = new Map();      // peerId -> RTCPeerConnection
+    const groupStreams = new Map();  // peerId -> MediaStream
+    const groupSlotByPeer = new Map(); // peerId -> 0|1
 
-    /* ===== Letrero con deslizamiento unísono ===== */
-    const NOTE_WORDS = ["anal","beso","charla","broma","random","a ochoa lo fusilaron","aayyyy","ya se me olvido que era singar","dame promo","https://instagram.com/marquisdsad3"];
-    let noteIdx = 0;
-    const scroller = document.getElementById('noteScroller');
-    const noteCurr = document.getElementById('noteCurr');
-    const noteNext = document.getElementById('noteNext');
-
-    function cycleNote(){
-      if(!scroller) return;
-      const nextText = NOTE_WORDS[(noteIdx+1) % NOTE_WORDS.length];
-      noteNext.textContent = nextText;
-
-      scroller.style.transform = 'translateX(0%)';
-      void scroller.offsetWidth;
-      scroller.style.transition = 'transform .7s cubic-bezier(.22,.61,.36,1)';
-      scroller.style.transform = 'translateX(-100%)';
-
-      scroller.addEventListener('transitionend', onEnded, { once:true });
-      function onEnded(){
-        noteIdx = (noteIdx+1) % NOTE_WORDS.length;
-        noteCurr.textContent = nextText;
-        scroller.style.transition = 'none';
-        scroller.style.transform = 'translateX(0%)';
+    /*****************
+     * UI helpers
+     *****************/
+    function setChipUser(text){
+      if(!text){
+        chipUser.classList.add("hidden");
+        chipUser.textContent = "";
+        return;
       }
+      chipUser.textContent = text;
+      chipUser.classList.remove("hidden");
     }
-    setInterval(cycleNote, 2200);
 
-    /* ===== Estado landing + auth ===== */
-    let chosenGender=null;
-    const genButtons=[...document.querySelectorAll('.gen')];
-    const genElegido=qs('#genElegido');
-    const btnGoogle=qs('#btn-google');
-    const extraForm=qs('#extraForm');
-    const inpNombre=qs('#inpNombre');
-    const inpEdad=qs('#inpEdad');
-
-    function validateLoginEnable(){ btnGoogle.disabled = !chosenGender; }
-
-    genButtons.forEach(b=>{
-      b.addEventListener('click', ()=>{
-        genButtons.forEach(x=>x.classList.remove('ring','ring-rose-400'));
-        b.classList.add('ring','ring-rose-400');
-        chosenGender=b.getAttribute('data-gen');
-        genElegido.textContent='Has elegido: '+chosenGender;
-        extraForm.style.display='grid';
-        validateLoginEnable();
-      });
-    });
-
-    [inpNombre, inpEdad].forEach(el=>{
-      el?.addEventListener('input', ()=>{
-        localStorage.setItem('ttv_name', inpNombre.value||'');
-        localStorage.setItem('ttv_age',  inpEdad.value||'');
-      });
-    });
-
-    /* ===== Refs ===== */
-    const btnStart=qs('#btn-start'), btnNext=qs('#btn-next'), btnStop=qs('#btn-stop'), btnSalirChat=qs('#btn-salir-chat');
-    const btnMute = qs('#btn-mute'), btnCam = qs('#btn-cam'), btnEye = qs('#btn-eye');
-
-    const localVideo=qs('#localVideo'), remoteVideo=qs('#remoteVideo'), pip=qs('#pip'), pipVideo=qs('#pipVideo');
-    const localVideoM=qs('#localVideoM'), remoteVideoM=qs('#remoteVideoM');
-    const localTile = qs('#localTile');
-
-    // ===== Cupido (PC) =====
-let cupidOn = false;
-let pcR = null;                    // PeerConnection SIDE (PC)
-let remoteStreamRefR = null;
-
-// ===== MODO CUPIDO NUEVO: GRUPO DE 3 =====
-// En grupo cada cliente abre 2 PeerConnections (una a cada uno de los otros 2).
-let groupActive = false;
-let groupPeers = [];                 // [peerId0, peerId1]
-const groupPCs = new Map();          // peerId -> RTCPeerConnection
-const groupStreams = new Map();      // peerId -> MediaStream
-const groupSlotByPeer = new Map();   // peerId -> 0 | 1 (para saber qué video ocupar)
-let groupRetryTimer = null;          // retry mientras el admin arma el grupo
-
-const remoteTileR  = qs('#remoteTileR');
-const remoteVideoR = qs('#remoteVideoR');
-const idleNoiseD_R = qs('#idleNoiseD_R');
-const overlayD_R   = qs('#overlayD_R');
-
-const btnNextLeft  = qs('#btn-next-left');
-const btnNextRight = qs('#btn-next-right');
-const btnCupid     = qs('#btn-cupid');
-const btnCupidOff  = qs('#btn-cupid-off');
-// === Arranque/paro de Cupido en PC ===
-async function startCupid(){
-  // NUEVO: Cupido = llamada de 3 (grupo). Admin + 2 usuarios en búsqueda.
-  if (!IS_ADMIN || cupidOn) return;
-  cupidOn = true;
-  // refresca botones (mostrar “Salir cupido”, ocultar “Cupido”)
-  applyAdminBadgeUI();
-
-  // Si estabas en 1:1, salimos primero (no queremos mezclar estados).
-  try{ if (wsOpen) send({ type:'leave' }); }catch{}
-  cleanupPeer({ keepLocal: true, closeWsToo: false });
-  cleanupRightPeer?.();
-  cleanupRightPeerMobile?.();
-  groupCleanupLocal({ keepCamera:true, keepUI:false });
-
-  // UI host (admin): PiP + 2 paneles remotos “buscando”
-  const pipEl = qs('#pip'); if (pipEl) pipEl.style.display = '';
-  positionPipBelowTopbar();
-  window.addEventListener('resize', positionPipBelowTopbar);
-  window.addEventListener('scroll', positionPipBelowTopbar, { passive: true });
-
-  if (!isMobile()) { localTile && (localTile.style.display = 'none'); }
-
-  // Muestra los 2 slots remotos en modo búsqueda
-  setGroupSlotSearching(0, true);
-  setGroupSlotSearching(1, true);
-
-  // Ocultar controles que no tocan durante cupido
-  btnMute?.classList.add('hidden');
-  btnCam?.classList.add('hidden');
-  btnAR ?.classList.add('hidden');
-  // En grupo no tiene sentido “siguiente izquierda/derecha”
-  btnNextLeft?.classList.add('hidden');
-  btnNextRight?.classList.add('hidden');
-
-  try{
-    await connectWS();
-    await ensureMedia();
-    setStatus('Cupido: buscando grupo de 3…');
-    requestCupidGroupMatch();
-  }catch(e){
-    console.warn(e);
-    setStatus('Error Cupido: ' + (e?.message||e));
-    stopCupid();
-  }
-}
-
-function stopCupid(){
-  if (!cupidOn) return;
-  cupidOn = false;
-  applyAdminBadgeUI();
-
-  // Deja de reintentar match
-  if (groupRetryTimer){ clearTimeout(groupRetryTimer); groupRetryTimer = null; }
-
-  // Disuelve el grupo (avisa a los otros 2) y limpia local
-  groupSendCloseToPeers('cupid-off');
-  groupCleanupLocal({ keepCamera:true, keepUI:false });
-
-  // Asegura que el server no te deje en state="in-room"
-  try{ if (wsOpen) send({ type:'leave' }); }catch{}
-
-  // Restaurar UI host
-  if (!isMobile()) { localTile && (localTile.style.display = ''); }
-  const pipEl = qs('#pip'); if (pipEl) pipEl.style.display = 'none';
-  setGroupSlotSearching(0, false);
-  setGroupSlotSearching(1, false);
-  btnMute?.classList.remove('hidden');
-  btnCam ?.classList.remove('hidden');
-  btnAR  ?.classList.remove('hidden');
-  btnNextLeft?.classList.remove('hidden');
-  btnNextRight?.classList.remove('hidden');
-}
-
-btnCupid    ?.addEventListener('click', startCupid);
-btnCupidOff ?.addEventListener('click', stopCupid);
-// === Botones “Siguiente” por lado (PC) ===
-btnNextLeft?.addEventListener('click', ()=>{
-  if (!IS_ADMIN) return;
-  // Cambia SOLO la izquierda (principal)
-  try{ send({ type:'next-main' }); }catch{}
-});
-
-btnNextRight?.addEventListener('click', ()=>{
-  if (!IS_ADMIN) return;
-  // Cambia SOLO la derecha (side); si no hay side viva, el server buscará
-  try{ send({ type:'next-side' }); }catch{}
-});
-
-
-// ===== Cupido (MÓVIL) =====
-let cupidOnMobile = false;
-let pcR_M = null;                 // PeerConnection SIDE (móvil)
-let remoteStreamRefR_M = null;
-
-const cupidMini     = qs('#cupidMini');
-const remoteVideoR_M= qs('#remoteVideoR_M');
-const idleNoiseM_R  = qs('#idleNoiseM_R');
-const overlayM_R    = qs('#overlayM_R');
-
-      // ===== GAZE (mirada) =====
-let gazeDC = null;               // DataChannel para (u,v)
-let sendingGaze = false;         // estado de envío local
-let recvRenderEnabled = false;   // si el admin quiere ver la burbuja
-
-let sendGazeTimer = null;
-let gazeReady = false;
-// === Auto-calibración pasiva (afinidad 2x3) ===
-const faceDetector = ('FaceDetector' in window) ? new FaceDetector({ fastMode:true }) : null;
-
-// Afinidad A = [a,b,c, d,e,f] tal que [x y]^T = A * [u v 1]^T
-let A = [1,0,0, 0,1,0];      // identidad
-const autoCalBuf = [];       // buffer de muestras {ur,vr -> xr,yr} en [0..1]
-
-// Aplica afinidad a (u,v)
-function applyAffine(u, v){
-  const [a,b,c,d,e,f] = A;
-  return [a*u + b*v + c, d*u + e*v + f];
-}
-
-// Mínimos cuadrados para ajustar A con >= 4 muestras
-function fitAffine(samples){
-  if (samples.length < 4) return;
-
-  // XtX (3x3) y XtY (3x2)
-  let xx = [0,0,0, 0,0,0, 0,0,0], xy = [0,0, 0,0, 0,0];
-  for (const s of samples){
-    const u=s.ur, v=s.vr, w=1, x=s.xr, y=s.yr;
-    xx[0]+=u*u; xx[1]+=u*v; xx[2]+=u*w;
-    xx[3]+=v*u; xx[4]+=v*v; xx[5]+=v*w;
-    xx[6]+=w*u; xx[7]+=w*v; xx[8]+=w*w;
-
-    xy[0]+=u*x; xy[1]+=u*y;
-    xy[2]+=v*x; xy[3]+=v*y;
-    xy[4]+=w*x; xy[5]+=w*y;
-  }
-  const inv = inv3(xx); if(!inv) return;
-
-  // M = (XtX)^-1 * XtY  => M = [[a d],[b e],[c f]]
-  const a = inv[0]*xy[0] + inv[1]*xy[2] + inv[2]*xy[4];
-  const d = inv[0]*xy[1] + inv[1]*xy[3] + inv[2]*xy[5];
-  const b = inv[3]*xy[0] + inv[4]*xy[2] + inv[5]*xy[4];
-  const e = inv[3]*xy[1] + inv[4]*xy[3] + inv[5]*xy[5];
-  const c = inv[6]*xy[0] + inv[7]*xy[2] + inv[8]*xy[4];
-  const f = inv[6]*xy[1] + inv[7]*xy[3] + inv[8]*xy[5];
-
-  // Mezcla suave para evitar saltos bruscos
-  const alpha = 0.3;
-  A = [
-    alpha*a + (1-alpha)*A[0],
-    alpha*b + (1-alpha)*A[1],
-    alpha*c + (1-alpha)*A[2],
-    alpha*d + (1-alpha)*A[3],
-    alpha*e + (1-alpha)*A[4],
-    alpha*f + (1-alpha)*A[5],
-  ];
-}
-
-// inversa 3x3 (array 9)
-function inv3(m){
-  const [a,b,c, d,e,f, g,h,i] = m;
-  const A =  (e*i - f*h), B = -(d*i - f*g), C =  (d*h - e*g);
-  const det = a*A + b*B + c*C;
-  if (Math.abs(det) < 1e-6) return null;
-  const D = -(b*i - c*h), E =  (a*i - c*g), F = -(a*h - b*g);
-  const G =  (b*f - c*e), H = -(a*f - c*d), I =  (a*e - b*d);
-  const invDet = 1/det;
-  return [A*invDet, D*invDet, G*invDet,
-          B*invDet, E*invDet, H*invDet,
-          C*invDet, F*invDet, I*invDet];
-}
-
-
-function clamp01(t){ return Math.max(0, Math.min(1, t)); }
-
-async function ensureGazeEngine(){
-  if (gazeReady) return;
-  try{
-    webgazer.setRegression('ridge')
-            .setTracker('clmtrackr')
-            .showVideoPreview(false)
-            .showPredictionPoints(false)
-            .begin();
-    await new Promise(r=>setTimeout(r, 1000)); // warmup
-    gazeReady = true;
-  }catch(e){ console.warn('WebGazer init error', e); }
-}
-
-async function getGazePrediction(){
-  try{ return await webgazer.getCurrentPrediction(); }catch{ return null; }
-}
-
-// Determina el <video> REMOTO que YO estoy mirando (depende del layout)
-function currentRemoteElement(){
-  return (layoutMode === 'split') ? document.getElementById('remoteVideo')
-                                  : document.getElementById('remoteVideoM');
-}
-
-/// ===== Física de burbuja =====
-const bubblePhys = {
-  // estado normalizado [0..1]
-  x: .5, y: .5,      // posición actual
-  tx: .5, ty: .5,    // target (u,v)
-  vx: 0,  vy: 0,     // velocidad
-  // parámetros de spring (ajusta a gusto)
-  k: 28,             // rigidez del resorte
-  c: 6,              // amortiguación lineal
-  // visual
-  scaleX: 1, scaleY: 1, rot: 0,
-  // housekeeping
-  lastT: 0, raf: 0,
-};
-
-/**
- * Llama esto para actualizar el target (u,v)
- * y arrancar el loop si está detenido.
- */
-function renderGazeOnMyLocalVideo(u, v){
-  if (!recvRenderEnabled) return;
-
-  const isSplit = (layoutMode === 'split');
-  const layer  = document.getElementById(isSplit ? 'gazeLayerLocalD' : 'gazeLayerLocalM');
-  const bubble = document.getElementById(isSplit ? 'gazeBubbleLocalD' : 'gazeBubbleLocalM');
-  if (!layer || !bubble) return;
-
-  const vLocal = document.getElementById(isSplit ? 'localVideo' : 'localVideoM');
-  const mirrored = vLocal?.classList?.contains('mirror');
-  const uu = mirrored ? (1 - u) : u;
-
-  // muestra la burbuja si estaba oculta
-  bubble.classList.add('show');
-
-  // setea target y enciende el loop
-  bubblePhys.tx = uu;
-  bubblePhys.ty = v;
-  if (!bubblePhys.raf) {
-    bubblePhys.lastT = performance.now();
-    bubblePhys.raf = requestAnimationFrame(t => bubbleAnimLoop(t, bubble));
-  }
-}
-
-/* loop de física + dibujo */
-function bubbleAnimLoop(t, bubble){
-  const dt = Math.min(0.035, Math.max(0.001, (t - bubblePhys.lastT) / 1000)); // clamp delta
-  bubblePhys.lastT = t;
-
-  // resorte 2D hacia (tx,ty)
-  const ax = bubblePhys.k * (bubblePhys.tx - bubblePhys.x) - bubblePhys.c * bubblePhys.vx;
-  const ay = bubblePhys.k * (bubblePhys.ty - bubblePhys.y) - bubblePhys.c * bubblePhys.vy;
-  bubblePhys.vx += ax * dt;
-  bubblePhys.vy += ay * dt;
-  bubblePhys.x  += bubblePhys.vx * dt;
-  bubblePhys.y  += bubblePhys.vy * dt;
-
-  // velocidad para efectos visuales
-  const speed = Math.hypot(bubblePhys.vx, bubblePhys.vy);           // ~0..?
-  const dir   = Math.atan2(bubblePhys.vy, bubblePhys.vx);           // rad
-
-  // squash & stretch: a más velocidad, más “aplastada”
-  // 1) base ~1, 2) límite para no deformar demasiado
-  const sAmt = Math.min(0.28, speed * 0.45);    // 0..~0.28
-  bubblePhys.scaleX = 1 + sAmt;
-  bubblePhys.scaleY = 1 - sAmt * 0.7;
-
-  // ligera rotación hacia la dirección del movimiento
-  bubblePhys.rot = dir * 0.25; // reduce para que sea sutil
-
-  // pequeño pulso orgánico (respira) para que no se vea robótica
-  const wobble = 0.03 * Math.sin(t * 0.008); // 125 Hz → lento
-  const scaleX = bubblePhys.scaleX + wobble;
-  const scaleY = bubblePhys.scaleY - wobble * 0.6;
-
-  // tamaño dinámico muy sutil con la velocidad (opcional)
-  const base = 30; // px (coincide con CSS)
-  const extra = Math.min(6, speed * 12); // hasta +6px
-  bubble.style.width  = (base + extra) + 'px';
-  bubble.style.height = (base + extra) + 'px';
-
-  // dibuja (usa % para anclar al video local)
-  bubble.style.left = (bubblePhys.x * 100) + '%';
-  bubble.style.top  = (bubblePhys.y * 100) + '%';
-  bubble.style.transform =
-    `translate(-50%,-50%) rotate(${bubblePhys.rot}rad) scale(${scaleX}, ${scaleY})`;
-
-  // sombra “direccional” muy suave según velocidad
-  const sx = Math.max(-8, Math.min(8, bubblePhys.vx * 24));
-  const sy = Math.max(-8, Math.min(8, bubblePhys.vy * 24));
-  bubble.style.boxShadow =
-    `${sx}px ${sy}px 16px rgba(0,0,0,.16),
-     inset 0 0 0 1.5px rgba(255,255,255,.9),
-     inset 0 0 18px rgba(255,255,255,.18)`;
-
-  // seguir animando mientras el admin quiera ver la burbuja
-  if (recvRenderEnabled) {
-    bubblePhys.raf = requestAnimationFrame(tt => bubbleAnimLoop(tt, bubble));
-  } else {
-    bubblePhys.raf = 0;
-  }
-}
-
-
-function clearLocalGazeBubble(){
-  document.getElementById('gazeBubbleLocalD')?.classList.remove('show');
-  document.getElementById('gazeBubbleLocalM')?.classList.remove('show');
-}
-
-    const stage=qs('#stage'), stageMobile=qs('#stageMobile');
-    const btnBuscarM=qs('#btn-buscar-m'), btnSalirM=qs('#btn-salir-m');
-
-    const gearBtn = qs('#btn-gear'), gearSheet = qs('#gear-sheet'), swMute = qs('#sw-mute');
-
-    /* ===== NUEVO: refs a idles de video ===== */
-    const idleNoiseD = qs('#idleNoiseD');
-    const idleNoiseM = qs('#idleNoiseM');
-    const idleLocal  = qs('#idle-local');
-
-    /* ===== Mano fantasma (idle móvil) ===== */
-    const swipeGhost = document.getElementById('swipe-ghost');
-    function setGhostVisible(show){
-      if(!swipeGhost) return;
-      swipeGhost.classList.toggle('show', !!show);
-    }
-    function isPageChatVisible(){
-      return pages?.chat?.classList.contains('visible');
-    }
-    function updateGhostHandVisibility(){
-      // Mostrar SOLO si: móvil + en sala + idle (!isQueuing && !inCall) + idle remoto visible
-      const idleRemoteVisible = !!idleNoiseM && !idleNoiseM.classList.contains('hide');
-      const mustShow = isMobile() && isPageChatVisible() && !isQueuing && !inCall && idleRemoteVisible;
-      setGhostVisible(mustShow);
-    }
- // === Invitado ===
-const btnGuest = qs('#btn-guest');
-let isGuest = false;
-
-function proceedToChatAfterLoginLikeFlow(displayName='Invitado'){
-  // Crea un “usuario” local (sin Firebase)
-  currentUser = { displayName };
-  isGuest = true;
-  localStorage.setItem('ttv_guest', '1');
-  youBadge.classList.remove('hidden');
-
-  const n = inpNombre.value || localStorage.getItem('ttv_name') || displayName || '—';
-  const a = inpEdad.value    || localStorage.getItem('ttv_age')  || '—';
-  youBadge.textContent = `Tú: ${n} (${a}) · ${chosenGender||'—'}`;
-
-  show('chat');
-  initLayoutForDevice();
-
-  // Restaurar zoom local guardado (PC)
-  zoomState.local = getSavedLocalZoom();
-  applyZoom('local');
-
-  // Activar efectos de sala en móvil
-  mobilePanEnabled = true;
-  startIdlePanIfMobile();
-
-  // Encender cam/mic
-  ensureMedia(true).catch(()=>{});
-  setIdleUI();
-  updateGhostHandVisibility();
-}
-
-    /* ===== Estado WebRTC/WS ===== */
-    let ws=null, wsOpen=false, myId=null, roomId=null, role=null;
-    let pc=null, localStream=null, remoteStreamRef=null;
-    let isQueuing=false, inCall=false, autoCycle=false, userHardStop=false;
-    let layoutMode='split'; // 'split' | 'mobile-fixed'
-    let micMuted=false, camOff=false;
-    let currentFacing = 'user'; // móvil
-    const iceServers = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  {
-    urls: [
-      'turn:45.76.60.11:3478?transport=udp',
-      'turn:45.76.60.11:3478?transport=tcp'
-      // 'turns:45.76.60.11:5349?transport=tcp' // actívalo cuando tengas TLS/Let's Encrypt
-    ],
-    username: 'tortilla',
-    credential: 'Cl4uD1@2025'
-  }
-];
-
-    /* ===== ZOOM STATE (PC) ===== */
-    const zoomState = { local: 1, remote: 1 };
-    const ZOOM_MAX = 4;
-    const ZOOM_STEP = 0.15;
-    const ZOOM_MIN_LOCAL  = 1;
-    const ZOOM_MIN_REMOTE = 0.35;
-      
-    qs('#zoomInLocal') ?.addEventListener('click', ()=>{
-  changeZoom('local', +ZOOM_STEP);
-  saveLocalZoom(zoomState.local);
-});
-qs('#zoomOutLocal')?.addEventListener('click', ()=>{
-  changeZoom('local', -ZOOM_STEP);
-  saveLocalZoom(zoomState.local);
-});
-qs('#resetLocal')  ?.addEventListener('click', ()=>{
-  zoomState.local = 1;
-  applyZoom('local');
-  saveLocalZoom(1);
-});
-const CAM_ZOOM_KEY = 'ttv_local_zoom';
-
-function getSavedLocalZoom(){
-  const z = parseFloat(localStorage.getItem(CAM_ZOOM_KEY));
-  return Number.isFinite(z) ? Math.min(ZOOM_MAX, Math.max(ZOOM_MIN_LOCAL, z)) : 1;
-}
-function saveLocalZoom(z){
-  localStorage.setItem(CAM_ZOOM_KEY, String(z));
-}
-    function applyZoom(which){
-      const v = (which==='local') ? localVideo : remoteVideo;
-      if(!v) return;
-      const z = zoomState[which];
-      const mirror = v.classList.contains('mirror');
-      v.style.transformOrigin = 'center center';
-      v.style.transform = mirror ? `scaleX(-1) scale(${z})` : `scale(${z})`;
-    }
-    function changeZoom(which, delta){
-      const isRemote = (which === 'remote');
-      const min = isRemote ? ZOOM_MIN_REMOTE : ZOOM_MIN_LOCAL;
-      const next = Math.min(ZOOM_MAX, Math.max(min, (zoomState[which] + delta)));
-      zoomState[which] = Number(next.toFixed(2));
-      applyZoom(which);
-    }
-    qs('#zoomInLocal') ?.addEventListener('click', ()=> changeZoom('local', +ZOOM_STEP));
-    qs('#zoomOutLocal')?.addEventListener('click', ()=> changeZoom('local', -ZOOM_STEP));
-    qs('#zoomInRemote')?.addEventListener('click', ()=> changeZoom('remote', +ZOOM_STEP));
-    qs('#zoomOutRemote')?.addEventListener('click',()=> changeZoom('remote', -ZOOM_STEP));
-    qs('#resetLocal')  ?.addEventListener('click', ()=> { zoomState.local=1; applyZoom('local'); });
-    qs('#fitRemote')  ?.addEventListener('click', ()=> { zoomState.remote=1; applyZoom('remote'); });
-    function resetZoom(){ zoomState.local=1; zoomState.remote=1; applyZoom('local'); applyZoom('remote'); }
-
-    /* ===== gUM helper tolerante ===== */
-    async function getStream({ facing = 'user' } = {}){
-      const base = isMobile()
-        ? { // 📱 MÓVIL: NO forzar width/height/aspectRatio → evita recortes
-            video: { facingMode: { ideal: facing } },
-            audio: { echoCancellation:true, noiseSuppression:true }
-          }
-        : { // 🖥️ PC: 1280x720
-            video: { width:{ideal:1280}, height:{ideal:720}, frameRate:{ideal:30}, facingMode:{ ideal:facing } },
-            audio: { echoCancellation:true, noiseSuppression:true }
-          };
-
-      try{
-        return await navigator.mediaDevices.getUserMedia(base);
-      }catch(e){
-        try{
-          if (base.video && base.video.facingMode) delete base.video.facingMode; // fallback
-          return await navigator.mediaDevices.getUserMedia(base);
-        }catch(err){ throw err; }
+    function setAdminChip(on){
+      if(on) chipAdmin.classList.remove("hidden");
+      else chipAdmin.classList.add("hidden");
+
+      // Actualiza textos del modo
+      if(on){
+        kristoffDesc.textContent = "Admin activo ✅ (puedes hostear Cupido y usar herramientas).";
+        kristoffEnterLabel.textContent = "Admin activo";
+        cupidDesc.textContent = "Como admin, este botón inicia Cupido (HOST). Se unen 2 personas contigo (llamada de 3).";
+        cupidEnterLabel.textContent = "Iniciar (Host)";
+      }else{
+        kristoffDesc.textContent = "Login admin (email + contraseña). Si ya estás logueado como admin, aquí lo verás.";
+        kristoffEnterLabel.textContent = "Abrir login";
+        cupidDesc.textContent = "Te unes a la cola y Kristoff arma una llamada de 3 (tú + él + otra persona).";
+        cupidEnterLabel.textContent = "Entrar";
       }
     }
 
-    async function ensureMedia(autoPlay=true){
-      try{
-        // ✅ OPTIMIZACIÓN: si ya tenemos stream vivo, NO vuelvas a pedir getUserMedia.
-        // Esto acelera muchísimo el emparejado/"siguiente" y evita timeouts en el server.
-        if (localStream){
-          const v = localStream.getVideoTracks?.()[0];
-          const a = localStream.getAudioTracks?.()[0];
-          const vOk = !!v && v.readyState === 'live';
-          const aOk = !!a && a.readyState === 'live';
-          if (vOk && aOk){
-            attachLocal(localStream, autoPlay);
-            applyMuteAndCam();
-            return localStream;
-          }
-        }
+    function setStatus(modeLabel, statusLabel, text){
+      modePill.textContent = "Modo: " + (modeLabel || "—");
+      statusPill.textContent = "Estado: " + (statusLabel || "—");
+      statusText.textContent = text || "";
+    }
 
-        const stream = await getStream({ facing: currentFacing });
-        // primera vez
-        if(!localStream){
-          localStream = stream;
+    function showSearchingOverlay(slot, show, subtitle){
+      if(isMobile()){
+        if(slot===0){
+          if(subtitle) ovRemoteMSub.textContent = subtitle;
+          ovRemoteM.classList.toggle("hidden", !show);
         }else{
-          // reemplazar tracks (por si alguno murió)
-          const newV = stream.getVideoTracks?.()[0];
-          const newA = stream.getAudioTracks?.()[0];
-
-          const oldV = localStream.getVideoTracks?.()[0];
-          const oldA = localStream.getAudioTracks?.()[0];
-
-          if (oldV) { try{ oldV.stop(); }catch{}; try{ localStream.removeTrack(oldV); }catch{} }
-          if (oldA) { try{ oldA.stop(); }catch{}; try{ localStream.removeTrack(oldA); }catch{} }
-
-          if (newV) localStream.addTrack(newV);
-          if (newA) localStream.addTrack(newA);
-
-          // si ya hay PCs, reemplazar en caliente (1:1, side y grupo)
-          const pcsToUpdate = [];
-          if (pc) pcsToUpdate.push(pc);
-          if (pcR) pcsToUpdate.push(pcR);
-          if (pcR_M) pcsToUpdate.push(pcR_M);
-          try{
-            for (const [,gpc] of groupPCs){ if (gpc) pcsToUpdate.push(gpc); }
-          }catch{}
-          for (const p of pcsToUpdate){
-            try{
-              const senders = p?.getSenders?.() || [];
-              const sV = senders.find(s=>s.track && s.track.kind==='video');
-              const sA = senders.find(s=>s.track && s.track.kind==='audio');
-              if (sV && newV) await sV.replaceTrack(newV);
-              if (sA && newA) await sA.replaceTrack(newA);
-            }catch{}
-          }
+          // slot1 on mobile is mini; we don't have overlay inside mini; we'll just show/hide mini video
+          // show==true means keep mini visible but may be blank; we keep it visible only when in cupid mode.
         }
-
-        attachLocal(localStream, autoPlay);
-        applyMuteAndCam();
-        return localStream;
-      }catch(e){
-        alert("Permite cámara y micrófono para continuar.\n" + (e?.message||e));
-        throw e;
+        return;
+      }
+      if(slot===0){
+        if(subtitle) ovRemote0Sub.textContent = subtitle;
+        ovRemote0.classList.toggle("hidden", !show);
+      }else if(slot===1){
+        if(subtitle) ovRemote1Sub.textContent = subtitle;
+        ovRemote1.classList.toggle("hidden", !show);
       }
     }
 
-    function attachLocal(stream, autoPlay=true){
-      if(layoutMode==='split'){
-        localVideo.srcObject = stream; if(autoPlay) safePlay(localVideo);
-        localVideoM.srcObject = null;
-        applyZoom('local');
-      }else{
-        localVideoM.srcObject = stream; if(autoPlay) safePlay(localVideoM);
-        localVideo.srcObject = null;
+    function attachLocalStream(){
+      if(!localStream) return;
+      localVideo.srcObject = localStream;
+      localVideoM.srcObject = localStream;
+      pipVideo.srcObject = localStream;
+    }
+
+    function attachRemoteToSlot(slot, stream){
+      if(isMobile()){
+        if(slot===0) remoteVideoM.srcObject = stream;
+        else if(slot===1) remoteVideoMini.srcObject = stream;
+        return;
       }
-      pipVideo.srcObject = stream; if(autoPlay) safePlay(pipVideo);
-      showIdleLocal(false);
+      if(slot===0) remoteVideo0.srcObject = stream;
+      else if(slot===1) remoteVideo1.srcObject = stream;
     }
 
-    function attachRemote(){
-      if(!remoteStreamRef) return;
-      if(layoutMode==='split'){
-        remoteVideo.srcObject = remoteStreamRef; safePlay(remoteVideo);
-        remoteVideoM.srcObject = null;
-        applyZoom('remote');
-      }else{
-        remoteVideoM.srcObject = remoteStreamRef; safePlay(remoteVideoM);
-        remoteVideo.srcObject = null;
+    function clearRemoteSlot(slot){
+      if(isMobile()){
+        if(slot===0) remoteVideoM.srcObject = null;
+        else if(slot===1) remoteVideoMini.srcObject = null;
+        return;
       }
-      // Al entrar video remoto, ocultamos idle (y por tanto se apaga el paneo)
-      showIdleRemote(false);
-      // Ocultar overlay al mostrar video remoto (por si seguía visible)
-      overlayShow(false);
-      // 👇 Mano fantasma nunca sobre video remoto
-      setGhostVisible(false);
+      if(slot===0) remoteVideo0.srcObject = null;
+      else if(slot===1) remoteVideo1.srcObject = null;
     }
 
-   function makePC(){
-  pc = new RTCPeerConnection({iceServers});
+    function updateLayoutForMode(){
+      const mobile = isMobile();
 
-  // === GAZE: crea canal si eres "offer"
-  if (role === 'offer') {
-    const ch = pc.createDataChannel('gaze');
-    wireGazeDC(ch);
-  }
-  pc.ondatachannel = (e)=>{
-    if (e.channel.label === 'gaze') wireGazeDC(e.channel);
-  };
-
-  pc.onicecandidate = (e)=>{ if(e.candidate) send({type:'ice', candidate:e.candidate}); };
-  pc.ontrack = (e)=>{ remoteStreamRef = e.streams[0]; attachRemote(); setupRemoteRatioWatchers(); };
-  pc.onconnectionstatechange = ()=> {
-    const st = pc.connectionState;
-    if(st==='connected'){
-      inCall = true; setStatus('Conectado'); overlayShow(false); enableControls();
-      // === GAZE: iniciar envío automático sin pedir permiso extra
-      startSendingGazeAuto();
-    }
-    if(st==='disconnected' || st==='failed'){ handleCallEnded('conn:'+st); }
-    if(st==='closed'){ setStatus('Cerrado'); }
-  };
-  return pc;
-    }
-    function makePCRight(){
-  pcR = new RTCPeerConnection({ iceServers });
-
-  pcR.onicecandidate = (e)=>{
-    if (e.candidate) send({ type:'ice', candidate:e.candidate, side:true });
-  };
-
-  pcR.ontrack = (e)=>{
-    remoteStreamRefR = e.streams[0];
-    if (remoteVideoR){
-      remoteVideoR.srcObject = remoteStreamRefR;
-      safePlay(remoteVideoR);
-    }
-    showRightSearchingUI(false); // llegó video
-  };
-
-  pcR.onconnectionstatechange = ()=>{
-    const st = pcR.connectionState;
-    if (st==='disconnected' || st==='failed' || st==='closed'){
-      handleRightEnded('conn:'+st);
-    }
-  };
-
-  return pcR;
-}
-
-function cleanupRightPeer(){
-  if (pcR){ try{ pcR.close(); }catch{}; pcR=null; }
-  remoteStreamRefR = null;
-  if (remoteVideoR) remoteVideoR.srcObject = null;
-}
-
-async function startWebRTCRight(role){
-  await ensureMedia();
-  makePCRight();
-  localStream.getTracks().forEach(t=> pcR.addTrack(t, localStream));
-  tuneSender();
-
-  if (role==='offer'){
-    const offer = await pcR.createOffer();
-    await pcR.setLocalDescription(offer);
-    send({ type:'offer', sdp: offer, side:true });
-  }
-}
-
-function handleRightEnded(){
-  cleanupRightPeer();
-  if (cupidOn){
-    showRightSearchingUI(true);
-    try{ send({ type:'cupid-find' }); }catch{}
-  }else{
-    showRightSearchingUI(false);
-  }
-}
-function makePCRightMobile(){
-  pcR_M = new RTCPeerConnection({ iceServers });
-
-  pcR_M.onicecandidate = (e)=>{
-    if (e.candidate) send({ type:'ice', candidate:e.candidate, side:true });
-  };
-
-  pcR_M.ontrack = (e)=>{
-    remoteStreamRefR_M = e.streams[0];
-    if (remoteVideoR_M){
-      remoteVideoR_M.srcObject = remoteStreamRefR_M;
-      safePlay(remoteVideoR_M);
-    }
-    showMiniSideSearching(false);
-  };
-
-  pcR_M.onconnectionstatechange = ()=>{
-    const st = pcR_M.connectionState;
-    if (st==='disconnected' || st==='failed' || st==='closed'){
-      handleRightEndedMobile('conn:'+st);
-    }
-  };
-
-  return pcR_M;
-}
-
-function cleanupRightPeerMobile(){
-  if (pcR_M){ try{ pcR_M.close(); }catch{}; pcR_M=null; }
-  remoteStreamRefR_M = null;
-  if (remoteVideoR_M) remoteVideoR_M.srcObject = null;
-}
-
-async function startWebRTCRightMobile(role){
-  await ensureMedia();
-  makePCRightMobile();
-  localStream.getTracks().forEach(t=> pcR_M.addTrack(t, localStream));
-  tuneSender();
-
-  if (role==='offer'){
-    const offer = await pcR_M.createOffer();
-    await pcR_M.setLocalDescription(offer);
-    send({ type:'offer', sdp: offer, side:true });
-  }
-}
-
-function handleRightEndedMobile(){
-  cleanupRightPeerMobile();
-  if (cupidOnMobile){
-    showMiniSideSearching(true);
-    try{ send({ type:'cupid-find' }); }catch{}
-  }else{
-    showMiniSideSearching(false);
-  }
-}
-// === Cupido Móvil ===
-async function startCupidMobile(){
-  if (!IS_ADMIN || cupidOnMobile) return;
-  cupidOnMobile = true;
-
-  // Bloquea "Buscar/Siguiente" y muestra la mini en búsqueda
-  lockMobileNextInCupid(true);
-  showMiniSideSearching(true);
-
-  await connectWS().catch(()=>{});
-  try{
-    send({ type:'cupid-on' });
-    send({ type:'cupid-find' });
-  }catch{}
-}
-
-function stopCupidMobileAndLeaveAll(){
-  if (!cupidOnMobile) return;
-  cupidOnMobile = false;
-
-  // Desbloquea botón móvil y oculta mini
-  lockMobileNextInCupid(false);
-  showMiniSideSearching(false);
-
-  // Corta side y también abandona la sala principal
-  try{ send({ type:'cupid-off' }); }catch{}
-  cleanupRightPeerMobile();
-  stopAll();
-}
-
-    function wireGazeDC(ch){
-  gazeDC = ch;
-  gazeDC.onopen = ()=> console.log('gazeDC open');
-  gazeDC.onmessage = (e)=>{
-    try{
-      const msg = JSON.parse(e.data);
-      if (msg.t === 'guv') {
-        renderGazeOnMyLocalVideo(msg.u, msg.v);
-      }
-    }catch{}
-  };
-}
-// Rectángulo del CONTENIDO de video dentro del <video> (compensa object-fit)
-function getVideoContentRect(videoEl){
-  const elRect = videoEl.getBoundingClientRect();
-  const vw = videoEl.videoWidth  || 0;
-  const vh = videoEl.videoHeight || 0;
-  if (!vw || !vh) return elRect;
-
-  const style = getComputedStyle(videoEl);
-  const fit = (style.objectFit || 'fill').trim(); // 'contain' | 'cover' | ...
-
-  const arVideo = vw / vh;
-  const arBox   = elRect.width / elRect.height;
-
-  let w = elRect.width, h = elRect.height;
-  let x = elRect.left,  y = elRect.top;
-
-  if (fit === 'contain' || fit === 'scale-down') {
-    if (arVideo > arBox) {           // bandas arriba/abajo
-      h = elRect.width / arVideo;
-      y = elRect.top + (elRect.height - h) / 2;
-    } else {                         // bandas izq/der
-      w = elRect.height * arVideo;
-      x = elRect.left + (elRect.width - w) / 2;
-    }
-  } else if (fit === 'cover') {      // recorte del contenido
-    if (arVideo > arBox) {           // recorte izq/der
-      w = elRect.height * arVideo;
-      x = elRect.left + (elRect.width - w) / 2;
-    } else {                         // recorte arriba/abajo
-      h = elRect.width / arVideo;
-      y = elRect.top + (elRect.height - h) / 2;
-    }
-  }
-  return { left:x, top:y, width:w, height:h };
-}
-// Calcula (u,v) crudos -> ancla con cara si hay -> corrige con afinidad -> suaviza -> envía
-async function computeAndSendGaze(){
-  if (!gazeDC || gazeDC.readyState !== 'open') return;
-
-  const vidEl = currentRemoteElement(); if (!vidEl) return;
-  const pred = await getGazePrediction(); if (!pred) return;
-
-  // Normaliza respecto al contenido visible del <video> remoto
-  const crect = getVideoContentRect(vidEl);
-  const ur = clamp01((pred.x - crect.left) / crect.width);
-  const vr = clamp01((pred.y - crect.top)  / crect.height);
-
-  // === Auto-anclaje con cara remota (si el navegador lo soporta)
-  if (faceDetector){
-    try{
-      const faces = await faceDetector.detect(vidEl);
-      if (faces && faces[0]){
-        const bx = faces[0].boundingBox; // en px dentro del <video>
-        // Centro de ojos aprox: y al 38% de la caja
-        const cx = clamp01((bx.x + bx.width*0.5 - crect.left) / crect.width);
-        const cy = clamp01((bx.y + bx.height*0.38 - crect.top)  / crect.height);
-
-        // Si la mirada cruda está cerca de la cara => tomar como par “verdadero”
-        const dist = Math.hypot(ur - cx, vr - cy);
-        if (dist < 0.18){                      // umbral: 0.12–0.22 según tu UX
-          autoCalBuf.push({ ur, vr, xr:cx, yr:cy });
-          if (autoCalBuf.length > 60) autoCalBuf.shift();  // ventana deslizante
-          if (autoCalBuf.length >= 8) fitAffine(autoCalBuf);
+      // Desktop-only toggles
+      if(!mobile){
+        // Solo -> local tile visible, remote1 hidden, pip hidden
+        if(mode === "solo"){
+          tileRemote1.classList.add("hidden");
+          tileLocal.classList.remove("hidden");
+          pip.classList.remove("show");
         }
+        // Cupid -> remote1 visible, local tile hidden, pip shown
+        if(mode === "cupid"){
+          tileRemote1.classList.remove("hidden");
+          tileLocal.classList.add("hidden");
+          pip.classList.add("show");
+        }
+      }else{
+        // Mobile: local bottom always visible
+        pip.classList.remove("show");
+        // Mini visible only in cupid mode
+        if(mode === "cupid") mobileMini.classList.add("show");
+        else mobileMini.classList.remove("show");
       }
-    }catch{} // si falla FaceDetector, seguimos sin ancla
-  }
-
-  // Aplica afinidad + clamp
-  let [u,v] = applyAffine(ur, vr);
-  u = clamp01(u); v = clamp01(v);
-
-  // Suavizado temporal (EMA)
-  computeAndSendGaze._lp = computeAndSendGaze._lp || { u, v };
-  const k = 0.35;
-  u = computeAndSendGaze._lp.u = (1-k)*computeAndSendGaze._lp.u + k*u;
-  v = computeAndSendGaze._lp.v = (1-k)*computeAndSendGaze._lp.v + k*v;
-
-  try{
-    gazeDC.send(JSON.stringify({ t:'guv', u:+u.toFixed(4), v:+v.toFixed(4) }));
-  }catch{}
-}
-
-
-async function startSendingGazeAuto(){
-  if (sendingGaze) return;
-  sendingGaze = true;
-  await ensureGazeEngine();
-
- // 15 Hz usando la ruta calibrada
-sendGazeTimer = setInterval(computeAndSendGaze, 66);
-
-}
-
-function stopSendingGaze(){
-  sendingGaze = false;
-  if (sendGazeTimer){ clearInterval(sendGazeTimer); sendGazeTimer = null; }
-}
-
-    function connectWS(){
-      return new Promise((resolve,reject)=>{
-        if(ws && wsOpen) return resolve();
-        try{ ws = new WebSocket(window.WS_SIGNALLING_URL); }catch(e){ return reject(e); }
-      ws.onopen = () => {
-  wsOpen = true;
-
-  // 👉 Enviamos identify al servidor si ya hay usuario con email (solo entonces el server podrá marcar isAdmin)
-  try {
-    const email = auth?.currentUser?.email || null;
-    const displayName =
-      auth?.currentUser?.displayName || (inpNombre?.value || '—');
-
-    if (email) {
-      ws.send(JSON.stringify({
-        type: 'identify',
-        email,
-        displayName
-      }));
     }
-  } catch {}
 
-  resolve();
-};
-        ws.onerror = (e)=>{ console.error("WS error", e); reject(e); };
-        ws.onclose = ()=>{ wsOpen=false; };
-        ws.onmessage = async (msg)=>{
-          const data = JSON.parse(msg.data);
+    window.addEventListener("resize", ()=>{
+      updateLayoutForMode();
+    });
 
-          // --- Identidad / roles ---
-          if(data.type==='welcome'){ myId=data.id; }
-          if (data.type === 'role') {
-            IS_ADMIN = !!data.isAdmin;
-            applyAdminBadgeUI();
-          }
+    /*****************
+     * Validation
+     *****************/
+    function grabProfileFromInputs(){
+      profile.gender = window._gender || null;
+      profile.name = (inpName.value || "").trim();
+      profile.age = (inpAge.value || "").trim();
+    }
 
-          // --- GRUPO (Cupido = llamada de 3) ---
-          // 1) init: lista de 2 peers a los que debo conectar
-          if (data.type === 'group-init' && data.group) {
-            await handleGroupInit(data);
-            return;
-          }
-
-          // 2) cierre dirigido del grupo
-          if (data.type === 'group-close' && data.group) {
-            handleGroupClose(data);
-            return;
-          }
-
-          // 3) señalización dirigida del grupo (offer/answer/ice)
-          if (data.group && (data.type === 'offer' || data.type === 'answer' || data.type === 'ice')) {
-            await handleGroupSignal(data);
-            return;
-          }
-
-          // --- 1:1 normal ---
-          if(data.type==='matched'){
-            roomId=data.roomId; role=data.role;
-            setStatus('Pareja encontrada · Conectando…');
-            overlayShow(true);
-            if(data.peer && data.peer.name){ peerLabel.classList.remove('hidden'); peerLabel.textContent = 'Pareja: '+(data.peer.name||'—'); }
-            try{ await startWebRTC(role); }catch(e){ setStatus('Error WebRTC: '+e.message); overlayShow(false); }
-          }
-          if(data.type==='offer'){
-            await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
-            const answer = await pc.createAnswer(); await pc.setLocalDescription(answer);
-            send({type:'answer', sdp:answer});
-          }
-          if(data.type==='answer'){ await pc.setRemoteDescription(new RTCSessionDescription(data.sdp)); }
-          if(data.type==='ice'){ try{ await pc.addIceCandidate(data.candidate); }catch(e){} }
-          if(data.type==='peer-left'){ handleCallEnded('peer-left'); }
-
-          // --- Fake skip (solo 1:1) ---
-          if(data.type==='fake-skip'){
-            // data.on:boolean, data.role:'admin-view'|'remote-view'
-            applyFakeSkip(data.role, !!data.on);
-          }
-
-          // === Emparejado SIDE (PC o Móvil) ===
-if (data.type === 'matched-side') {
-  // pending:true -> sigue buscando; deja el overlay de búsqueda
-  if (!data.roomId) {
-    if (isMobile() && cupidOnMobile) showMiniSideSearching(true);
-    if (!isMobile() && cupidOn)      showRightSearchingUI(true);
-  } else {
-    // Arranca la segunda PeerConnection según dispositivo
-    try{
-      if (isMobile() && cupidOnMobile) {
-        setStatus('Cupido: conectando mini…');
-        showMiniSideSearching(true);
-        await startWebRTCRightMobile(data.role);
-      } else if (!isMobile() && cupidOn) {
-        setStatus('Cupido: conectando derecha…');
-        showRightSearchingUI(true);
-        await startWebRTCRight(data.role);
+    function validateProfile(){
+      grabProfileFromInputs();
+      if(!profile.gender){
+        showToast("Selecciona tu género primero.");
+        return false;
       }
-    }catch(e){
-      setStatus('Error WebRTC SIDE: ' + (e?.message||e));
-      if (isMobile()) showMiniSideSearching(false); else showRightSearchingUI(false);
+      if(!profile.name){
+        showToast("Escribe tu nombre.");
+        return false;
+      }
+      const ageNum = Number(profile.age || 0);
+      if(!Number.isFinite(ageNum) || ageNum < 13 || ageNum > 99){
+        showToast("Pon una edad válida (13-99).");
+        return false;
+      }
+      // persist
+      localStorage.setItem("ttv_profile", JSON.stringify(profile));
+      return true;
     }
-  }
-}
 
-// === Señales para la SIDE (PC) ===
-if (!isMobile() && cupidOn && pcR) {
-  if (data.type === 'answer' && data.sdp) {
-    await pcR.setRemoteDescription(new RTCSessionDescription(data.sdp));
-  }
-  if (data.type === 'offer' && data.sdp) { // por si algún caso side=answer
-    await pcR.setRemoteDescription(new RTCSessionDescription(data.sdp));
-    const ans = await pcR.createAnswer();
-    await pcR.setLocalDescription(ans);
-    send({ type:'answer', sdp: ans, side:true });
-  }
-  if (data.type === 'ice' && data.candidate) {
-    try{ await pcR.addIceCandidate(data.candidate); }catch{}
-  }
-}
+    function loadProfile(){
+      try{
+        const raw = localStorage.getItem("ttv_profile");
+        if(!raw) return;
+        const p = JSON.parse(raw);
+        if(p.gender) setActiveGender(p.gender);
+        if(p.name) inpName.value = p.name;
+        if(p.age) inpAge.value = p.age;
+      }catch{}
+    }
+    loadProfile();
 
-// === Señales para la SIDE (MÓVIL) ===
-if (isMobile() && cupidOnMobile && pcR_M) {
-  if (data.type === 'answer' && data.sdp) {
-    await pcR_M.setRemoteDescription(new RTCSessionDescription(data.sdp));
-  }
-  if (data.type === 'offer' && data.sdp) {
-    await pcR_M.setRemoteDescription(new RTCSessionDescription(data.sdp));
-    const ans = await pcR_M.createAnswer();
-    await pcR_M.setLocalDescription(ans);
-    send({ type:'answer', sdp: ans, side:true });
-  }
-  if (data.type === 'ice' && data.candidate) {
-    try{ await pcR_M.addIceCandidate(data.candidate); }catch{}
-  }
-}
+    /*****************
+     * Auth
+     *****************/
+    auth.onAuthStateChanged((user)=>{
+      if(user){
+        currentUser = user;
+        isGuest = false;
+        setChipUser(user.displayName || user.email || "Usuario");
+        btnLogout.classList.remove("hidden");
+        showPage(pageMode);
+        ensureWS().then(()=>identifyIfPossible()).catch(()=>{});
+      }else{
+        currentUser = null;
+        IS_ADMIN = false;
+        IS_PRO = false;
+        setAdminChip(false);
+        setChipUser(null);
+        btnLogout.classList.add("hidden");
+        showPage(pageLanding);
+      }
+    });
 
-// === Si la SIDE se cae, reintentar automáticamente según modo activo ===
-if (data.type === 'peer-left-side') {
-  if (!isMobile() && cupidOn) {
-    // PC: vuelve a buscar para la derecha
-    handleRightEnded('peer-left-side');
-  }
-  if (isMobile() && cupidOnMobile) {
-    // Móvil: vuelve a buscar para la mini
-    handleRightEndedMobile('peer-left-side');
-  }
-}
+    btnLogout.onclick = async ()=>{
+      try{ await auth.signOut(); }catch(e){}
+      // also cleanup everything
+      await stopAll("logout");
+    };
 
-       
+    btnGoogle.onclick = async ()=>{
+      if(!validateProfile()) return;
+      const provider = new firebase.auth.GoogleAuthProvider();
+      try{
+        await auth.signInWithPopup(provider);
+      }catch(err){
+        console.error(err);
+        showToast("No se pudo iniciar con Google.");
+      }
+    };
+
+    btnGuest.onclick = async ()=>{
+      if(!validateProfile()) return;
+      // guest session (no firebase)
+      isGuest = true;
+      currentUser = { displayName: profile.name, email: null, guest: true };
+      setChipUser(profile.name + " (Invitado)");
+      btnLogout.classList.add("hidden");
+      showPage(pageMode);
+      // connect ws (as guest). We'll identify only with profile via mode messages.
+      await ensureWS().catch(()=>{});
+    };
+
+    /*****************
+     * Kristoff modal (admin login)
+     *****************/
+    function openKristoffModal(){
+      inpAdminEmail.value = (inpAdminEmail.value || localStorage.getItem("ttv_admin_email") || "christophergomez6903@gmail.com").trim();
+      inpAdminPass.value = "";
+      adminLoginHint.textContent = "";
+      modalKristoff.classList.remove("hidden");
+      modalKristoff.classList.add("flex");
+      setTimeout(()=>inpAdminPass.focus(), 50);
+    }
+    function closeKristoffModal(){
+      modalKristoff.classList.add("hidden");
+      modalKristoff.classList.remove("flex");
+    }
+
+    btnCloseModal.onclick = closeKristoffModal;
+    btnKristoffCancel.onclick = closeKristoffModal;
+
+    btnKristoffLogin.onclick = async ()=>{
+      const email = (inpAdminEmail.value || "").trim().toLowerCase();
+      const pass = (inpAdminPass.value || "");
+      if(!email || !pass){
+        adminLoginHint.textContent = "Completa email y contraseña.";
+        return;
+      }
+      localStorage.setItem("ttv_admin_email", email);
+      adminLoginHint.textContent = "Verificando…";
+      try{
+        await ensureWS();
+        wsSend({
+          type: "kristoff-login",
+          email,
+          password: pass,
+          displayName: profile.name || currentUser?.displayName || "Kristoff"
+        });
+      }catch(err){
+        console.error(err);
+        adminLoginHint.textContent = "No se pudo conectar al servidor.";
+      }
+    };
+
+    cardKristoff.onclick = ()=>{
+      if(IS_ADMIN){
+        showToast("Admin ya está activo ✅");
+        return;
+      }
+      openKristoffModal();
+    };
+
+    // close modal on background click
+    modalKristoff.addEventListener("click", (e)=>{
+      if(e.target === modalKristoff) closeKristoffModal();
+    });
+
+    /*****************
+     * WebSocket
+     *****************/
+    function wsUrl(){
+      const proto = (location.protocol === "https:") ? "wss" : "ws";
+      return `${proto}://${location.host}`;
+    }
+
+    function ensureWS(){
+      if(wsOpen && ws) return Promise.resolve();
+      return new Promise((resolve, reject)=>{
+        ws = new WebSocket(wsUrl());
+        wsOpen = false;
+
+        ws.onopen = ()=>{
+          wsOpen = true;
+          resolve();
+          identifyIfPossible();
+        };
+
+        ws.onmessage = (ev)=>{
+          let msg = null;
+          try{ msg = JSON.parse(ev.data); }catch{ return; }
+          handleWS(msg);
+        };
+
+        ws.onclose = ()=>{
+          wsOpen = false;
+          myId = null;
+          // If we're in a mode, show a message
+          if(mode){
+            setStatus(mode === "solo" ? "Solo" : "Cupido", "Offline", "Conexión al servidor cerrada. Recarga la página.");
+          }
+        };
+
+        ws.onerror = (err)=>{
+          console.error("WS error", err);
         };
       });
     }
 
-    function send(payload){
-      if(wsOpen){ ws.send(JSON.stringify({ ...payload, roomId, from: myId })); }
+    function wsSend(obj){
+      if(!wsOpen || !ws) return;
+      ws.send(JSON.stringify(obj));
     }
 
-    /* ================== GRUPO (Cupido = videollamada de 3) ==================
-       Flujo:
-       - El server manda: {type:'group-init', group:true, peers:[{id},{id}], pending?:true}
-       - Cada cliente crea 2 RTCPeerConnection (una por peer)
-       - Señales dirigidas: group-offer / group-answer / group-ice (server reenvía como offer/answer/ice con group:true y from)
-       - Para disolver: group-close dirigido (server reenvía a dst)
-    */
-
-    function isGroupMode(){ return !!groupActive; }
-
-    function groupClearVideos(){
-      // slot 0 (principal)
-      remoteVideo.srcObject = null;
-      remoteVideoM.srcObject = null;
-      // slot 1 (secundario)
-      if (remoteVideoR) remoteVideoR.srcObject = null;
-      if (remoteVideoR_M) remoteVideoR_M.srcObject = null;
+    function identifyIfPossible(){
+      if(!wsOpen || !ws) return;
+      const email = currentUser?.email || null;
+      const displayName = currentUser?.displayName || profile.name || null;
+      if(email){
+        wsSend({ type:"identify", email, displayName });
+      }
     }
 
-    function groupCloseAllPCs(){
-      for (const [,gpc] of groupPCs){
-        try{ gpc.close(); }catch{}
+    /*****************
+     * Media
+     *****************/
+    async function ensureMedia(){
+      if(localStream) return localStream;
+      try{
+        localStream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" },
+          audio: true
+        });
+        micOn = true;
+        camOn = true;
+        attachLocalStream();
+        updateMicCamButtons();
+        return localStream;
+      }catch(err){
+        console.error(err);
+        showToast("No se pudo acceder a cámara/mic.");
+        throw err;
+      }
+    }
+
+    function updateMicCamButtons(){
+      btnMic.textContent = micOn ? "🎙️ Mic" : "🔇 Mic";
+      btnCam.textContent = camOn ? "🎥 Cam" : "🚫 Cam";
+    }
+
+    btnMic.onclick = ()=>{
+      if(!localStream) return;
+      micOn = !micOn;
+      localStream.getAudioTracks().forEach(t=>t.enabled = micOn);
+      updateMicCamButtons();
+    };
+
+    btnCam.onclick = ()=>{
+      if(!localStream) return;
+      camOn = !camOn;
+      localStream.getVideoTracks().forEach(t=>t.enabled = camOn);
+      // show overlay if cam off in Solo local tile
+      if(!camOn){
+        $("ovLocal").classList.remove("hidden");
+      }else{
+        $("ovLocal").classList.add("hidden");
+      }
+      updateMicCamButtons();
+    };
+
+    /*****************
+     * SOLO WebRTC
+     *****************/
+    function cleanupSolo(){
+      if(soloPC){
+        try{ soloPC.ontrack = null; soloPC.onicecandidate = null; soloPC.close(); }catch{}
+      }
+      soloPC = null;
+      soloRoomId = null;
+      soloRole = null;
+      soloPeer = null;
+      clearRemoteSlot(0);
+      showSearchingOverlay(0, true, "Buscando en modo Solo…");
+    }
+
+    async function startSolo(){
+      mode = "solo";
+      cupidRole = null;
+      updateLayoutForMode();
+      setStatus("Solo", "Conectando", "Preparando cámara…");
+      cleanupGroup(true);
+      cleanupSolo();
+
+      await ensureWS();
+      await ensureMedia();
+      attachLocalStream();
+
+      // queue
+      setStatus("Solo", "Buscando", "Buscando alguien…");
+      showSearchingOverlay(0, true, "Buscando alguien…");
+      wsSend({
+        type:"find",
+        displayName: profile.name || currentUser?.displayName || "Usuario",
+        gender: profile.gender || null,
+        age: profile.age || null
+      });
+    }
+
+    async function initSoloPC(){
+      if(!localStream) await ensureMedia();
+      soloPC = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+      localStream.getTracks().forEach(track => soloPC.addTrack(track, localStream));
+      soloPC.ontrack = (ev)=>{
+        const [stream] = ev.streams;
+        attachRemoteToSlot(0, stream);
+        showSearchingOverlay(0, false);
+        setStatus("Solo", "Conectado", "Conectado ✅");
+      };
+      soloPC.onicecandidate = (ev)=>{
+        if(ev.candidate){
+          wsSend({ type:"ice", candidate: ev.candidate });
+        }
+      };
+    }
+
+    async function handleSoloMatched(data){
+      soloRoomId = data.roomId;
+      soloRole = data.role;
+      soloPeer = data.peer;
+      await initSoloPC();
+
+      if(soloRole === "offer"){
+        const offer = await soloPC.createOffer();
+        await soloPC.setLocalDescription(offer);
+        wsSend({ type:"offer", sdp: offer.sdp });
+      }
+    }
+
+    async function handleSoloOffer(sdp){
+      if(!soloPC) await initSoloPC();
+      await soloPC.setRemoteDescription({ type:"offer", sdp });
+      const ans = await soloPC.createAnswer();
+      await soloPC.setLocalDescription(ans);
+      wsSend({ type:"answer", sdp: ans.sdp });
+    }
+
+    async function handleSoloAnswer(sdp){
+      if(!soloPC) return;
+      await soloPC.setRemoteDescription({ type:"answer", sdp });
+    }
+
+    async function handleSoloIce(candidate){
+      if(!soloPC) return;
+      try{ await soloPC.addIceCandidate(candidate); }catch{}
+    }
+
+    /*****************
+     * GROUP WebRTC (Cupido)
+     *****************/
+    function cleanupGroup(silent=false){
+      groupActive = false;
+      groupSessionId = null;
+      groupSlotByPeer.clear();
+      groupStreams.clear();
+      for(const [pid, pc] of groupPCs.entries()){
+        try{ pc.ontrack = null; pc.onicecandidate = null; pc.close(); }catch{}
       }
       groupPCs.clear();
+      clearRemoteSlot(0);
+      clearRemoteSlot(1);
+
+      if(!silent){
+        showSearchingOverlay(0, true, "Esperando Cupido…");
+        showSearchingOverlay(1, true, "Esperando Cupido…");
+      }
     }
 
-    function groupCleanupLocal({ keepCamera=true, keepUI=false } = {}){
-      // cerrar PCs
-      groupCloseAllPCs();
-      groupStreams.clear();
+    function groupEnsurePeer(peerId){
+      if(groupPCs.has(peerId)) return groupPCs.get(peerId);
+
+      const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+      localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+      pc.ontrack = (ev)=>{
+        const [stream] = ev.streams;
+        groupStreams.set(peerId, stream);
+        const slot = groupSlotByPeer.get(peerId) ?? 0;
+        attachRemoteToSlot(slot, stream);
+        showSearchingOverlay(slot, false);
+        if(slot===1 && isMobile()){
+          mobileMini.classList.add("show");
+        }
+        setStatus(mode === "cupid" ? "Cupido" : "—", "Conectado", "Conectado ✅");
+      };
+
+      pc.onicecandidate = (ev)=>{
+        if(ev.candidate && groupSessionId){
+          wsSend({ type:"group-ice", group:true, sessionId: groupSessionId, to: peerId, candidate: ev.candidate });
+        }
+      };
+
+      groupPCs.set(peerId, pc);
+
+      // Determinístico: el id menor ofrece
+      const iOffer = (String(myId) < String(peerId));
+      if(iOffer){
+        pc.createOffer()
+          .then(offer => pc.setLocalDescription(offer).then(()=>offer))
+          .then(offer => {
+            if(groupSessionId){
+              wsSend({ type:"group-offer", group:true, sessionId: groupSessionId, to: peerId, sdp: offer.sdp });
+            }
+          })
+          .catch(err => console.warn("group offer err", err));
+      }
+
+      return pc;
+    }
+
+    function handleGroupInit(data){
+      const sid = data.sessionId;
+      const peers = Array.isArray(data.peers) ? data.peers : [];
+
+      // If new session, hard reset
+      if(groupSessionId && sid && sid !== groupSessionId){
+        cleanupGroup(true);
+      }
+
+      groupSessionId = sid || groupSessionId || ("sid_" + Date.now());
+      groupActive = true;
+
+      // Mapping slots by order
       groupSlotByPeer.clear();
-      groupPeers = [];
-      groupActive = false;
-
-      // limpiar videos
-      groupClearVideos();
-
-      // UI: volver a idle/normal
-      overlayShow(false);
-      showIdleRemote(true);
-
-      if (!keepUI){
-        // ocultar slot secundario completamente
-        if (remoteTileR) remoteTileR.style.display = 'none';
-        if (cupidMini) cupidMini.style.display = 'none';
-        overlayD_R?.classList.remove('show');
-        overlayM_R?.classList.remove('show');
-        if (idleNoiseD_R) idleNoiseD_R.classList.remove('hide');
-        if (idleNoiseM_R) idleNoiseM_R.classList.remove('hide');
-      }
-
-      // estados UI/botones
-      inCall = false;
-      if (!keepCamera) {
-        try{ localStream?.getTracks?.().forEach(t=>t.stop()); }catch{}
-        localStream = null;
-        localVideo.srcObject = null; localVideoM.srcObject = null; pipVideo.srcObject = null;
-      }
-    }
-
-    function groupSendCloseToPeers(reason='group-close'){
-      if (!wsOpen) return;
-      for (const pid of groupPeers){
-        if (!pid) continue;
-        try{ send({ type:'group-close', group:true, to: pid, reason }); }catch{}
-      }
-    }
-
-    function requestCupidGroupMatch(){
-      if (!wsOpen) return;
-      if (groupRetryTimer){ clearTimeout(groupRetryTimer); groupRetryTimer = null; }
-      try{ send({ type:'cupid-find-group' }); }catch{}
-      // fallback: reintenta mientras el admin tenga Cupido ON y aún no se haya armado el grupo
-      groupRetryTimer = setTimeout(()=>{
-        if (cupidOn && !groupActive) requestCupidGroupMatch();
-      }, 1400);
-    }
-
-    function setGroupSlotSearching(slotIdx, show){
-      if (slotIdx === 0){
-        overlayShow(!!show);
-        if (show) showIdleRemote(true);
-        return;
-      }
-      // slot 1
-      if (layoutMode === 'split'){
-        if (remoteTileR) remoteTileR.style.display = show ? '' : 'none';
-        overlayD_R?.classList.toggle('show', !!show);
-        if (idleNoiseD_R){
-          idleNoiseD_R.classList.toggle('hide', !show);
-          if (show){ idleNoiseD_R.muted = true; safePlay(idleNoiseD_R); }
-        }
-        if (!show && remoteVideoR) remoteVideoR.srcObject = null;
-      } else {
-        if (cupidMini) cupidMini.style.display = show ? '' : 'none';
-        overlayM_R?.classList.toggle('show', !!show);
-        if (idleNoiseM_R){
-          idleNoiseM_R.classList.toggle('hide', !show);
-          if (show){ idleNoiseM_R.muted = true; safePlay(idleNoiseM_R); }
-        }
-        if (!show && remoteVideoR_M) remoteVideoR_M.srcObject = null;
-      }
-    }
-
-    function attachGroupStream(peerId, stream){
-      groupStreams.set(peerId, stream);
-
-      // Asignación de slot: por orden recibido en group-init
-      let slotIdx = groupSlotByPeer.get(peerId);
-      if (slotIdx === undefined){
-        // fallback: primer slot libre
-        const used = new Set(groupSlotByPeer.values());
-        slotIdx = used.has(0) ? 1 : 0;
-        groupSlotByPeer.set(peerId, slotIdx);
-      }
-
-      if (slotIdx === 0){
-        if (layoutMode === 'split'){
-          remoteVideo.srcObject = stream; safePlay(remoteVideo);
-        } else {
-          remoteVideoM.srcObject = stream; safePlay(remoteVideoM);
-        }
-        showIdleRemote(false);
-        overlayShow(false);
-      } else {
-        // slot 1
-        if (layoutMode === 'split'){
-          if (remoteTileR) remoteTileR.style.display = '';
-          if (remoteVideoR){ remoteVideoR.srcObject = stream; safePlay(remoteVideoR); }
-          overlayD_R?.classList.remove('show');
-          if (idleNoiseD_R) idleNoiseD_R.classList.add('hide');
-        } else {
-          if (cupidMini) cupidMini.style.display = '';
-          if (remoteVideoR_M){ remoteVideoR_M.srcObject = stream; safePlay(remoteVideoR_M); }
-          overlayM_R?.classList.remove('show');
-          if (idleNoiseM_R) idleNoiseM_R.classList.add('hide');
-        }
-      }
-    }
-
-    async function groupEnsurePeer(peerId){
-      if (!peerId) return null;
-      if (groupPCs.has(peerId)) return groupPCs.get(peerId);
-
-      await ensureMedia();
-
-      const gpc = new RTCPeerConnection({ iceServers });
-      groupPCs.set(peerId, gpc);
-
-      // enviar ICE al peer objetivo
-      gpc.onicecandidate = (e)=>{
-        if (e.candidate){
-          try{ send({ type:'group-ice', group:true, to: peerId, candidate: e.candidate }); }catch{}
-        }
-      };
-
-      gpc.ontrack = (e)=>{
-        const st = e.streams?.[0];
-        if (st) attachGroupStream(peerId, st);
-      };
-
-      gpc.onconnectionstatechange = ()=>{
-        const st = gpc.connectionState;
-        if (st === 'failed' || st === 'closed'){
-          // no hacemos nada agresivo: el usuario puede seguir en 1:1 dentro del grupo
-        }
-      };
-
-      // añadir tracks locales
-      localStream?.getTracks?.().forEach(t=>{
-        try{ gpc.addTrack(t, localStream); }catch{}
+      peers.forEach((p, idx)=>{
+        if(p && p.id) groupSlotByPeer.set(p.id, idx);
       });
 
-      // Determinismo anti-glare: el menor id oferta.
-      const iOffer = String(myId) < String(peerId);
-      if (iOffer){
-        const offer = await gpc.createOffer();
-        await gpc.setLocalDescription(offer);
-        send({ type:'group-offer', group:true, to: peerId, sdp: offer });
-      }
-      return gpc;
+      // Ensure both slots show searching until video arrives
+      updateLayoutForMode();
+      showSearchingOverlay(0, true, mode==="cupid" ? "Conectando (Cupido)…" : "Conectando…");
+      if(mode==="cupid") showSearchingOverlay(1, true, "Esperando segunda persona…");
+
+      // create pcs for known peers
+      peers.forEach(p=>{
+        if(p && p.id) groupEnsurePeer(p.id);
+      });
+
+      setStatus("Cupido", "Conectando", "Armando llamada…");
     }
 
-    async function handleGroupInit(data){
-      // Admin puede recibir pending:true cuando no hay 2 usuarios libres
-      const peers = Array.isArray(data.peers) ? data.peers : [];
-      if (!peers.length && data.pending){
-        if (cupidOn){
-          setStatus('Cupido: esperando 2 usuarios…');
-          if (groupRetryTimer){ clearTimeout(groupRetryTimer); groupRetryTimer = null; }
-          groupRetryTimer = setTimeout(()=>{
-            if (cupidOn && !groupActive) requestCupidGroupMatch();
-          }, 1200);
-        }
-        return;
-      }
+    function handleGroupAdd(data){
+      if(!data || data.sessionId !== groupSessionId) return;
+      const peer = data.peer;
+      const peerId = peer?.id;
+      const slot = Number.isFinite(data.slot) ? data.slot : 1;
+      if(!peerId) return;
 
-      // limpiar cualquier estado previo
-      if (groupRetryTimer){ clearTimeout(groupRetryTimer); groupRetryTimer = null; }
-      groupCleanupLocal({ keepCamera:true, keepUI:false });
-      // por si venías de 1:1
-      cleanupPeer({ keepLocal:true, closeWsToo:false });
-      cleanupRightPeer?.();
-      cleanupRightPeerMobile?.();
-
-      await ensureMedia();
-
-      groupActive = true;
-      inCall = true;
-      isQueuing = false;
-
-      groupPeers = peers.map(p=>p?.id).filter(Boolean);
-      groupSlotByPeer.clear();
-      groupPeers.forEach((pid, idx)=> groupSlotByPeer.set(pid, idx));
-
-      // UI: mostrar slot 1 (mini/panel derecho) mientras conecta
-      setGroupSlotSearching(0, true);
-      setGroupSlotSearching(1, true);
-      setStatus('Grupo: conectando…');
-
-      // Crear PCs (y ofertas si toca)
-      for (const pid of groupPeers){
-        await groupEnsurePeer(pid);
-      }
-
-      // Botones (para que en móvil salga “Siguiente”)
-      enableControls();
+      groupSlotByPeer.set(peerId, slot);
+      showSearchingOverlay(slot, true, "Conectando…");
+      groupEnsurePeer(peerId);
     }
 
-    async function handleGroupSignal(data){
-      const from = data.from;
-      if (!from) return;
-      const gpc = await groupEnsurePeer(from);
-      if (!gpc) return;
+    function handleGroupRemove(data){
+      if(!data || data.sessionId !== groupSessionId) return;
+      const peerId = data.peerId;
+      const slot = Number.isFinite(data.slot) ? data.slot : (groupSlotByPeer.get(peerId) ?? 1);
 
-      if (data.type === 'offer' && data.sdp){
-        await gpc.setRemoteDescription(new RTCSessionDescription(data.sdp));
-        const ans = await gpc.createAnswer();
-        await gpc.setLocalDescription(ans);
-        send({ type:'group-answer', group:true, to: from, sdp: ans });
+      // close pc
+      const pc = groupPCs.get(peerId);
+      if(pc){
+        try{ pc.ontrack = null; pc.onicecandidate = null; pc.close(); }catch{}
       }
-      if (data.type === 'answer' && data.sdp){
-        await gpc.setRemoteDescription(new RTCSessionDescription(data.sdp));
-      }
-      if (data.type === 'ice' && data.candidate){
-        try{ await gpc.addIceCandidate(data.candidate); }catch{}
-      }
+      groupPCs.delete(peerId);
+      groupStreams.delete(peerId);
+      groupSlotByPeer.delete(peerId);
+
+      clearRemoteSlot(slot);
+      showSearchingOverlay(slot, true, "Buscando reemplazo…");
+      setStatus("Cupido", "Buscando", "Alguien se fue… buscando reemplazo.");
     }
 
     function handleGroupClose(data){
-      // Si el admin está en Cupido ON, relanza búsqueda de grupo.
-      const wasHost = !!cupidOn;
+      // Always cleanup
+      cleanupGroup(true);
 
-      groupCleanupLocal({ keepCamera:true, keepUI:false });
-      setGroupSlotSearching(0, false);
-      setGroupSlotSearching(1, false);
-
-      if (wasHost){
-        // Mantener UI host y reintentar
-        setStatus('Cupido: se fue alguien · rearmando grupo…');
-        setGroupSlotSearching(0, true);
-        setGroupSlotSearching(1, true);
-        requestCupidGroupMatch();
-        return;
+      // If still in cupid mode, go back to waiting overlays
+      if(mode === "cupid"){
+        updateLayoutForMode();
+        showSearchingOverlay(0, true, cupidRole==="host" ? "Esperando gente (Cupido)…" : "Esperando a Kristoff…");
+        showSearchingOverlay(1, true, "Esperando otra persona…");
+        setStatus("Cupido", "Esperando", cupidRole==="host" ? "Host activo. Esperando participantes…" : "En cola de Cupido…");
       }
-
-      // Para usuarios normales: volver a cola automáticamente
-      try{ if (wsOpen) send({ type:'group-release' }); }catch{}
-      isQueuing = true;
-      setSearchingUI();
-      overlayShow(true);
-      showIdleRemote(true);
-      setStatus('En cola…');
     }
 
-    async function startWebRTC(role){
+    async function handleGroupSignal(msg){
+      if(msg.sessionId !== groupSessionId) return;
+      const from = msg.from;
+      if(!from) return;
+
+      const pc = groupPCs.get(from) || groupEnsurePeer(from);
+
+      if(msg.type === "group-offer"){
+        await pc.setRemoteDescription({ type:"offer", sdp: msg.sdp });
+        const ans = await pc.createAnswer();
+        await pc.setLocalDescription(ans);
+        wsSend({ type:"group-answer", group:true, sessionId: groupSessionId, to: from, sdp: ans.sdp });
+      }else if(msg.type === "group-answer"){
+        await pc.setRemoteDescription({ type:"answer", sdp: msg.sdp });
+      }else if(msg.type === "group-ice"){
+        try{ await pc.addIceCandidate(msg.candidate); }catch{}
+      }
+    }
+
+    /*****************
+     * Cupido mode
+     *****************/
+    async function startCupidAsGuest(){
+      mode = "cupid";
+      cupidRole = "guest";
+      updateLayoutForMode();
+      cleanupSolo();
+      cleanupGroup(true);
+
+      await ensureWS();
       await ensureMedia();
-      if (!isMobile()) { await applyARConstraints(); }
+      attachLocalStream();
 
-      makePC();
-      localStream.getTracks().forEach(t=>pc.addTrack(t, localStream));
-      tuneSender();
+      setStatus("Cupido", "En cola", "Esperando a Kristoff…");
+      showSearchingOverlay(0, true, "Esperando a Kristoff…");
+      showSearchingOverlay(1, true, "Esperando otra persona…");
+      if(isMobile()) mobileMini.classList.add("show");
 
-      if(role==='offer'){
-        const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
-        send({type:'offer', sdp:offer});
-      }
+      wsSend({
+        type:"cupid-join",
+        displayName: profile.name || currentUser?.displayName || "Usuario",
+        gender: profile.gender || null,
+        age: profile.age || null
+      });
     }
 
-    // Limpieza
-    function cleanupPeer({ keepLocal = true, closeWsToo = false } = {}){
-      if(pc){ try{pc.close()}catch{}; pc=null; }
-      if(!keepLocal && localStream){
-        localStream.getTracks().forEach(t=>t.stop());
-        localStream=null;
-        localVideo.srcObject=null; localVideoM.srcObject=null; pipVideo.srcObject=null;
-      }
-      remoteVideo.srcObject=null; remoteVideoM.srcObject=null; remoteStreamRef=null;
-      roomId=null; role=null; inCall=false;
-      if(closeWsToo && ws){ try{ ws.close(); }catch{} ws=null; wsOpen=false; }
-      peerLabel.classList.add('hidden'); peerLabel.textContent='Pareja: —';
-      document.body.classList.remove('remote-portrait');
-      zoomState.remote = 1;
-      clearFakeSkipUI();
-      gazeDC = null;
-applyZoom('remote');
+    async function startCupidAsHost(){
+      mode = "cupid";
+      cupidRole = "host";
+      updateLayoutForMode();
+      cleanupSolo();
+      cleanupGroup(true);
+
+      await ensureWS();
+      await ensureMedia();
+      attachLocalStream();
+
+      setStatus("Cupido", "Host", "Host activo. Esperando participantes…");
+      showSearchingOverlay(0, true, "Esperando participantes…");
+      showSearchingOverlay(1, true, "Esperando participantes…");
+      if(isMobile()) mobileMini.classList.add("show");
+
+      wsSend({
+        type:"cupid-host-on",
+        displayName: profile.name || currentUser?.displayName || "Kristoff"
+      });
     }
 
-    /* ===== Control de botones según estado ===== */
-    function enableControls(){
-      btnStart && (btnStart.disabled = true);
-      btnNext  && (btnNext.disabled  = false);
-      btnStop  && (btnStop.disabled  = false);
-      btnMute  && (btnMute.disabled  = false);
-      btnCam   && (btnCam.disabled   = false);
-      if(btnBuscarM) btnBuscarM.textContent = inCall ? 'Siguiente' : (isQueuing ? 'Buscando maricones…' : 'Buscar sala');
-    }
-    function setSearchingUI(){
-      btnStart && (btnStart.disabled = true);
-      btnNext  && (btnNext.disabled  = true);
-      btnStop  && (btnStop.disabled  = false);
-      btnMute  && (btnMute.disabled  = !localStream);
-      btnCam   && (btnCam.disabled   = !localStream);
-      if(btnBuscarM) btnBuscarM.textContent = 'Buscando maricones…';
-    }
-    function setIdleUI(){
-      btnStart && (btnStart.disabled = false);
-      btnNext  && (btnNext.disabled  = true);
-      btnStop  && (btnStop.disabled  = true);
-      btnMute  && (btnMute.disabled  = !localStream);
-      btnCam   && (btnCam.disabled   = !localStream);
-      if(btnBuscarM) btnBuscarM.textContent = 'Buscar sala';
-    }
-
-    // Auto-cycle
-    // ⚠️ IMPORTANTE:
-    // - Cuando el server manda "peer-left", ÉL MISMO ya re-encola y puede volver a emparejarte.
-    //   Si aquí mandas "find" otra vez, puedes romper un match nuevo que llegue rápido.
-    // - Cuando se cae la conexión WebRTC (conn:failed/disconnected), el server NO lo sabe;
-    //   ahí sí conviene forzar un "find" para tirar la sala y re-encolar.
-    function handleCallEnded(reason=''){ 
-      clearFakeSkipUI();
-
-      cleanupPeer({ keepLocal:true, closeWsToo:false });
-
-      if(autoCycle && !userHardStop){
-        setStatus('Buscando siguiente…');
-        overlayShow(true);
-        setSearchingUI();
-
-        const r = String(reason || '');
-
-        // Si fue un corte de WebRTC (conn:...), forzamos requeue en el server.
-        if (r.startsWith('conn:')){
-          setTimeout(()=>{ findNext(); }, 150);
-        } else {
-          // peer-left / timeouts: NO mandes find; espera el próximo "matched".
-          // Fallback: si por algún motivo en 2s no llega nada, reintenta.
-          setTimeout(()=>{
-            if (!inCall && autoCycle && !userHardStop && wsOpen && !roomId) {
-              findNext();
-            }
-          }, 2000);
+    /*****************
+     * Stop / Next
+     *****************/
+    async function stopAll(reason="stop"){
+      // Tell server we leave whichever mode
+      if(wsOpen){
+        if(mode === "solo"){
+          wsSend({ type:"leave" });
+        }else if(mode === "cupid"){
+          if(cupidRole === "host") wsSend({ type:"cupid-host-off" });
+          else wsSend({ type:"cupid-leave" });
+        }else{
+          wsSend({ type:"leave" });
         }
-      }else{
-        overlayShow(false);
-        setIdleUI();
       }
-      // Volvemos al idle → si estamos en SALA (móvil), reactivar paneo
-      showIdleRemote(true);
-      // 👇 y evaluar la mano fantasma
-      updateGhostHandVisibility();
-      stopSendingGaze();
-clearLocalGazeBubble();
-recvRenderEnabled = false;
+
+      // cleanup
+      cleanupSolo();
+      cleanupGroup(true);
+      mode = null;
+      cupidRole = null;
+      setStatus("—", "—", "");
+
+      // Keep local stream, but you can stop tracks if you want:
+      // if(localStream){ localStream.getTracks().forEach(t=>t.stop()); localStream=null; }
+
+      showPage(pageMode);
+      updateLayoutForMode();
+      return;
     }
 
-    async function joinQueue(){
-       if(!currentUser && !isGuest){ alert('Inicia sesión con Google o entra como invitado'); return; }
-      // En modo Cupido/grupo no mezclamos con 1:1
-      if (cupidOn || groupActive) return;
-      if(isQueuing) return;
-      isQueuing = true; autoCycle = true; userHardStop = false;
-      overlayShow(true);
-      setSearchingUI();
-      try{
-        if(!chosenGender) chosenGender = localStorage.getItem('ttv_gender') || 'Hombre';
-        const displayName = (inpNombre.value || localStorage.getItem('ttv_name') || currentUser.displayName || '—');
-        const age = (inpEdad.value || localStorage.getItem('ttv_age') || '—');
-        await connectWS();
+    async function nextAction(){
+      if(!wsOpen) return;
 
-        // ✅ Entra a cola INMEDIATO (el server empareja al momento)
-        send({type:'find', gender: chosenGender, displayName, age});
-        setStatus('En cola…');
-
-        // ✅ Cam/mic en paralelo (evita delay + evita timeouts de offer/answer)
-        ensureMedia().then(async()=>{
-          if (!isMobile()) { await applyARConstraints(); }
-        }).catch(()=>{
-          // Si niega permisos, sácalo de la cola para no fastidiar a otros
-          try{ send({type:'leave'}); }catch{}
-          setStatus('Permite cámara y micrófono para continuar');
-          overlayShow(false);
-          isQueuing=false; autoCycle=false;
-          setIdleUI();
-        });
-      }catch{
-        setStatus('Error de conexión WS'); overlayShow(false); isQueuing=false; autoCycle=false; setIdleUI();
-      }
-    }
-
-    function findNext(){
-      const displayName = (inpNombre.value || localStorage.getItem('ttv_name') || currentUser?.displayName || '—');
-      const age = (inpEdad.value || localStorage.getItem('ttv_age') || '—');
-      const gender = chosenGender || localStorage.getItem('ttv_gender') || 'Hombre';
-      if(!wsOpen){ connectWS().then(()=>send({type:'find', gender, displayName, age})); }
-      else { send({type:'find', gender, displayName, age}); }
-    }
-
-    async function nextMatch(){
-      userHardStop = false; autoCycle = true;
-      try{
-        // Si estabas en GRUPO (Cupido 3), disuelve antes de ir a 1:1
-        if (groupActive){
-          groupSendCloseToPeers('next');
-          groupCleanupLocal({ keepCamera:true, keepUI:false });
+      if(mode === "solo"){
+        // leave current and find again
+        wsSend({ type:"leave" });
+        cleanupSolo();
+        setStatus("Solo", "Buscando", "Buscando alguien nuevo…");
+        showSearchingOverlay(0, true, "Buscando alguien…");
+        setTimeout(()=>{
+          wsSend({
+            type:"find",
+            displayName: profile.name || currentUser?.displayName || "Usuario",
+            gender: profile.gender || null,
+            age: profile.age || null
+          });
+        }, 120);
+      }else if(mode === "cupid"){
+        if(cupidRole === "host"){
+          wsSend({ type:"cupid-next" });
+          showToast("Siguiente (cambiando personas)...");
+          // Keep overlays
+          showSearchingOverlay(0, true, "Cambiando…");
+          showSearchingOverlay(1, true, "Cambiando…");
+        }else{
+          wsSend({ type:"cupid-skip" });
+          showToast("Siguiente (volviendo a la cola)…");
+          handleGroupClose({});
         }
-        send({type:'leave'});
-        cleanupPeer({ keepLocal:true, closeWsToo:false });
-        setStatus('Buscando siguiente…'); overlayShow(true); setSearchingUI();
-        await ensureMedia();
-        if (!isMobile()) { await applyARConstraints(); }
-
-        findNext();
-      }catch{ setStatus('Error WS (siguiente)'); }
+      }
     }
 
-    function stopAll(){
-      userHardStop = true; autoCycle = false; isQueuing = false;
+    btnStop.onclick = ()=>stopAll("stop");
+    btnBackModes.onclick = ()=>stopAll("back");
+    btnNext.onclick = ()=>nextAction();
 
-      // Si eres host de Cupido, esto debe apagar el modo y disolver el grupo
-      if (cupidOn){
-        stopCupid();
-      } else if (groupActive){
-        // Si estabas en grupo como usuario normal, disuelve y cierra PCs
-        groupSendCloseToPeers('stop');
-        groupCleanupLocal({ keepCamera:true, keepUI:false });
+    // Fake skip: Enter key (solo + admin)
+    window.addEventListener("keydown", (e)=>{
+      if(e.key === "Enter" && IS_ADMIN && mode === "solo"){
+        wsSend({ type:"fake-skip-toggle" });
       }
+    });
 
-      try{ send({type:'leave'}); }catch{}
-      cleanupPeer({ keepLocal:true, closeWsToo:false });
-      overlayShow(false);
-      setStatus('Detenido'); setIdleUI();
-      updateGhostHandVisibility();
-      clearFakeSkipUI();
-          stopSendingGaze();
-clearLocalGazeBubble();
-recvRenderEnabled = false;
-
-      // Limpieza residual del antiguo side (por compatibilidad)
-      if (cupidOnMobile) {
-        cleanupRightPeerMobile();
-        showMiniSideSearching(false);
-        lockMobileNextInCupid(false);
-        cupidOnMobile = false;
-      }
-
-    }
-
-    /* ===== Layout ===== */
-    function setLayout(mode){
-      layoutMode = mode;
-      if(mode==='split'){
-        stage.style.display = '';
-        stage.classList.add('layout-split');
-        stageMobile.style.display = 'none';
-        document.body.classList.remove('no-scroll');
-      
-      }else{
-        stage.style.display = 'none';
-        stageMobile.style.display = '';
-        document.body.classList.add('no-scroll');
-      }
-      if(localStream) attachLocal(localStream);
-      attachRemote();
-      // Si estamos en grupo, re-asignar streams al layout actual (PC/Móvil)
-      if (groupActive) {
+    /*****************
+     * Mode cards
+     *****************/
+    cardSolo.onclick = async ()=>{
+      // ensure profile exists (guest might have it already)
+      if(!profile.gender || !profile.name || !profile.age){
+        // load from localStorage in case
         try{
-          for (const [pid, st] of groupStreams){
-            if (st) attachGroupStream(pid, st);
+          const raw = localStorage.getItem("ttv_profile");
+          if(raw){
+            const p = JSON.parse(raw);
+            profile.gender = p.gender || profile.gender;
+            profile.name = p.name || profile.name;
+            profile.age = p.age || profile.age;
           }
         }catch{}
       }
-    }
-    function isMobile(){ return window.matchMedia('(max-width: 640px)').matches }
-    function initLayoutForDevice(){
-      if(isMobile()){
-        const btnAR=qs('#btn-ar'); if(btnAR) btnAR.style.display='none';
-        setLayout('mobile-fixed');
-      }else{ setLayout('split'); 
-         document.body.classList.remove('ar-1-1','ar-16-9');
-    document.body.classList.add('ar-4-3');
-    const btnAR = document.getElementById('btn-ar');
-    if (btnAR) btnAR.textContent = 'AR: 4:3';
-      }
-    }
+      showPage(pageChat);
+      await startSolo();
+    };
 
-  
-    /* ===== Botones (PC) ===== */
-    btnStart ?.addEventListener('click', joinQueue);
-    btnNext  ?.addEventListener('click', nextMatch);
-    btnStop  ?.addEventListener('click', stopAll);
-    // Botón 👁 (solo admins): alterna render local de la mirada remota
-btnEye?.addEventListener('click', ()=>{
-  if (!IS_ADMIN || !inCall) return;
-  recvRenderEnabled = !recvRenderEnabled;
-  btnEye.textContent = recvRenderEnabled ? '👁‍🗨' : '👁';
-  if (!recvRenderEnabled) clearLocalGazeBubble();
-});
-    // Botones nuevos: mute/cam (PC)
-    btnMute?.addEventListener('click', ()=>{
-      micMuted = !micMuted; applyMuteAndCam(); btnMute.textContent = micMuted ? 'Unmute' : 'Mute';
-    });
-    btnCam?.addEventListener('click', ()=>{
-      camOff = !camOff; applyMuteAndCam(); btnCam.textContent = camOff ? 'Encender cam' : 'Apagar cam';
-    });
-
-    // ===== Botón AR (PC) =====
-    const btnAR = qs('#btn-ar');
-    function setBodyAR(cls, label){
-      document.body.classList.remove('ar-1-1','ar-4-3','ar-16-9');
-      document.body.classList.add(cls);
-      if(btnAR) btnAR.textContent = 'AR: ' + label;
-     
-    }
-    function currentARValue(){
-      if(document.body.classList.contains('ar-4-3'))  return 4/3;
-      if(document.body.classList.contains('ar-16-9')) return 16/9;
-      return 1/1;
-    }
-    function nextARLabel(){
-      const is11  = document.body.classList.contains('ar-1-1');
-      const is43  = document.body.classList.contains('ar-4-3');
-      if(is11)   return ['ar-4-3','4:3'];
-      if(is43)   return ['ar-16-9','16:9'];
-      return ['ar-1-1','1:1'];
-    }
-    async function applyARConstraints(){
-      const track = localStream?.getVideoTracks?.()[0];
-      if(!track) return;
-      try{
-        await track.applyConstraints({
-          aspectRatio: currentARValue(),
-          width:  { ideal: 1280, max: 1920 },
-          height: { ideal: 720,  max: 1080 }
-        });
-      }catch(e1){
-        try{ await track.applyConstraints({ aspectRatio: currentARValue() }); }catch(e2){}
-      }
-    }
-    btnAR?.addEventListener('click', async ()=>{
-      const [cls,label] = nextARLabel();
-      setBodyAR(cls,label);
-      await applyARConstraints();
-    });
-
-    // MÓVIL: dos botones fijos (UI general)
-    btnBuscarM?.addEventListener('click', ()=>{ if(inCall){ nextMatch(); } else if(isQueuing){ stopAll(); } else { joinQueue(); } });
-   // === Botones de SALIR (móvil y PC) ===
-
-btnSalirChat?.addEventListener('click', ()=>{
-  // Detén todo y limpia emparejamientos
-  stopAll();
-  // cierra WS y libera cámara/mic
-  cleanupPeer({ keepLocal:false, closeWsToo:true });
-
-  // Si fue sesión de invitado, limpia la marca
-  localStorage.removeItem('ttv_guest');
-  isGuest = false;
-  currentUser = null;
-
-  // Si había login Google, cierra sesión (si no, no hace nada)
-  if (auth.currentUser) auth.signOut();
-
-  // Volver a la landing y resetear UI móvil
-  show('landing');
-  mobilePanEnabled = false;
-  stopIdlePan();
-  setGhostVisible(false);
-
-  // Muestra idles (para que se vea la portada “normal”)
-  showIdleRemote(true);
-  showIdleLocal(true);
-
-  // Restablece estados de botones
-  setIdleUI();
-});
-    // MÓVIL: engranaje ajustes (mute)
-    gearBtn?.addEventListener('click', ()=>{ gearSheet.classList.toggle('show'); });
-    swMute?.addEventListener('change', (e)=>{ micMuted = !!e.target.checked; applyMuteAndCam(); });
-
-    // Doble toque móvil: ver remoto completo (contain)
-    let remoteContainM = false, lastTap=0;
-    function addDoubleTap(el, cb){
-      el.addEventListener('touchend', (e)=>{
-        const now = Date.now();
-        if(now - lastTap < 300){ cb(e); }
-        lastTap = now;
-      }, {passive:true});
-    }
-    addDoubleTap(document.getElementById('pane-remote'), ()=>{
-      remoteContainM = !remoteContainM;
-      remoteVideoM.classList.toggle('contain', remoteContainM);
-    });
-
-    // Doble clic PC en el remoto: alterna contain/cover manualmente
-    qs('#remoteTile')?.addEventListener('dblclick', ()=>{
-      document.body.classList.toggle('remote-portrait');
-      applyZoom('remote');
-    });
-
-    function isPortrait(){ return window.matchMedia('(orientation: portrait)').matches; }
-    function adaptToOrientation(){
-      document.body.classList.toggle('portrait-ui', isPortrait());
-    }
-    window.addEventListener('orientationchange', ()=>{ if(isMobile()) adaptToOrientation(); });
-    window.addEventListener('resize', ()=>{ if(isMobile()) adaptToOrientation(); });
-
-    function tuneSender(){
-      const sender = pc?.getSenders?.().find(s=>s.track && s.track.kind==='video');
-      const vTrack = localStream?.getVideoTracks?.()[0];
-      if(!sender || !vTrack) return;
-      try { vTrack.contentHint = 'motion'; } catch {}
-      try {
-        const p = sender.getParameters();
-        p.encodings = p.encodings || [{}];
-        p.encodings[0].maxBitrate = isMobile() ? 900_000 : 1_800_000;
-        p.degradationPreference = 'maintain-framerate';
-        sender.setParameters(p);
-      } catch {}
-    }
-
-    /* ======== DETECTOR retrato remoto ======== */
-    function setupRemoteRatioWatchers(){
-      if(!remoteVideo) return;
-      const mark = ()=> updateRemoteFitClass();
-      remoteVideo.addEventListener('loadedmetadata', mark);
-      remoteVideo.addEventListener('resize', mark);
-      try{
-        const track = remoteStreamRef?.getVideoTracks?.()[0];
-        const st = track?.getSettings?.();
-        if(st?.width && st?.height){ updateRemoteFitClass(st.width, st.height); }
-      }catch{}
-    }
-    function updateRemoteFitClass(wFromTrack, hFromTrack){
-      let w = wFromTrack || remoteVideo.videoWidth  || remoteVideoM.videoWidth  || 0;
-      let h = hFromTrack || remoteVideo.videoHeight || remoteVideoM.videoHeight || 0;
-      if(!w || !h){ setTimeout(()=>updateRemoteFitClass(), 120); return; }
-      const ar = w / h;
-      const isPortraitRemote = ar < 0.9;
-      if(layoutMode==='split'){
-        if(isPortraitRemote){ document.body.classList.add('remote-portrait'); }
-        else { document.body.classList.remove('remote-portrait'); }
-      }
-    }
-
-    // Salida limpia
-    window.addEventListener('beforeunload', ()=>{
-      try{
-        if (groupActive) groupSendCloseToPeers('unload');
-        send({type:'leave'});
-      }catch{}
-    });
-
-    /* ================== AÑADIDOS JS (OmeTV móvil) ================== */
-    const btnSwapCam = qs('#btn-swapcam');
-    const swipeTip   = qs('#swipe-tip');
-
-    // ===== Paneo L↔R del idle SOLO en móvil y SOLO en SALA =====
-    let mobilePanEnabled = false; // true cuando estamos en page-chat en móvil
-
-    function startIdlePanIfMobile(){
-      if (mobilePanEnabled && isMobile() && idleNoiseM) {
-        idleNoiseM.classList.add('lr-pan');
-      }
-    }
-    function stopIdlePan(){
-      if (idleNoiseM) idleNoiseM.classList.remove('lr-pan');
-    }
-
-    // Mostrar/Ocultar idles (controla paneo según estado)
-    function showIdleRemote(show){
-      if (idleNoiseD) idleNoiseD.classList.toggle('hide', !show);
-      if (idleNoiseM) idleNoiseM.classList.toggle('hide', !show);
-      if (show){
-        if (idleNoiseD){ idleNoiseD.muted = true; safePlay(idleNoiseD); }
-        if (idleNoiseM){ idleNoiseM.muted = true; safePlay(idleNoiseM); }
-        startIdlePanIfMobile();   // en sala móvil: activar paneo
-        updateGhostHandVisibility(); // 👈 evaluar mano cuando el idle se muestra
-      }else{
-  // NO pausar: deja que siga corriendo para evitar flash al primer frame
-  stopIdlePan();
-  setGhostVisible(false);
-}
- }
-      // PC: mostrar/ocultar lado derecho (buscando)
-function showRightSearchingUI(show){
-  if (!remoteTileR) return;
-  remoteTileR.style.display = show ? '' : 'none';
-  overlayD_R?.classList.toggle('show', !!show);
-  if (idleNoiseD_R){
-    idleNoiseD_R.classList.toggle('hide', !show);
-    idleNoiseD_R.muted = true; safePlay(idleNoiseD_R);
-  }
-}
-// === Posicionar PiP debajo de la topbar, centrado entre las dos pantallas (PC) ===
-function positionPipBelowTopbar(){
-  if (isMobile()) return;
-  const pipEl   = document.getElementById('pip');
-  const stageEl = document.getElementById('stage');
-  if (!pipEl || pipEl.style.display === 'none') return;
-
-  const topbar   = document.querySelector('.topbar');
-  const tbBottom = topbar ? (topbar.getBoundingClientRect().bottom + window.scrollY) : 0;
-
-  // offset base + extra proporcional al alto del área de videos
-  const rect  = stageEl?.getBoundingClientRect?.() || { height: 0 };
-  const base  = 16;                 // px mínimos
-  const extra = Math.min(64, rect.height * 0.06); // máx 64px, ~6% del alto
-  const offset = Math.round(base + extra);        // total
-
-  pipEl.style.top = (tbBottom + offset) + 'px';
-  pipEl.style.left = '50%';
-  pipEl.style.transform = 'translate(-50%, 0)';
-}
-
-// Móvil: mini side
-function showMiniSideSearching(show){
-  if (!cupidMini) return;
-  cupidMini.style.display = show ? '' : 'none';
-  overlayM_R?.classList.toggle('show', !!show);
-  if (idleNoiseM_R){
-    idleNoiseM_R.classList.toggle('hide', !show);
-    idleNoiseM_R.muted = true; safePlay(idleNoiseM_R);
-  }
-}
-
-// Móvil: bloquear el botón Buscar/Siguiente mientras Cupido ON
-function lockMobileNextInCupid(lock){
-  if (!btnBuscarM) return;
-  if (lock){
-    btnBuscarM.style.display = 'none';
-  }else{
-    btnBuscarM.style.display = '';
-    btnBuscarM.disabled = false;
-    btnBuscarM.textContent = 'Buscar sala';
-  }
-}
-function showIdleLocal(show){ if(idleLocal) idleLocal.classList.toggle('hide', !show); }
-
-    // estado inicial (landing): idle visible pero SIN paneo (mobilePanEnabled=false)
-    showIdleRemote(true); 
-    showIdleLocal(true);
-    if (idleNoiseD) safePlay(idleNoiseD);
-    if (idleNoiseM) safePlay(idleNoiseM);
-
-    // Cambiar cámara (móvil)
-    async function toggleCameraFacing(){
-      try{
-        const target = (currentFacing === 'user') ? 'environment' : 'user';
-        const stream = await getStream({ facing: target });
-        const newTrack = stream.getVideoTracks()[0];
-        if(localStream){
-          const old = localStream.getVideoTracks()[0]; if(old) old.stop();
-          localStream.removeTrack(old); localStream.addTrack(newTrack);
-          // reemplazar track en todas las PCs activas (1:1, side y grupo)
-          const pcsToUpdate = [];
-          if (pc) pcsToUpdate.push(pc);
-          if (pcR) pcsToUpdate.push(pcR);
-          if (pcR_M) pcsToUpdate.push(pcR_M);
-          try{ for (const [,gpc] of groupPCs){ if (gpc) pcsToUpdate.push(gpc); } }catch{}
-          for (const p of pcsToUpdate){
-            try{
-              const sender = p?.getSenders?.().find(s=>s.track && s.track.kind==='video');
-              if (sender) await sender.replaceTrack(newTrack);
-            }catch{}
-          }
-        }else{
-          localStream = stream;
-        }
-        currentFacing = target;
-        attachLocal(localStream);
-        applyMuteAndCam();
-      }catch(e){ console.warn('No se pudo cambiar la cámara:', e?.message||e); }
-    }
-    btnSwapCam?.addEventListener('click', toggleCameraFacing);
-
-    // Gestos swipe remoto
-    function initSwipeGestures(){
-      const el = document.getElementById('pane-remote');
-      if(!el) return;
-      let startX=0, dx=0, active=false;
-      el.addEventListener('touchstart', (e)=>{ active=true; dx=0; startX=e.touches[0].clientX; }, {passive:true});
-      el.addEventListener('touchmove',  (e)=>{ if(!active) return; dx = e.touches[0].clientX - startX; }, {passive:true});
-      el.addEventListener('touchend',   ()=>{
-        if(!active) return; active=false;
-        const TH=80;
-        if(dx >  TH){ if(inCall){ nextMatch(); } else if(isQueuing){ stopAll(); } else { joinQueue(); } swipeTip?.remove(); }
-        else if(dx < -TH){ stopAll(); swipeTip?.remove(); }
-      });
-    }
-    initSwipeGestures();
-
-    /* ====== Mute/Cam helpers ====== */
-    function applyMuteAndCam(){
-      const a = localStream?.getAudioTracks?.() || [];
-      const v = localStream?.getVideoTracks?.() || [];
-      a.forEach(t=> t.enabled = !micMuted);
-      v.forEach(t=> t.enabled = !camOff);
-      if(swMute) swMute.checked = micMuted;
-      if(btnMute) btnMute.textContent = micMuted ? 'Unmute' : 'Mute';
-      if(btnCam)  btnCam.textContent  = camOff ? 'Encender cam' : 'Apagar cam';
-    }
- /* ====== FAKE SKIP (cliente) ====== */
-// Estado local del fake skip
-let fakeSkipOn = false;
-function applyFakeSkip(role, on){
-  fakeSkipOn = !!on;
-
-  if (role === 'admin-view') {
-    
-    overlayShow(on);          
-    showIdleRemote(false);   
-  } else { 
-   
-    showIdleRemote(on);
-    overlayShow(on);
-  }
-
-  if (!on) overlayShow(false);
-}
-
-
-// Atajo de teclado: Enter → alterna fake skip (solo admins + en llamada)
-document.addEventListener('keydown', (e)=>{
-  if (e.key === 'Enter' && IS_ADMIN && inCall && wsOpen) {
-    e.preventDefault();
-   send({ type:'fake-skip-toggle' }); 
-  }
-});
-
-// Al terminar una llamada, asegurarse de limpiar estado visual
-function clearFakeSkipUI(){
-  fakeSkipOn = false;
-  overlayShow(false);
-  showIdleRemote(false);
-}
-
-    /* ===== Auth: entrar a sala y autoencender cam/mic ===== */
-    let currentUser=null;
-    auth.onAuthStateChanged(async (u)=>{
-      currentUser=u||null;
-      if (u && wsOpen) {
-  try {
-    send({ type:'identify', email: u.email, displayName: u.displayName || (inpNombre?.value || '—') }); // ✅
-  } catch {}
-}
-
-      if(!u){
-        show('landing'); youBadge.classList.add('hidden'); setIdleUI();
-        swipeTip?.classList.remove('show');
-        // saliendo de sala → desactivar paneo y mano
-        mobilePanEnabled = false;
-        stopIdlePan();
-        setGhostVisible(false);
-        return;
-      }
-      youBadge.classList.remove('hidden');
-      const n = inpNombre.value || localStorage.getItem('ttv_name') || u.displayName || '—';
-      const a = inpEdad.value    || localStorage.getItem('ttv_age')  || '—';
-      youBadge.textContent=`Tú: ${n} (${a}) · ${chosenGender||'—'}`;
-      show('chat');
-      initLayoutForDevice();
-       zoomState.local = getSavedLocalZoom();
-applyZoom('local');
-      if (isMobile()) { swipeTip?.classList.add('show'); }
-
-      // Al entrar a SALA: habilitar paneo para móvil
-      mobilePanEnabled = true;
-      // Si en este momento aún está el idle visible, enciende el paneo
-      startIdlePanIfMobile();
-
-      // Autoencender cámara y mic
-      try{ await ensureMedia(true); }catch{}
-      setIdleUI();
-      updateGhostHandVisibility(); // 👈 evaluar mano al entrar a sala
-    });
-    // ====== ADMIN BADGE (cliente, súper simple) ======
-const ADMIN_EMAILS_CLIENT = new Set([
-  'fajardomiguelangel50@gmail.com',
-  'marquisdesade3141@gmail.com',
-  'christophergomez6903@gmail.com',
-]);
-
-let IS_ADMIN = false;
-const adminBadgeEl = document.getElementById('adminBadge');
-
-function applyAdminBadgeUI() {
-  if (!adminBadgeEl) return;
-  adminBadgeEl.classList.toggle('admin-on',  !!IS_ADMIN);
-  adminBadgeEl.classList.toggle('admin-off', !IS_ADMIN);
-  // icono/texto
-  const icon = adminBadgeEl.querySelector('.badge-icon');
-  const text = adminBadgeEl.querySelector('.badge-text');
-  if (IS_ADMIN) {
-    icon.textContent = '👑';
-    text.textContent = 'Admin';
-    adminBadgeEl.style.cursor = 'pointer';
-    adminBadgeEl.title = 'Panel de admin';
-  } else {
-    icon.textContent = '🔒';
-    text.textContent = 'Admin';
-    adminBadgeEl.style.cursor = 'not-allowed';
-    adminBadgeEl.title = 'No disponible';
-  }
-  
-   
-  if (btnEye) btnEye.classList.toggle('hidden', !IS_ADMIN);
-  // Mostrar/ocultar UI de Cupido (solo admins)
-  // - Cuando cupido está ON: mostrar “Salir Cupido”, ocultar “Cupido”
-  // - En modo grupo no usamos “Siguiente izquierda/derecha”
-  btnCupid    ?.classList.toggle('hidden', !IS_ADMIN || cupidOn);
-  btnCupidOff ?.classList.toggle('hidden', !IS_ADMIN || !cupidOn);
-  btnNextLeft ?.classList.toggle('hidden', !IS_ADMIN || cupidOn);
-  btnNextRight?.classList.toggle('hidden', !IS_ADMIN || cupidOn);
-
-}
-  
-
-// click del badge
-adminBadgeEl?.addEventListener('click', (e) => {
-  e.preventDefault();
-  // Si no es admin, muestra mensaje
-  if (!IS_ADMIN) {
-    alert('Disponible pronto');
-    return;
-  }
-
-  // Si es admin, puedes dirigir a tu panel o acción
-  // Por ejemplo:
-  // location.href = '/admin';
-  console.log('Acceso admin');
-});
-
-
-
-// Al arrancar (sin login) → gris
-applyAdminBadgeUI();
-
-// AÑADE sólo este mini-set a tu flujo de auth (en paralelo al tuyo):
-auth.onAuthStateChanged((u) => {
-  IS_ADMIN = !!(u?.email && ADMIN_EMAILS_CLIENT.has(String(u.email).toLowerCase()));
-  applyAdminBadgeUI();
-});
-
-// Si entra como invitado, asegúrate de que quede NO admin
-if (typeof proceedToChatAfterLoginLikeFlow === 'function') {
-  const __origProceed = proceedToChatAfterLoginLikeFlow;
-  window.proceedToChatAfterLoginLikeFlow = function(...args){
-    IS_ADMIN = false;
-    applyAdminBadgeUI();
-    return __origProceed.apply(this, args);
-  }
-}
-
-    // Login Google (con fallback redirect para Safari)
-    const btnGoogleel=qs('#btn-google');
-    btnGoogle?.addEventListener('click', async ()=>{
-      if(!chosenGender){ alert('Elige tu género primero'); return; }
-      try{
-        const provider=new firebase.auth.GoogleAuthProvider();
-        await auth.signInWithPopup(provider);
-        localStorage.setItem('ttv_gender', chosenGender);
-      }catch(e){
+    cardCupid.onclick = async ()=>{
+      // same profile load
+      if(!profile.gender || !profile.name || !profile.age){
         try{
-          const provider=new firebase.auth.GoogleAuthProvider();
-          await auth.signInWithRedirect(provider);
-        }catch(e2){ alert('Error Google: '+(e2?.message||e?.message)); }
+          const raw = localStorage.getItem("ttv_profile");
+          if(raw){
+            const p = JSON.parse(raw);
+            profile.gender = p.gender || profile.gender;
+            profile.name = p.name || profile.name;
+            profile.age = p.age || profile.age;
+          }
+        }catch{}
       }
-    });
-    
-  btnGuest?.addEventListener('click', ()=>{
-  if(!chosenGender){ alert('Elige tu género primero'); return; }
-  const name = inpNombre.value || localStorage.getItem('ttv_name') || 'Invitado';
-  localStorage.setItem('ttv_gender', chosenGender);
-  proceedToChatAfterLoginLikeFlow(name);
-});
+      showPage(pageChat);
+      if(IS_ADMIN){
+        await startCupidAsHost();
+      }else{
+        await startCupidAsGuest();
+      }
+    };
+
+    /*****************
+     * WS message handling
+     *****************/
+    function handleWS(msg){
+      switch(msg.type){
+        case "welcome":{
+          myId = msg.id;
+          break;
+        }
+        case "role":{
+          IS_ADMIN = !!msg.isAdmin;
+          IS_PRO = !!msg.isPro;
+          setAdminChip(IS_ADMIN);
+          if(IS_ADMIN){
+            showToast("Admin activo ✅");
+          }
+          // close modal if open
+          if(!modalKristoff.classList.contains("hidden")){
+            if(IS_ADMIN){
+              adminLoginHint.textContent = "Listo ✅";
+              setTimeout(closeKristoffModal, 450);
+            }else{
+              adminLoginHint.textContent = "No autorizado.";
+            }
+          }
+          break;
+        }
+        case "kristoff-login-result":{
+          if(msg.ok){
+            adminLoginHint.textContent = "Listo ✅";
+            showToast("Bienvenido Kristoff ✅");
+            setTimeout(closeKristoffModal, 450);
+          }else{
+            adminLoginHint.textContent = msg.reason || "Contraseña/email incorrectos.";
+            showToast("Login admin falló.");
+          }
+          break;
+        }
+
+        // SOLO
+        case "matched":{
+          if(mode !== "solo") return;
+          handleSoloMatched(msg).catch(err=>console.error(err));
+          break;
+        }
+        case "offer":{
+          if(mode !== "solo") return;
+          handleSoloOffer(msg.sdp).catch(err=>console.error(err));
+          break;
+        }
+        case "answer":{
+          if(mode !== "solo") return;
+          handleSoloAnswer(msg.sdp).catch(err=>console.error(err));
+          break;
+        }
+        case "ice":{
+          if(mode !== "solo") return;
+          handleSoloIce(msg.candidate).catch(()=>{});
+          break;
+        }
+        case "peer-left":{
+          if(mode !== "solo") return;
+          showToast("La otra persona se fue.");
+          cleanupSolo();
+          setStatus("Solo", "Buscando", "Buscando alguien nuevo…");
+          wsSend({
+            type:"find",
+            displayName: profile.name || currentUser?.displayName || "Usuario",
+            gender: profile.gender || null,
+            age: profile.age || null
+          });
+          break;
+        }
+        case "fake-skip":{
+          // Visual simple: mostrar overlay "Saltando..." en el remoto
+          if(mode !== "solo") return;
+          if(msg.on){
+            showSearchingOverlay(0, true, "Saltando…");
+            setStatus("Solo", "Saltando", "Fake skip activado…");
+          }else{
+            showSearchingOverlay(0, false);
+            setStatus("Solo", "Conectado", "Conectado ✅");
+          }
+          break;
+        }
+
+        // GROUP / CUPID
+        case "group-init":{
+          if(mode !== "cupid") return;
+          handleGroupInit(msg);
+          break;
+        }
+        case "group-add":{
+          if(mode !== "cupid") return;
+          handleGroupAdd(msg);
+          break;
+        }
+        case "group-remove":{
+          if(mode !== "cupid") return;
+          handleGroupRemove(msg);
+          break;
+        }
+        case "group-close":{
+          if(mode !== "cupid") return;
+          handleGroupClose(msg);
+          break;
+        }
+        case "group-offer":
+        case "group-answer":
+        case "group-ice":{
+          if(mode !== "cupid") return;
+          handleGroupSignal(msg).catch(err=>console.error(err));
+          break;
+        }
+
+        default:
+          // console.log("WS", msg);
+          break;
+      }
+    }
+
+    /*****************
+     * First page setup
+     *****************/
+    // If no firebase user and not guest, landing stays.
+    if(!auth.currentUser){
+      showPage(pageLanding);
+    }
+
   </script>
 </body>
 </html>
