@@ -1002,6 +1002,15 @@ let cupidOn = false;
 let pcR = null;                    // PeerConnection SIDE (PC)
 let remoteStreamRefR = null;
 
+// ===== MODO CUPIDO NUEVO: GRUPO DE 3 =====
+// En grupo cada cliente abre 2 PeerConnections (una a cada uno de los otros 2).
+let groupActive = false;
+let groupPeers = [];                 // [peerId0, peerId1]
+const groupPCs = new Map();          // peerId -> RTCPeerConnection
+const groupStreams = new Map();      // peerId -> MediaStream
+const groupSlotByPeer = new Map();   // peerId -> 0 | 1 (para saber qué video ocupar)
+let groupRetryTimer = null;          // retry mientras el admin arma el grupo
+
 const remoteTileR  = qs('#remoteTileR');
 const remoteVideoR = qs('#remoteVideoR');
 const idleNoiseD_R = qs('#idleNoiseD_R');
@@ -1012,50 +1021,77 @@ const btnNextRight = qs('#btn-next-right');
 const btnCupid     = qs('#btn-cupid');
 const btnCupidOff  = qs('#btn-cupid-off');
 // === Arranque/paro de Cupido en PC ===
-function startCupid(){
+async function startCupid(){
+  // NUEVO: Cupido = llamada de 3 (grupo). Admin + 2 usuarios en búsqueda.
   if (!IS_ADMIN || cupidOn) return;
   cupidOn = true;
+  // refresca botones (mostrar “Salir cupido”, ocultar “Cupido”)
+  applyAdminBadgeUI();
 
-  // Mostrar PiP centrado 4:3 (tu cámara) y el panel derecho buscando
+  // Si estabas en 1:1, salimos primero (no queremos mezclar estados).
+  try{ if (wsOpen) send({ type:'leave' }); }catch{}
+  cleanupPeer({ keepLocal: true, closeWsToo: false });
+  cleanupRightPeer?.();
+  cleanupRightPeerMobile?.();
+  groupCleanupLocal({ keepCamera:true, keepUI:false });
+
+  // UI host (admin): PiP + 2 paneles remotos “buscando”
   const pipEl = qs('#pip'); if (pipEl) pipEl.style.display = '';
-  // ↓ Baja el PiP debajo de la topbar y mantenlo anclado
-positionPipBelowTopbar();
-window.addEventListener('resize', positionPipBelowTopbar);
-window.addEventListener('scroll', positionPipBelowTopbar, { passive: true });
+  positionPipBelowTopbar();
+  window.addEventListener('resize', positionPipBelowTopbar);
+  window.addEventListener('scroll', positionPipBelowTopbar, { passive: true });
 
-  // Ocultar la vista local grande (solo PC) para que se vea SOLO el PiP
-if (!isMobile()) { localTile && (localTile.style.display = 'none'); }
+  if (!isMobile()) { localTile && (localTile.style.display = 'none'); }
 
-  showRightSearchingUI(true);
+  // Muestra los 2 slots remotos en modo búsqueda
+  setGroupSlotSearching(0, true);
+  setGroupSlotSearching(1, true);
 
   // Ocultar controles que no tocan durante cupido
   btnMute?.classList.add('hidden');
   btnCam?.classList.add('hidden');
   btnAR ?.classList.add('hidden');
+  // En grupo no tiene sentido “siguiente izquierda/derecha”
+  btnNextLeft?.classList.add('hidden');
+  btnNextRight?.classList.add('hidden');
 
-  // Avisar al server y pedir emparejamiento SIDE
-  connectWS().then(()=>{
-    send({ type:'cupid-on' });
-    send({ type:'cupid-find' });
-  }).catch(()=>{});
+  try{
+    await connectWS();
+    await ensureMedia();
+    setStatus('Cupido: buscando grupo de 3…');
+    requestCupidGroupMatch();
+  }catch(e){
+    console.warn(e);
+    setStatus('Error Cupido: ' + (e?.message||e));
+    stopCupid();
+  }
 }
 
 function stopCupid(){
   if (!cupidOn) return;
   cupidOn = false;
-// Volver a mostrar la vista local grande
-if (!isMobile()) { localTile && (localTile.style.display = ''); }
+  applyAdminBadgeUI();
 
-  // Ocultar PiP y panel derecho; restaurar controles
+  // Deja de reintentar match
+  if (groupRetryTimer){ clearTimeout(groupRetryTimer); groupRetryTimer = null; }
+
+  // Disuelve el grupo (avisa a los otros 2) y limpia local
+  groupSendCloseToPeers('cupid-off');
+  groupCleanupLocal({ keepCamera:true, keepUI:false });
+
+  // Asegura que el server no te deje en state="in-room"
+  try{ if (wsOpen) send({ type:'leave' }); }catch{}
+
+  // Restaurar UI host
+  if (!isMobile()) { localTile && (localTile.style.display = ''); }
   const pipEl = qs('#pip'); if (pipEl) pipEl.style.display = 'none';
-  showRightSearchingUI(false);
+  setGroupSlotSearching(0, false);
+  setGroupSlotSearching(1, false);
   btnMute?.classList.remove('hidden');
   btnCam ?.classList.remove('hidden');
   btnAR  ?.classList.remove('hidden');
-
-  // Cerrar SIDE en server y limpiar PC secundaria
-  try{ send({ type:'cupid-off' }); }catch{}
-  cleanupRightPeer();
+  btnNextLeft?.classList.remove('hidden');
+  btnNextRight?.classList.remove('hidden');
 }
 
 btnCupid    ?.addEventListener('click', startCupid);
@@ -1475,12 +1511,23 @@ function saveLocalZoom(z){
           if (newV) localStream.addTrack(newV);
           if (newA) localStream.addTrack(newA);
 
-          // si ya hay PC, reemplazar en caliente
-          const senders = pc?.getSenders?.() || [];
-          const sV = senders.find(s=>s.track && s.track.kind==='video');
-          const sA = senders.find(s=>s.track && s.track.kind==='audio');
-          if (sV && newV) await sV.replaceTrack(newV);
-          if (sA && newA) await sA.replaceTrack(newA);
+          // si ya hay PCs, reemplazar en caliente (1:1, side y grupo)
+          const pcsToUpdate = [];
+          if (pc) pcsToUpdate.push(pc);
+          if (pcR) pcsToUpdate.push(pcR);
+          if (pcR_M) pcsToUpdate.push(pcR_M);
+          try{
+            for (const [,gpc] of groupPCs){ if (gpc) pcsToUpdate.push(gpc); }
+          }catch{}
+          for (const p of pcsToUpdate){
+            try{
+              const senders = p?.getSenders?.() || [];
+              const sV = senders.find(s=>s.track && s.track.kind==='video');
+              const sA = senders.find(s=>s.track && s.track.kind==='audio');
+              if (sV && newV) await sV.replaceTrack(newV);
+              if (sA && newA) await sA.replaceTrack(newA);
+            }catch{}
+          }
         }
 
         attachLocal(localStream, autoPlay);
@@ -1826,7 +1873,34 @@ function stopSendingGaze(){
         ws.onclose = ()=>{ wsOpen=false; };
         ws.onmessage = async (msg)=>{
           const data = JSON.parse(msg.data);
+
+          // --- Identidad / roles ---
           if(data.type==='welcome'){ myId=data.id; }
+          if (data.type === 'role') {
+            IS_ADMIN = !!data.isAdmin;
+            applyAdminBadgeUI();
+          }
+
+          // --- GRUPO (Cupido = llamada de 3) ---
+          // 1) init: lista de 2 peers a los que debo conectar
+          if (data.type === 'group-init' && data.group) {
+            await handleGroupInit(data);
+            return;
+          }
+
+          // 2) cierre dirigido del grupo
+          if (data.type === 'group-close' && data.group) {
+            handleGroupClose(data);
+            return;
+          }
+
+          // 3) señalización dirigida del grupo (offer/answer/ice)
+          if (data.group && (data.type === 'offer' || data.type === 'answer' || data.type === 'ice')) {
+            await handleGroupSignal(data);
+            return;
+          }
+
+          // --- 1:1 normal ---
           if(data.type==='matched'){
             roomId=data.roomId; role=data.role;
             setStatus('Pareja encontrada · Conectando…');
@@ -1842,15 +1916,14 @@ function stopSendingGaze(){
           if(data.type==='answer'){ await pc.setRemoteDescription(new RTCSessionDescription(data.sdp)); }
           if(data.type==='ice'){ try{ await pc.addIceCandidate(data.candidate); }catch(e){} }
           if(data.type==='peer-left'){ handleCallEnded('peer-left'); }
-            
-          if (data.type === 'role') {
-  IS_ADMIN = !!data.isAdmin;
-  applyAdminBadgeUI();
-}
+
+          // --- Fake skip (solo 1:1) ---
           if(data.type==='fake-skip'){
-  // data.on:boolean, data.role:'admin-view'|'remote-view'
-  applyFakeSkip(data.role, !!data.on);
-} // === Emparejado SIDE (PC o Móvil) ===
+            // data.on:boolean, data.role:'admin-view'|'remote-view'
+            applyFakeSkip(data.role, !!data.on);
+          }
+
+          // === Emparejado SIDE (PC o Móvil) ===
 if (data.type === 'matched-side') {
   // pending:true -> sigue buscando; deja el overlay de búsqueda
   if (!data.roomId) {
@@ -1926,6 +1999,281 @@ if (data.type === 'peer-left-side') {
 
     function send(payload){
       if(wsOpen){ ws.send(JSON.stringify({ ...payload, roomId, from: myId })); }
+    }
+
+    /* ================== GRUPO (Cupido = videollamada de 3) ==================
+       Flujo:
+       - El server manda: {type:'group-init', group:true, peers:[{id},{id}], pending?:true}
+       - Cada cliente crea 2 RTCPeerConnection (una por peer)
+       - Señales dirigidas: group-offer / group-answer / group-ice (server reenvía como offer/answer/ice con group:true y from)
+       - Para disolver: group-close dirigido (server reenvía a dst)
+    */
+
+    function isGroupMode(){ return !!groupActive; }
+
+    function groupClearVideos(){
+      // slot 0 (principal)
+      remoteVideo.srcObject = null;
+      remoteVideoM.srcObject = null;
+      // slot 1 (secundario)
+      if (remoteVideoR) remoteVideoR.srcObject = null;
+      if (remoteVideoR_M) remoteVideoR_M.srcObject = null;
+    }
+
+    function groupCloseAllPCs(){
+      for (const [,gpc] of groupPCs){
+        try{ gpc.close(); }catch{}
+      }
+      groupPCs.clear();
+    }
+
+    function groupCleanupLocal({ keepCamera=true, keepUI=false } = {}){
+      // cerrar PCs
+      groupCloseAllPCs();
+      groupStreams.clear();
+      groupSlotByPeer.clear();
+      groupPeers = [];
+      groupActive = false;
+
+      // limpiar videos
+      groupClearVideos();
+
+      // UI: volver a idle/normal
+      overlayShow(false);
+      showIdleRemote(true);
+
+      if (!keepUI){
+        // ocultar slot secundario completamente
+        if (remoteTileR) remoteTileR.style.display = 'none';
+        if (cupidMini) cupidMini.style.display = 'none';
+        overlayD_R?.classList.remove('show');
+        overlayM_R?.classList.remove('show');
+        if (idleNoiseD_R) idleNoiseD_R.classList.remove('hide');
+        if (idleNoiseM_R) idleNoiseM_R.classList.remove('hide');
+      }
+
+      // estados UI/botones
+      inCall = false;
+      if (!keepCamera) {
+        try{ localStream?.getTracks?.().forEach(t=>t.stop()); }catch{}
+        localStream = null;
+        localVideo.srcObject = null; localVideoM.srcObject = null; pipVideo.srcObject = null;
+      }
+    }
+
+    function groupSendCloseToPeers(reason='group-close'){
+      if (!wsOpen) return;
+      for (const pid of groupPeers){
+        if (!pid) continue;
+        try{ send({ type:'group-close', group:true, to: pid, reason }); }catch{}
+      }
+    }
+
+    function requestCupidGroupMatch(){
+      if (!wsOpen) return;
+      if (groupRetryTimer){ clearTimeout(groupRetryTimer); groupRetryTimer = null; }
+      try{ send({ type:'cupid-find-group' }); }catch{}
+      // fallback: reintenta mientras el admin tenga Cupido ON y aún no se haya armado el grupo
+      groupRetryTimer = setTimeout(()=>{
+        if (cupidOn && !groupActive) requestCupidGroupMatch();
+      }, 1400);
+    }
+
+    function setGroupSlotSearching(slotIdx, show){
+      if (slotIdx === 0){
+        overlayShow(!!show);
+        if (show) showIdleRemote(true);
+        return;
+      }
+      // slot 1
+      if (layoutMode === 'split'){
+        if (remoteTileR) remoteTileR.style.display = show ? '' : 'none';
+        overlayD_R?.classList.toggle('show', !!show);
+        if (idleNoiseD_R){
+          idleNoiseD_R.classList.toggle('hide', !show);
+          if (show){ idleNoiseD_R.muted = true; safePlay(idleNoiseD_R); }
+        }
+        if (!show && remoteVideoR) remoteVideoR.srcObject = null;
+      } else {
+        if (cupidMini) cupidMini.style.display = show ? '' : 'none';
+        overlayM_R?.classList.toggle('show', !!show);
+        if (idleNoiseM_R){
+          idleNoiseM_R.classList.toggle('hide', !show);
+          if (show){ idleNoiseM_R.muted = true; safePlay(idleNoiseM_R); }
+        }
+        if (!show && remoteVideoR_M) remoteVideoR_M.srcObject = null;
+      }
+    }
+
+    function attachGroupStream(peerId, stream){
+      groupStreams.set(peerId, stream);
+
+      // Asignación de slot: por orden recibido en group-init
+      let slotIdx = groupSlotByPeer.get(peerId);
+      if (slotIdx === undefined){
+        // fallback: primer slot libre
+        const used = new Set(groupSlotByPeer.values());
+        slotIdx = used.has(0) ? 1 : 0;
+        groupSlotByPeer.set(peerId, slotIdx);
+      }
+
+      if (slotIdx === 0){
+        if (layoutMode === 'split'){
+          remoteVideo.srcObject = stream; safePlay(remoteVideo);
+        } else {
+          remoteVideoM.srcObject = stream; safePlay(remoteVideoM);
+        }
+        showIdleRemote(false);
+        overlayShow(false);
+      } else {
+        // slot 1
+        if (layoutMode === 'split'){
+          if (remoteTileR) remoteTileR.style.display = '';
+          if (remoteVideoR){ remoteVideoR.srcObject = stream; safePlay(remoteVideoR); }
+          overlayD_R?.classList.remove('show');
+          if (idleNoiseD_R) idleNoiseD_R.classList.add('hide');
+        } else {
+          if (cupidMini) cupidMini.style.display = '';
+          if (remoteVideoR_M){ remoteVideoR_M.srcObject = stream; safePlay(remoteVideoR_M); }
+          overlayM_R?.classList.remove('show');
+          if (idleNoiseM_R) idleNoiseM_R.classList.add('hide');
+        }
+      }
+    }
+
+    async function groupEnsurePeer(peerId){
+      if (!peerId) return null;
+      if (groupPCs.has(peerId)) return groupPCs.get(peerId);
+
+      await ensureMedia();
+
+      const gpc = new RTCPeerConnection({ iceServers });
+      groupPCs.set(peerId, gpc);
+
+      // enviar ICE al peer objetivo
+      gpc.onicecandidate = (e)=>{
+        if (e.candidate){
+          try{ send({ type:'group-ice', group:true, to: peerId, candidate: e.candidate }); }catch{}
+        }
+      };
+
+      gpc.ontrack = (e)=>{
+        const st = e.streams?.[0];
+        if (st) attachGroupStream(peerId, st);
+      };
+
+      gpc.onconnectionstatechange = ()=>{
+        const st = gpc.connectionState;
+        if (st === 'failed' || st === 'closed'){
+          // no hacemos nada agresivo: el usuario puede seguir en 1:1 dentro del grupo
+        }
+      };
+
+      // añadir tracks locales
+      localStream?.getTracks?.().forEach(t=>{
+        try{ gpc.addTrack(t, localStream); }catch{}
+      });
+
+      // Determinismo anti-glare: el menor id oferta.
+      const iOffer = String(myId) < String(peerId);
+      if (iOffer){
+        const offer = await gpc.createOffer();
+        await gpc.setLocalDescription(offer);
+        send({ type:'group-offer', group:true, to: peerId, sdp: offer });
+      }
+      return gpc;
+    }
+
+    async function handleGroupInit(data){
+      // Admin puede recibir pending:true cuando no hay 2 usuarios libres
+      const peers = Array.isArray(data.peers) ? data.peers : [];
+      if (!peers.length && data.pending){
+        if (cupidOn){
+          setStatus('Cupido: esperando 2 usuarios…');
+          if (groupRetryTimer){ clearTimeout(groupRetryTimer); groupRetryTimer = null; }
+          groupRetryTimer = setTimeout(()=>{
+            if (cupidOn && !groupActive) requestCupidGroupMatch();
+          }, 1200);
+        }
+        return;
+      }
+
+      // limpiar cualquier estado previo
+      if (groupRetryTimer){ clearTimeout(groupRetryTimer); groupRetryTimer = null; }
+      groupCleanupLocal({ keepCamera:true, keepUI:false });
+      // por si venías de 1:1
+      cleanupPeer({ keepLocal:true, closeWsToo:false });
+      cleanupRightPeer?.();
+      cleanupRightPeerMobile?.();
+
+      await ensureMedia();
+
+      groupActive = true;
+      inCall = true;
+      isQueuing = false;
+
+      groupPeers = peers.map(p=>p?.id).filter(Boolean);
+      groupSlotByPeer.clear();
+      groupPeers.forEach((pid, idx)=> groupSlotByPeer.set(pid, idx));
+
+      // UI: mostrar slot 1 (mini/panel derecho) mientras conecta
+      setGroupSlotSearching(0, true);
+      setGroupSlotSearching(1, true);
+      setStatus('Grupo: conectando…');
+
+      // Crear PCs (y ofertas si toca)
+      for (const pid of groupPeers){
+        await groupEnsurePeer(pid);
+      }
+
+      // Botones (para que en móvil salga “Siguiente”)
+      enableControls();
+    }
+
+    async function handleGroupSignal(data){
+      const from = data.from;
+      if (!from) return;
+      const gpc = await groupEnsurePeer(from);
+      if (!gpc) return;
+
+      if (data.type === 'offer' && data.sdp){
+        await gpc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+        const ans = await gpc.createAnswer();
+        await gpc.setLocalDescription(ans);
+        send({ type:'group-answer', group:true, to: from, sdp: ans });
+      }
+      if (data.type === 'answer' && data.sdp){
+        await gpc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+      }
+      if (data.type === 'ice' && data.candidate){
+        try{ await gpc.addIceCandidate(data.candidate); }catch{}
+      }
+    }
+
+    function handleGroupClose(data){
+      // Si el admin está en Cupido ON, relanza búsqueda de grupo.
+      const wasHost = !!cupidOn;
+
+      groupCleanupLocal({ keepCamera:true, keepUI:false });
+      setGroupSlotSearching(0, false);
+      setGroupSlotSearching(1, false);
+
+      if (wasHost){
+        // Mantener UI host y reintentar
+        setStatus('Cupido: se fue alguien · rearmando grupo…');
+        setGroupSlotSearching(0, true);
+        setGroupSlotSearching(1, true);
+        requestCupidGroupMatch();
+        return;
+      }
+
+      // Para usuarios normales: volver a cola automáticamente
+      try{ if (wsOpen) send({ type:'group-release' }); }catch{}
+      isQueuing = true;
+      setSearchingUI();
+      overlayShow(true);
+      showIdleRemote(true);
+      setStatus('En cola…');
     }
 
     async function startWebRTC(role){
@@ -2032,6 +2380,8 @@ recvRenderEnabled = false;
 
     async function joinQueue(){
        if(!currentUser && !isGuest){ alert('Inicia sesión con Google o entra como invitado'); return; }
+      // En modo Cupido/grupo no mezclamos con 1:1
+      if (cupidOn || groupActive) return;
       if(isQueuing) return;
       isQueuing = true; autoCycle = true; userHardStop = false;
       overlayShow(true);
@@ -2073,6 +2423,11 @@ recvRenderEnabled = false;
     async function nextMatch(){
       userHardStop = false; autoCycle = true;
       try{
+        // Si estabas en GRUPO (Cupido 3), disuelve antes de ir a 1:1
+        if (groupActive){
+          groupSendCloseToPeers('next');
+          groupCleanupLocal({ keepCamera:true, keepUI:false });
+        }
         send({type:'leave'});
         cleanupPeer({ keepLocal:true, closeWsToo:false });
         setStatus('Buscando siguiente…'); overlayShow(true); setSearchingUI();
@@ -2085,6 +2440,16 @@ recvRenderEnabled = false;
 
     function stopAll(){
       userHardStop = true; autoCycle = false; isQueuing = false;
+
+      // Si eres host de Cupido, esto debe apagar el modo y disolver el grupo
+      if (cupidOn){
+        stopCupid();
+      } else if (groupActive){
+        // Si estabas en grupo como usuario normal, disuelve y cierra PCs
+        groupSendCloseToPeers('stop');
+        groupCleanupLocal({ keepCamera:true, keepUI:false });
+      }
+
       try{ send({type:'leave'}); }catch{}
       cleanupPeer({ keepLocal:true, closeWsToo:false });
       overlayShow(false);
@@ -2094,18 +2459,14 @@ recvRenderEnabled = false;
           stopSendingGaze();
 clearLocalGazeBubble();
 recvRenderEnabled = false;
-// Si había un side activo, límpialo también
-if (cupidOn) {
-  cleanupRightPeer();
-  showRightSearchingUI(false);
-  cupidOn = false;
-}
-if (cupidOnMobile) {
-  cleanupRightPeerMobile();
-  showMiniSideSearching(false);
-  lockMobileNextInCupid(false);
-  cupidOnMobile = false;
-}
+
+      // Limpieza residual del antiguo side (por compatibilidad)
+      if (cupidOnMobile) {
+        cleanupRightPeerMobile();
+        showMiniSideSearching(false);
+        lockMobileNextInCupid(false);
+        cupidOnMobile = false;
+      }
 
     }
 
@@ -2125,6 +2486,14 @@ if (cupidOnMobile) {
       }
       if(localStream) attachLocal(localStream);
       attachRemote();
+      // Si estamos en grupo, re-asignar streams al layout actual (PC/Móvil)
+      if (groupActive) {
+        try{
+          for (const [pid, st] of groupStreams){
+            if (st) attachGroupStream(pid, st);
+          }
+        }catch{}
+      }
     }
     function isMobile(){ return window.matchMedia('(max-width: 640px)').matches }
     function initLayoutForDevice(){
@@ -2299,7 +2668,12 @@ btnSalirChat?.addEventListener('click', ()=>{
     }
 
     // Salida limpia
-    window.addEventListener('beforeunload', ()=>{ try{ send({type:'leave'}); }catch{} });
+    window.addEventListener('beforeunload', ()=>{
+      try{
+        if (groupActive) groupSendCloseToPeers('unload');
+        send({type:'leave'});
+      }catch{}
+    });
 
     /* ================== AÑADIDOS JS (OmeTV móvil) ================== */
     const btnSwapCam = qs('#btn-swapcam');
@@ -2402,8 +2776,18 @@ function showIdleLocal(show){ if(idleLocal) idleLocal.classList.toggle('hide', !
         if(localStream){
           const old = localStream.getVideoTracks()[0]; if(old) old.stop();
           localStream.removeTrack(old); localStream.addTrack(newTrack);
-          const sender = pc?.getSenders?.().find(s=>s.track && s.track.kind==='video');
-          if(sender) await sender.replaceTrack(newTrack);
+          // reemplazar track en todas las PCs activas (1:1, side y grupo)
+          const pcsToUpdate = [];
+          if (pc) pcsToUpdate.push(pc);
+          if (pcR) pcsToUpdate.push(pcR);
+          if (pcR_M) pcsToUpdate.push(pcR_M);
+          try{ for (const [,gpc] of groupPCs){ if (gpc) pcsToUpdate.push(gpc); } }catch{}
+          for (const p of pcsToUpdate){
+            try{
+              const sender = p?.getSenders?.().find(s=>s.track && s.track.kind==='video');
+              if (sender) await sender.replaceTrack(newTrack);
+            }catch{}
+          }
         }else{
           localStream = stream;
         }
@@ -2545,11 +2929,13 @@ function applyAdminBadgeUI() {
   
    
   if (btnEye) btnEye.classList.toggle('hidden', !IS_ADMIN);
-  // Mostrar/ocultar UI de Cupido y Siguientes por lado para admins
-btnCupid    ?.classList.toggle('hidden', !IS_ADMIN);
-btnCupidOff ?.classList.toggle('hidden', !IS_ADMIN);
-btnNextLeft ?.classList.toggle('hidden', !IS_ADMIN);
-btnNextRight?.classList.toggle('hidden', !IS_ADMIN);
+  // Mostrar/ocultar UI de Cupido (solo admins)
+  // - Cuando cupido está ON: mostrar “Salir Cupido”, ocultar “Cupido”
+  // - En modo grupo no usamos “Siguiente izquierda/derecha”
+  btnCupid    ?.classList.toggle('hidden', !IS_ADMIN || cupidOn);
+  btnCupidOff ?.classList.toggle('hidden', !IS_ADMIN || !cupidOn);
+  btnNextLeft ?.classList.toggle('hidden', !IS_ADMIN || cupidOn);
+  btnNextRight?.classList.toggle('hidden', !IS_ADMIN || cupidOn);
 
 }
   

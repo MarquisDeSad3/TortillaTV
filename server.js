@@ -732,6 +732,23 @@ case "group-ice": {
   break;
 }
 
+// ====== NUEVO: cierre dirigido de grupo (para disolver la llamada de 3) ======
+case "group-close": {
+  // Esperamos: { type:'group-close', group:true, to, reason? }
+  if (!msg.group || !msg.to) break;
+
+  const dst = getClient(msg.to);
+  if (!dst) break;
+
+  safeSend(dst.ws, {
+    type: 'group-close',
+    group: true,
+    from: id,
+    reason: msg.reason || 'group-close'
+  });
+  break;
+}
+
 
 // Bypass de señales con side:true
 case "offer":
