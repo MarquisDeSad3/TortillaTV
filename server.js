@@ -490,7 +490,7 @@ function teardownSideRoom(adminId, reason = "teardown-side") {
     if (B.state !== "idle") {
       B.state = "waiting";
       B.joinTs = Date.now();
-      enqueue(otherId, queueKeyFor(B));
+      enqueue(otherId, queueKeyFor(other));
     }
   }
 
@@ -835,7 +835,7 @@ case "group-release": {
               if (other.state !== "idle") {
                 other.state = "waiting";
                 other.joinTs = Date.now();
-                enqueue(otherId, queueKeyFor(B));
+                enqueue(otherId, queueKeyFor(other));
               }
             }
             if (r.timers?.offer)  clearTimeout(r.timers.offer);
@@ -928,7 +928,7 @@ if (!me.roomId && !me.sideRoomId && me.state === "in-room") {
           if (other.state !== "idle") {
             other.state = "waiting";
             other.joinTs = Date.now();
-            enqueue(otherId, queueKeyFor(B));
+            enqueue(otherId, queueKeyFor(other));
           }
         }
         if (r.timers?.offer)  clearTimeout(r.timers.offer);
