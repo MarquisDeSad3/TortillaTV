@@ -136,7 +136,19 @@
 
     .pip{ display:none !important; }
 
-    .topbar .btn{ border:2px solid rgba(17,24,39,.3); background:rgba(255,255,255,.9); padding:.5rem .9rem; border-radius:999px; font-weight:600; }
+    /* === TOPBAR: estilo pill como el selector Solo/Cupido === */
+    .topbar .btn{
+      padding:.55rem .95rem;
+      border-radius:999px;
+      font-weight:900;
+      font-size:.92rem;
+      border:1px solid rgba(17,24,39,.22);
+      color:#111;
+      background:rgba(255,255,255,.88);
+      box-shadow:0 10px 22px rgba(0,0,0,.08);
+      transition: transform .08s ease, background .12s ease, opacity .12s ease;
+    }
+    .topbar .btn:active{ transform: translateY(1px); }
     .topbar .btn:disabled{ opacity:.55 }
 
     .overlay{
@@ -543,6 +555,7 @@
     <div class="paper-holes"><div class="paper-hole"></div><div class="paper-hole"></div><div class="paper-hole"></div></div>
 
     <main class="book mx-auto max-w-5xl px-6 py-10">
+
       <!-- LANDING -->
       <section id="page-landing" class="page visible">
         <div class="hero">
@@ -608,6 +621,35 @@
         </div>
       </section>
 
+      <!-- ===== NUEVA PANTALLA: SELECCIÓN DE MODO (después del login) ===== -->
+      <section id="page-mode" class="page hidden">
+        <div class="hero">
+          <h2 class="font-extrabold text-3xl sm:text-4xl">Elige tu modo</h2>
+          <p class="mt-2 text-neutral-700 text-lg">
+            <b>Solo</b> (1 vs 1) o <b>Cupido</b> (sala de 3 con Kristoff).
+          </p>
+
+          <div class="mt-6 grid grid-cols-1 gap-3 max-w-md w-full">
+            <button id="modeScreenSolo"
+              class="rounded-2xl border-2 border-black/20 bg-white/90 px-5 py-4 text-left shadow">
+              <div class="font-extrabold text-lg">🧍 Modo Solo</div>
+              <div class="text-neutral-700 text-sm">Chat aleatorio normal (1 vs 1)</div>
+            </button>
+
+            <button id="modeScreenCupid"
+              class="rounded-2xl border-2 border-black/20 bg-white/90 px-5 py-4 text-left shadow">
+              <div class="font-extrabold text-lg">💘 Modo Cupido</div>
+              <div class="text-neutral-700 text-sm">Sala de 3: tú + otra persona + Kristoff (host)</div>
+            </button>
+          </div>
+
+          <button id="modeScreenBack"
+            class="mt-6 rounded-full border-2 border-neutral-900/30 bg-white/80 px-5 py-2 text-sm font-semibold shadow">
+            Volver
+          </button>
+        </div>
+      </section>
+
       <!-- SALA -->
       <section id="page-chat" class="page hidden">
         <!-- Topbar PC -->
@@ -621,8 +663,6 @@
             <button id="btn-cam"   class="btn" disabled>Apagar cam</button>
 
             <button id="btn-eye" class="btn hidden" title="Ver mirada de la pareja">👁</button>
-            <button id="btn-cupid" class="btn hidden" title="Modo Cupido">💘 Cupido</button>
-            <button id="btn-cupid-off" class="btn hidden" title="Salir Cupido">Salir Cupido</button>
 
             <div class="ml-auto flex items-center gap-2">
               <button id="btn-ar" class="btn">AR: 1:1</button>
@@ -646,11 +686,6 @@
                     src="./assets/noise.mp4" muted playsinline autoplay loop preload="auto"></video>
               <video id="remoteVideo" autoplay playsinline></video>
 
-              <button id="btn-next-left"
-                class="absolute top-2 left-2 z-30 bg-white/90 border-2 border-black/20 rounded-full px-3 py-1 text-sm font-semibold hidden">
-                ⟳ Siguiente
-              </button>
-
               <div id="overlayD" class="overlay">
                 <div class="card px-5 py-4 flex items-center gap-3 bg-white">
                   <span class="font-semibold">Buscando pareja…</span>
@@ -666,16 +701,11 @@
               </div>
             </div>
 
-            <!-- REMOTO DERECHO (PC · CUPIDO) -->
+            <!-- REMOTO DERECHO (PC · CUPIDO HOST) -->
             <div class="tile remote" id="remoteTileR" style="display:none">
               <video id="idleNoiseD_R" class="idle-video"
                     src="./assets/noise.mp4" muted playsinline autoplay loop preload="auto"></video>
               <video id="remoteVideoR" autoplay playsinline></video>
-
-              <button id="btn-next-right"
-                class="absolute top-2 left-2 z-30 bg-white/90 border-2 border-black/20 rounded-full px-3 py-1 text-sm font-semibold hidden">
-                ⟳ Siguiente
-              </button>
 
               <div id="overlayD_R" class="overlay">
                 <div class="card px-5 py-4 flex items-center gap-3 bg-white">
@@ -707,7 +737,7 @@
             </div>
           </div><!-- /#stage -->
 
-          <!-- PiP ADMIN (PC · Cupido) -->
+          <!-- PiP (PC · Cupido) => SIEMPRE Kristoff (para participantes); para host es su self -->
           <div id="pip" style="
             display:none;
             position:fixed;
@@ -723,7 +753,7 @@
             border:1px solid rgba(255,255,255,.45);
             background:#000;
           ">
-            <video id="pipVideo" autoplay playsinline muted
+            <video id="pipVideo" autoplay playsinline
                   style="width:100%;height:100%;object-fit:cover;"></video>
           </div>
 
@@ -751,12 +781,15 @@
               <div id="idle-local" class="idle static-noise"><div>Preparando cámara…</div></div>
               <video id="localVideoM" autoplay playsinline muted class="mirror"></video>
 
+              <!-- NUEVO: remoto #2 en Cupido (oculto hasta llamada grupal) -->
+              <video id="remoteVideo2M" autoplay playsinline class="hide"></video>
+
               <div class="gaze-layer" id="gazeLayerLocalM" aria-hidden="true">
                 <div class="gaze-bubble" id="gazeBubbleLocalM"></div>
               </div>
             </div>
 
-            <!-- MINI SIDE (MÓVIL · Cupido) -->
+            <!-- MINI (MÓVIL · Cupido): SELF flotante (WhatsApp) -->
             <div id="cupidMini" style="
               position:fixed;
               left:12px; bottom:calc(env(safe-area-inset-bottom,0) + 74px);
@@ -770,11 +803,13 @@
             ">
               <video id="idleNoiseM_R" class="idle-video"
                     src="./assets/noise.mp4" muted playsinline autoplay loop preload="auto"></video>
-              <video id="remoteVideoR_M" autoplay playsinline></video>
+
+              <video id="cupidSelfVideoM" autoplay playsinline muted class="mirror"
+                    style="width:100%;height:100%;object-fit:cover;"></video>
 
               <div id="overlayM_R" class="overlay show">
                 <div class="card px-4 py-3 flex items-center gap-3 bg-white">
-                  <span class="font-semibold">Buscando otra persona…</span>
+                  <span class="font-semibold">Conectando…</span>
                   <div class="flex"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
                 </div>
               </div>
@@ -815,30 +850,6 @@
   <div id="modePill" class="mode-pill" role="toolbar" aria-label="Modo">
     <button id="pillSolo" type="button">Solo</button>
     <button id="pillCupid" type="button">Cupido</button>
-  </div>
-
-  <!-- ===== MODAL: Selección de modo (Solo/Cupido) para usuarios normales ===== -->
-  <div id="modeModal" class="fixed inset-0 z-[2000] hidden">
-    <div class="absolute inset-0 bg-black/50 backdrop-blur-sm"></div>
-    <div class="absolute inset-0 flex items-center justify-center p-4">
-      <div class="card w-full max-w-md animate-wobbleIn">
-        <div class="flex items-center justify-between">
-          <h2 class="font-extrabold text-xl">¿Qué modo quieres?</h2>
-          <button id="modeClose" class="text-sm font-bold px-3 py-1 rounded-full border border-black/20 bg-white/60">✕</button>
-        </div>
-        <p class="mt-2 text-neutral-700">Puedes cambiarlo luego con el botón de arriba (Solo / Cupido).</p>
-        <div class="mt-4 grid grid-cols-1 gap-3">
-          <button id="modeSolo" class="rounded-2xl border-2 border-black/20 bg-white/90 px-5 py-4 text-left shadow">
-            <div class="font-extrabold text-lg">🧍 Modo Solo</div>
-            <div class="text-neutral-700 text-sm">Chat aleatorio normal (1 vs 1)</div>
-          </button>
-          <button id="modeCupid" class="rounded-2xl border-2 border-black/20 bg-white/90 px-5 py-4 text-left shadow">
-            <div class="font-extrabold text-lg">💘 Modo Cupido</div>
-            <div class="text-neutral-700 text-sm">Entras a la cola Cupido para unirte al host (sala de 3)</div>
-          </button>
-        </div>
-      </div>
-    </div>
   </div>
 
   <!-- ===== MODAL: Kristoff password ===== -->
@@ -942,44 +953,73 @@
     firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();
 
-    // ===== MODO (solo/cupido) + Kristoff =====
+    // ===== Kristoff =====
     const KRISTOFF_PASSWORD = "diazcanelsingao";
     const KRISTOFF_EMAIL = "christophergomez6903@gmail.com";
-    let userMode = null; // 'solo' | 'cupid' | 'kristoff-solo' | 'kristoff-cupid-host'
-    let pendingAuthUser = null;
+
+    // userMode: 'solo' | 'cupid' | 'cupid-host'
+    let userMode = null;
+    let currentUser = null;
+    let isGuest = false;
 
     function openModal(id){ const el = document.getElementById(id); if(el) el.classList.remove('hidden'); }
     function closeModal(id){ const el = document.getElementById(id); if(el) el.classList.add('hidden'); }
 
-    // ✅ IMPORTANTE: ya NO persistimos el modo en localStorage, así que se pide siempre en cada recarga.
-    function askModeThen(cb){
-      if (userMode === 'solo' || userMode === 'cupid') { cb?.(); return; }
-      openModal('modeModal');
-      const close = ()=>{ closeModal('modeModal'); };
+    function isKristoffUser(){
+      const email =
+        (auth?.currentUser?.email ||
+         currentUser?.email ||
+         window.KRISTOFF_EMAIL ||
+         '').toLowerCase();
+      return email === KRISTOFF_EMAIL.toLowerCase();
+    }
 
-      const solo = ()=>{ userMode='solo'; close(); cb?.(); };
-      const cupid = ()=>{ userMode='cupid'; close(); cb?.(); };
-
-      const btnS = document.getElementById('modeSolo');
-      const btnC = document.getElementById('modeCupid');
-      const btnX = document.getElementById('modeClose');
-      btnS.onclick = solo;
-      btnC.onclick = cupid;
-      btnX.onclick = ()=>{ userMode='solo'; close(); cb?.(); };
+    function serverMode(){
+      if (userMode === 'cupid-host') return 'cupid-host';
+      if (userMode === 'cupid') return 'cupid';
+      return 'solo';
     }
 
     /* ===== Helpers UI ===== */
     function qs(s,root=document){ return root.querySelector(s) }
-    const pages = { landing: qs('#page-landing'), chat: qs('#page-chat') };
+    const pages = { landing: qs('#page-landing'), mode: qs('#page-mode'), chat: qs('#page-chat') };
 
     function show(k){
-      Object.values(pages).forEach(p=>{p.classList.add('hidden');p.classList.remove('visible')});
+      Object.values(pages).forEach(p=>{ p.classList.add('hidden'); p.classList.remove('visible') });
       pages[k].classList.remove('hidden');
       pages[k].classList.add('visible');
-      window.scrollTo({top:0,behavior:'smooth'})
+      window.scrollTo({top:0,behavior:'smooth'});
     }
     function setStatus(t){ const el=qs('#status'); if(el) el.textContent=t }
     function safePlay(v){ try{ const p=v?.play?.(); if(p?.catch) p.catch(()=>{}); }catch{} }
+
+    function goToModeScreen(){
+      show('mode');
+      updateModePillUI();
+    }
+    function enterChatFromMode(mode){
+      userMode = mode; // 'solo' | 'cupid' | 'cupid-host'
+      show('chat');
+      initLayoutForDevice();
+      updateModePillUI();
+
+      zoomState.local = getSavedLocalZoom();
+      applyZoom('local');
+
+      mobilePanEnabled = true;
+      startIdlePanIfMobile();
+
+      ensureMedia(true).catch(()=>{});
+      setIdleUI();
+      updateGhostHandVisibility();
+    }
+
+    qs('#modeScreenSolo')?.addEventListener('click', ()=> enterChatFromMode('solo'));
+    qs('#modeScreenCupid')?.addEventListener('click', ()=>{
+      // si Kristoff entra por aquí (raro), lo dejamos como host
+      enterChatFromMode(isKristoffUser() ? 'cupid-host' : 'cupid');
+    });
+    qs('#modeScreenBack')?.addEventListener('click', ()=> goBackToLanding());
 
     function overlayEl(){
       return (layoutMode === 'split')
@@ -1100,40 +1140,25 @@
 
     const localVideo=qs('#localVideo'), remoteVideo=qs('#remoteVideo'), pip=qs('#pip'), pipVideo=qs('#pipVideo');
     const localVideoM=qs('#localVideoM'), remoteVideoM=qs('#remoteVideoM');
+    const remoteVideo2M = qs('#remoteVideo2M');
+    const cupidMini = qs('#cupidMini');
+    const cupidSelfVideoM = qs('#cupidSelfVideoM');
+
     const localTile = qs('#localTile');
 
-    // ===== Cupido (PC) =====
-    let cupidOn = false;
-    let pcR = null;
-    let remoteStreamRefR = null;
-
-    // ===== GRUPO DE 3 =====
+    // ===== GRUPO DE 3 (Cupido) =====
     let groupActive = false;
     let groupPeers = [];
     const groupPCs = new Map();
     const groupStreams = new Map();
     const groupSlotByPeer = new Map();
-    let groupRetryTimer = null;
+    const groupConnected = new Set();
+    let groupHostId = null;
+    let groupRoomId = null;
 
     const remoteTileR  = qs('#remoteTileR');
     const remoteVideoR = qs('#remoteVideoR');
     const idleNoiseD_R = qs('#idleNoiseD_R');
-    const overlayD_R   = qs('#overlayD_R');
-
-    const btnNextLeft  = qs('#btn-next-left');
-    const btnNextRight = qs('#btn-next-right');
-    const btnCupid     = qs('#btn-cupid');
-    const btnCupidOff  = qs('#btn-cupid-off');
-
-    // ===== Cupido (MÓVIL) =====
-    let cupidOnMobile = false;
-    let pcR_M = null;
-    let remoteStreamRefR_M = null;
-
-    const cupidMini     = qs('#cupidMini');
-    const remoteVideoR_M= qs('#remoteVideoR_M');
-    const idleNoiseM_R  = qs('#idleNoiseM_R');
-    const overlayM_R    = qs('#overlayM_R');
 
     // ===== GAZE =====
     let gazeDC = null;
@@ -1322,9 +1347,8 @@
 
     // === Invitado ===
     const btnGuest = qs('#btn-guest');
-    let isGuest = false;
 
-    function proceedToChatAfterLoginLikeFlow(displayName='Invitado'){
+    function proceedToModeAfterLoginLikeFlow(displayName='Invitado'){
       currentUser = { displayName };
       isGuest = true;
       localStorage.setItem('ttv_guest', '1');
@@ -1334,23 +1358,14 @@
       const a = inpEdad.value    || localStorage.getItem('ttv_age')  || '—';
       youBadge.textContent = `Tú: ${n} (${a}) · ${chosenGender||'—'}`;
 
-      show('chat');
-      initLayoutForDevice();
+      // ir a pantalla de modo (NO chat)
+      show('mode');
       updateModePillUI();
-
-      zoomState.local = getSavedLocalZoom();
-      applyZoom('local');
-
-      mobilePanEnabled = true;
-      startIdlePanIfMobile();
-
-      ensureMedia(true).catch(()=>{});
-      setIdleUI();
-      updateGhostHandVisibility();
     }
 
     /* ===== Estado WebRTC/WS ===== */
     let ws=null, wsOpen=false, myId=null, roomId=null, role=null;
+    let cupidHostRetryTimer = null; // reintentos automáticos (solo modo cupido-host)
     let pc=null, localStream=null, remoteStreamRef=null;
     let isQueuing=false, inCall=false, autoCycle=false, userHardStop=false;
     let layoutMode='split';
@@ -1401,7 +1416,6 @@
       applyZoom(which);
     }
 
-    // ✅ Quité listeners duplicados; estos guardan zoom local correctamente
     qs('#zoomInLocal') ?.addEventListener('click', ()=>{
       changeZoom('local', +ZOOM_STEP);
       saveLocalZoom(zoomState.local);
@@ -1441,6 +1455,42 @@
       }
     }
 
+    function setPipVisible(on){
+      if(!pip) return;
+      if (isMobile()) { pip.style.display = 'none'; return; }
+      pip.style.display = on ? 'block' : 'none';
+    }
+
+    function showIdleRemoteR(showIt){
+      if (idleNoiseD_R) idleNoiseD_R.classList.toggle('hide', !showIt);
+      if (showIt && idleNoiseD_R){ idleNoiseD_R.muted = true; safePlay(idleNoiseD_R); }
+    }
+
+    function isGroupHost(){
+      return !!groupHostId && myId === groupHostId;
+    }
+
+    function setCupidCallLayout(active){
+      const on = !!active;
+
+      if (isMobile()){
+        // móvil: 2 panes remotos + self flotante
+        if (cupidMini) cupidMini.style.display = on ? '' : 'none';
+        remoteVideo2M?.classList.toggle('hide', !on);
+        localVideoM?.classList.toggle('hide', on);
+
+        setPipVisible(false);
+        return;
+      }
+
+      // PC: PiP SIEMPRE
+      setPipVisible(on);
+
+      // Host: 2 remotos grandes, PiP = self (Kristoff)
+      if (remoteTileR) remoteTileR.style.display = (on && isGroupHost()) ? '' : 'none';
+      if (localTile)   localTile.style.display   = (on && isGroupHost()) ? 'none' : '';
+    }
+
     async function ensureMedia(autoPlay=true){
       try{
         if (localStream){
@@ -1474,8 +1524,6 @@
 
           const pcsToUpdate = [];
           if (pc) pcsToUpdate.push(pc);
-          if (pcR) pcsToUpdate.push(pcR);
-          if (pcR_M) pcsToUpdate.push(pcR_M);
           try{
             for (const [,gpc] of groupPCs){ if (gpc) pcsToUpdate.push(gpc); }
           }catch{}
@@ -1500,15 +1548,40 @@
     }
 
     function attachLocal(stream, autoPlay=true){
+      // Cupido móvil: self preview flotante
+      if (groupActive && isMobile()){
+        if (cupidSelfVideoM){
+          cupidSelfVideoM.srcObject = stream;
+          cupidSelfVideoM.muted = true;
+          if(autoPlay) safePlay(cupidSelfVideoM);
+        }
+        if (localVideoM) localVideoM.srcObject = null;
+        if (localVideo)  localVideo.srcObject = null;
+
+        // PiP no en móvil
+        if (pipVideo) pipVideo.srcObject = null;
+        showIdleLocal(false);
+        return;
+      }
+
       if(layoutMode==='split'){
         localVideo.srcObject = stream; if(autoPlay) safePlay(localVideo);
-        localVideoM.srcObject = null;
+        if(localVideoM) localVideoM.srcObject = null;
         applyZoom('local');
       }else{
         localVideoM.srcObject = stream; if(autoPlay) safePlay(localVideoM);
-        localVideo.srcObject = null;
+        if(localVideo) localVideo.srcObject = null;
       }
-      pipVideo.srcObject = stream; if(autoPlay) safePlay(pipVideo);
+
+      // PiP: SOLO lo manejamos para host o no-grupo; participante lo maneja attachGroupStream(host)
+      if (!groupActive || isGroupHost()){
+        if (pipVideo){
+          pipVideo.srcObject = stream;
+          pipVideo.muted = true;
+          if(autoPlay) safePlay(pipVideo);
+        }
+      }
+
       showIdleLocal(false);
     }
 
@@ -1516,11 +1589,11 @@
       if(!remoteStreamRef) return;
       if(layoutMode==='split'){
         remoteVideo.srcObject = remoteStreamRef; safePlay(remoteVideo);
-        remoteVideoM.srcObject = null;
+        if(remoteVideoM) remoteVideoM.srcObject = null;
         applyZoom('remote');
       }else{
         remoteVideoM.srcObject = remoteStreamRef; safePlay(remoteVideoM);
-        remoteVideo.srcObject = null;
+        if(remoteVideo) remoteVideo.srcObject = null;
       }
       showIdleRemote(false);
       overlayShow(false);
@@ -1643,6 +1716,9 @@
 
     async function startSendingGazeAuto(){
       if (sendingGaze) return;
+      // no gaze en grupo
+      if (groupActive) return;
+
       sendingGaze = true;
       await ensureGazeEngine();
       sendGazeTimer = setInterval(computeAndSendGaze, 66);
@@ -1660,25 +1736,21 @@
         ws.onopen = () => {
           wsOpen = true;
 
+          // identify: siempre manda displayName (aunque no haya email)
           try{
-            if (window.KRISTOFF_EMAIL) {
-              ws.send(JSON.stringify({ type:'identify', email: window.KRISTOFF_EMAIL, displayName: 'Kristoff' }));
-            }
-          }catch{}
+            const email =
+              auth?.currentUser?.email ||
+              currentUser?.email ||
+              window.KRISTOFF_EMAIL ||
+              null;
 
-          try {
-            const email = auth?.currentUser?.email || null;
             const displayName =
-              auth?.currentUser?.displayName || (inpNombre?.value || '—');
+              auth?.currentUser?.displayName ||
+              currentUser?.displayName ||
+              (inpNombre?.value || localStorage.getItem('ttv_name') || '—');
 
-            if (email) {
-              ws.send(JSON.stringify({
-                type: 'identify',
-                email,
-                displayName
-              }));
-            }
-          } catch {}
+            ws.send(JSON.stringify({ type:'identify', email, displayName }));
+          }catch{}
 
           resolve();
         };
@@ -1690,33 +1762,120 @@
           const data = JSON.parse(msg.data);
 
           if(data.type==='welcome'){ myId=data.id; }
+
           if (data.type === 'role') {
             IS_ADMIN = !!data.isAdmin;
             applyAdminBadgeUI();
           }
 
+          // === SOLO 1vs1 ===
           if(data.type==='matched'){
+            if (serverMode() !== 'solo') return;
             roomId=data.roomId; role=data.role;
             setStatus('Pareja encontrada · Conectando…');
             overlayShow(true);
-            if(data.peer && data.peer.name){ peerLabel.classList.remove('hidden'); peerLabel.textContent = 'Pareja: '+(data.peer.name||'—'); }
+            if(data.peer && data.peer.name){
+              peerLabel.classList.remove('hidden');
+              peerLabel.textContent = 'Pareja: '+(data.peer.name||'—');
+            }
             try{ await startWebRTC(role); }catch(e){ setStatus('Error WebRTC: '+e.message); overlayShow(false); }
           }
+
           if(data.type==='offer'){
+            if (serverMode() !== 'solo') return;
             await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
             const answer = await pc.createAnswer(); await pc.setLocalDescription(answer);
             send({type:'answer', sdp:answer});
           }
-          if(data.type==='answer'){ await pc.setRemoteDescription(new RTCSessionDescription(data.sdp)); }
-          if(data.type==='ice'){ try{ await pc.addIceCandidate(data.candidate); }catch(e){} }
-          if(data.type==='peer-left'){ handleCallEnded('peer-left'); }
+          if(data.type==='answer'){
+            if (serverMode() !== 'solo') return;
+            await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+          }
+          if(data.type==='ice'){
+            if (serverMode() !== 'solo') return;
+            try{ await pc.addIceCandidate(data.candidate); }catch(e){}
+          }
+          if(data.type==='peer-left'){
+            if (serverMode() !== 'solo') return;
+            handleCallEnded('peer-left');
+          }
+
+// === CUPIDO (grupo) ===
+if (data.type === 'group-matched'){
+  // Si el host pidió grupo pero aún no hay 2 usuarios, el server manda pending:true y roomId:null
+  if (!data.roomId){
+    if (userMode === 'cupid-host'){
+      isQueuing = true;
+      setStatus('Cupido · Esperando 2 personas…');
+      overlayShow(true);
+      setSearchingUI();
+      scheduleCupidHostRetry(1300);
+    }
+    return;
+  }
+  await startGroupCall(data);
+}
+          if (data.type === 'group-offer'){
+            await onGroupOffer(data);
+          }
+          if (data.type === 'group-answer'){
+            await onGroupAnswer(data);
+          }
+          if (data.type === 'group-ice'){
+            await onGroupIce(data);
+          }
+          if (data.type === 'group-peer-left'){
+            handleCallEnded('group-peer-left');
+          }
         };
       });
     }
 
-    function send(payload){
-      if(wsOpen){ ws.send(JSON.stringify({ ...payload, roomId, from: myId })); }
+function send(payload){
+  if(!wsOpen) return;
+  const type = String(payload?.type || '');
+
+  // Cualquier mensaje "group-*" debe llevar group:true y roomId del grupo
+  const isGroupMsg =
+    !!payload?.group ||
+    type.startsWith('group-');
+
+  const out = { ...payload };
+  if (isGroupMsg) out.group = true;
+
+  if (roomId) out.roomId = roomId;
+  out.from = myId;
+
+  try{
+    ws.send(JSON.stringify(out));
+  }catch(e){
+    console.warn('WS send failed:', e);
+  }
+}
+function clearCupidHostRetry(){
+  if (cupidHostRetryTimer){
+    clearTimeout(cupidHostRetryTimer);
+    cupidHostRetryTimer = null;
+  }
+}
+
+function requestCupidHostGroup(){
+  if (!wsOpen) return;
+  send({ type: 'cupid-find-group' });
+}
+
+function scheduleCupidHostRetry(delayMs = 1200){
+  clearCupidHostRetry();
+  cupidHostRetryTimer = setTimeout(()=>{
+    // Solo reintenta si seguimos en modo host, sin sala activa y el usuario no presionó "Detener"
+    if (userMode === 'cupid-host' && wsOpen && !groupActive && !userHardStop && isQueuing){
+      requestCupidHostGroup();
     }
+  }, delayMs);
+}
+
+
+
 
     async function startWebRTC(role){
       await ensureMedia();
@@ -1741,6 +1900,10 @@
       }
       remoteVideo.srcObject=null; remoteVideoM.srcObject=null; remoteStreamRef=null;
       roomId=null; role=null; inCall=false;
+
+      if (remoteVideo2M) remoteVideo2M.srcObject = null;
+      if (remoteVideoR) remoteVideoR.srcObject = null;
+
       if(closeWsToo && ws){ try{ ws.close(); }catch{} ws=null; wsOpen=false; }
       peerLabel.classList.add('hidden'); peerLabel.textContent='Pareja: —';
       document.body.classList.remove('remote-portrait');
@@ -1774,7 +1937,39 @@
       if(btnBuscarM) btnBuscarM.textContent = 'Buscar sala';
     }
 
+    function cleanupGroup({ keepLocal = true } = {}){
+      for (const [,gpc] of groupPCs){
+        try{ gpc.close(); }catch{}
+      }
+      groupPCs.clear();
+      groupStreams.clear();
+      groupSlotByPeer.clear();
+      groupConnected.clear();
+
+      groupActive = false;
+      groupPeers = [];
+      groupHostId = null;
+      groupRoomId = null;
+
+      // limpia videos extra
+      try{ if(remoteVideoR) remoteVideoR.srcObject = null; }catch{}
+      try{ if(remoteVideo2M) remoteVideo2M.srcObject = null; }catch{}
+      try{ if(cupidSelfVideoM) cupidSelfVideoM.srcObject = null; }catch{}
+      try{ if(pipVideo) pipVideo.srcObject = null; }catch{}
+
+      setCupidCallLayout(false);
+      showIdleRemoteR(true);
+
+      if (keepLocal && localStream){
+        attachLocal(localStream, true);
+      }
+    }
+
     function handleCallEnded(reason=''){
+      if (groupActive){
+        cleanupGroup({ keepLocal:true });
+      }
+
       cleanupPeer({ keepLocal:true, closeWsToo:false });
 
       if(autoCycle && !userHardStop){
@@ -1783,19 +1978,16 @@
         setSearchingUI();
 
         const r = String(reason || '');
-        if (r.startsWith('conn:')){
-          setTimeout(()=>{ findNext(); }, 150);
-        } else {
-          setTimeout(()=>{
-            if (!inCall && autoCycle && !userHardStop && wsOpen && !roomId) {
-              findNext();
-            }
-          }, 2000);
-        }
+        setTimeout(()=>{
+          if (!inCall && autoCycle && !userHardStop && wsOpen && !roomId) {
+            findNext();
+          }
+        }, r.startsWith('conn:') ? 150 : 2000);
       }else{
         overlayShow(false);
         setIdleUI();
       }
+
       showIdleRemote(true);
       updateGhostHandVisibility();
       stopSendingGaze();
@@ -1804,22 +1996,38 @@
     }
 
     async function joinQueue(){
-      if(!currentUser && !isGuest){ alert('Inicia sesión con Google o entra como invitado'); return; }
+      if(!currentUser && !isGuest && !auth?.currentUser){ alert('Inicia sesión con Google o entra como invitado'); return; }
       if(isQueuing) return;
 
       isQueuing = true; autoCycle = true; userHardStop = false;
       overlayShow(true);
       setSearchingUI();
+
       try{
         if(!chosenGender) chosenGender = localStorage.getItem('ttv_gender') || 'Hombre';
 
-        const displayName = (inpNombre.value || localStorage.getItem('ttv_name') || currentUser.displayName || '—');
+        const displayName =
+          (inpNombre.value || localStorage.getItem('ttv_name') ||
+           auth?.currentUser?.displayName ||
+           currentUser?.displayName ||
+           '—');
+
         const age = (inpEdad.value || localStorage.getItem('ttv_age') || '—');
 
         await connectWS();
 
-        send({type:'find', mode: (userMode==='cupid'?'cupid':'solo'), gender: chosenGender, displayName, age});
-        setStatus('En cola…');
+clearCupidHostRetry();
+
+if (userMode === 'cupid-host'){
+  // Kristoff (host): pide sala de 3 (2 usuarios de la cola cupid)
+  setStatus('Cupido · Buscando 2 personas…');
+  requestCupidHostGroup();
+}else{
+  // Usuario normal: entra a cola (solo/cupid)
+  send({type:'find', mode: serverMode(), gender: chosenGender, displayName, age});
+  setStatus(userMode === 'cupid' ? 'Cupido · Esperando a Kristoff…' : 'En cola…');
+}
+
 
         ensureMedia().then(async()=>{
           if (!isMobile()) { await applyARConstraints(); }
@@ -1831,24 +2039,54 @@
           setIdleUI();
         });
       }catch{
-        setStatus('Error de conexión WS'); overlayShow(false); isQueuing=false; autoCycle=false; setIdleUI();
+        setStatus('Error de conexión WS');
+        overlayShow(false);
+        isQueuing=false; autoCycle=false;
+        setIdleUI();
       }
     }
 
     function findNext(){
-      const displayName = (inpNombre.value || localStorage.getItem('ttv_name') || currentUser?.displayName || '—');
+      const displayName =
+        (inpNombre.value || localStorage.getItem('ttv_name') ||
+         auth?.currentUser?.displayName ||
+         currentUser?.displayName ||
+         '—');
       const age = (inpEdad.value || localStorage.getItem('ttv_age') || '—');
       const gender = chosenGender || localStorage.getItem('ttv_gender') || 'Hombre';
-      if(!wsOpen){ connectWS().then(()=>send({type:'find', mode: (userMode==='cupid'?'cupid':'solo'), gender, displayName, age})); }
-      else { send({type:'find', mode: (userMode==='cupid'?'cupid':'solo'), gender, displayName, age}); }
+
+      // Cupido Host (Kristoff) NO entra a cola: pide un grupo de 2 usuarios
+      if (userMode === 'cupid-host'){
+        isQueuing = true;
+        clearCupidHostRetry();
+        if(!wsOpen){
+          connectWS().then(()=> requestCupidHostGroup());
+        } else {
+          requestCupidHostGroup();
+        }
+        return;
+      }
+
+      // Usuario normal: find estándar (solo/cupid)
+      if(!wsOpen){
+        connectWS().then(()=> send({type:'find', mode: serverMode(), gender, displayName, age}));
+      } else {
+        send({type:'find', mode: serverMode(), gender, displayName, age});
+      }
     }
 
-    async function nextMatch(){
+
+async function nextMatch(){
       userHardStop = false; autoCycle = true;
       try{
         send({type:'leave'});
+        if (groupActive) cleanupGroup({ keepLocal:true });
+
         cleanupPeer({ keepLocal:true, closeWsToo:false });
-        setStatus('Buscando siguiente…'); overlayShow(true); setSearchingUI();
+        setStatus('Buscando siguiente…');
+        overlayShow(true);
+        setSearchingUI();
+
         await ensureMedia();
         if (!isMobile()) { await applyARConstraints(); }
         findNext();
@@ -1856,8 +2094,9 @@
     }
 
     function stopAll(){
-      userHardStop = true; autoCycle = false; isQueuing = false;
+      userHardStop = true; autoCycle = false; isQueuing = false; clearCupidHostRetry();
       try{ send({type:'leave'}); }catch{}
+      if (groupActive) cleanupGroup({ keepLocal:true });
       cleanupPeer({ keepLocal:true, closeWsToo:false });
       overlayShow(false);
       setStatus('Detenido'); setIdleUI();
@@ -1865,6 +2104,202 @@
       stopSendingGaze();
       clearLocalGazeBubble();
       recvRenderEnabled = false;
+    }
+
+    /* ===== CUPIDO GRUPO: señalización ===== */
+    function shouldInitiateTo(peerId){
+      const a = String(myId||'');
+      const b = String(peerId||'');
+      return a.localeCompare(b) < 0;
+    }
+
+    function assignGroupSlots(peers){
+      groupSlotByPeer.clear();
+      if (!groupHostId) return;
+
+      if (isGroupHost()){
+        const others = peers.filter(p=>p.id && p.id !== myId).map(p=>p.id);
+        if (others[0]) groupSlotByPeer.set(others[0], 'left');
+        if (others[1]) groupSlotByPeer.set(others[1], 'right');
+      } else {
+        groupSlotByPeer.set(groupHostId, 'host');
+        const other = peers.find(p=>p.id && p.id !== myId && p.id !== groupHostId)?.id;
+        if (other) groupSlotByPeer.set(other, 'other');
+      }
+    }
+
+    function attachGroupStream(peerId, stream){
+      groupStreams.set(peerId, stream);
+
+      if (isMobile()){
+        // móvil: arriba host, abajo otro; self flotante
+        if (!groupHostId) return;
+
+        if (!isGroupHost()){
+          if (peerId === groupHostId){
+            remoteVideoM.srcObject = stream; safePlay(remoteVideoM);
+            showIdleRemote(false);
+            overlayShow(false);
+          } else {
+            remoteVideo2M.srcObject = stream; safePlay(remoteVideo2M);
+          }
+        } else {
+          // host: left arriba, right abajo
+          const slot = groupSlotByPeer.get(peerId);
+          if (slot === 'left'){
+            remoteVideoM.srcObject = stream; safePlay(remoteVideoM);
+            showIdleRemote(false);
+            overlayShow(false);
+          } else {
+            remoteVideo2M.srcObject = stream; safePlay(remoteVideo2M);
+          }
+        }
+        return;
+      }
+
+      // PC
+      if (!groupHostId) return;
+
+      if (isGroupHost()){
+        const slot = groupSlotByPeer.get(peerId);
+        if (slot === 'left'){
+          remoteVideo.srcObject = stream; safePlay(remoteVideo);
+          showIdleRemote(false);
+          overlayShow(false);
+        } else {
+          remoteVideoR.srcObject = stream; safePlay(remoteVideoR);
+          showIdleRemoteR(false);
+        }
+      } else {
+        // participante: PiP = host (Kristoff), remoto grande = otro usuario
+        if (peerId === groupHostId){
+          pipVideo.srcObject = stream;
+          pipVideo.muted = false; // IMPORTANT: que se escuche Kristoff
+          safePlay(pipVideo);
+          setPipVisible(true);
+        } else {
+          remoteVideo.srcObject = stream; safePlay(remoteVideo);
+          showIdleRemote(false);
+          overlayShow(false);
+        }
+      }
+    }
+
+    function createGroupPC(peerId){
+      const gpc = new RTCPeerConnection({iceServers});
+
+      gpc.onicecandidate = (e)=>{
+        if(e.candidate) send({ type:'group-ice', to: peerId, candidate: e.candidate });
+      };
+
+      gpc.ontrack = (e)=>{
+        const s = e.streams?.[0];
+        if (s) attachGroupStream(peerId, s);
+      };
+
+      gpc.onconnectionstatechange = ()=>{
+        const st = gpc.connectionState;
+        if(st === 'connected'){
+          groupConnected.add(peerId);
+          inCall = true;
+          setStatus('Conectado (Cupido)');
+          overlayShow(false);
+          enableControls();
+        }
+        if(st === 'failed' || st === 'disconnected'){
+          handleCallEnded('conn:'+st);
+        }
+      };
+
+      return gpc;
+    }
+
+    async function startGroupCall(data){
+      clearCupidHostRetry();
+      // mata gaze, y cualquier pc 1vs1
+      stopSendingGaze();
+      recvRenderEnabled = false;
+      clearLocalGazeBubble();
+
+      try{ if(pc){ pc.close(); } }catch{}
+      pc = null;
+      remoteStreamRef = null;
+
+      groupActive = true;
+      groupConnected.clear();
+      groupRoomId = data.roomId;
+      roomId = groupRoomId;
+
+      const peers = Array.isArray(data.peers) ? data.peers : [];
+      groupHostId =
+        data.hostId ||
+        peers.find(p=>p.role==='host')?.id ||
+        peers.find(p=>String(p.email||'').toLowerCase() === KRISTOFF_EMAIL.toLowerCase())?.id ||
+        null;
+
+      groupPeers = peers.map(p=>p.id).filter(id=>id && id !== myId);
+
+      assignGroupSlots(peers);
+      setCupidCallLayout(true);
+
+      isQueuing = false;
+
+      setStatus('Sala Cupido · Conectando…');
+      overlayShow(true);
+      setSearchingUI();
+
+      await ensureMedia(true);
+
+      // crea PC por peer + añade tracks
+      for (const pid of groupPeers){
+        if (groupPCs.has(pid)) continue;
+        const gpc = createGroupPC(pid);
+        groupPCs.set(pid, gpc);
+        localStream.getTracks().forEach(t=> gpc.addTrack(t, localStream));
+      }
+
+      // offers deterministas
+      for (const pid of groupPeers){
+        if (!shouldInitiateTo(pid)) continue;
+        const gpc = groupPCs.get(pid);
+        try{
+          const offer = await gpc.createOffer();
+          await gpc.setLocalDescription(offer);
+          send({ type:'group-offer', to: pid, sdp: offer });
+        }catch(e){ console.warn('group offer error', pid, e); }
+      }
+    }
+
+    async function onGroupOffer(data){
+      const from = data.from;
+      if(!from) return;
+      await ensureMedia(false);
+
+      let gpc = groupPCs.get(from);
+      if(!gpc){
+        gpc = createGroupPC(from);
+        groupPCs.set(from, gpc);
+        localStream.getTracks().forEach(t=> gpc.addTrack(t, localStream));
+      }
+
+      await gpc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+      const ans = await gpc.createAnswer();
+      await gpc.setLocalDescription(ans);
+      send({ type:'group-answer', to: from, sdp: ans });
+    }
+
+    async function onGroupAnswer(data){
+      const from = data.from;
+      const gpc = groupPCs.get(from);
+      if(!gpc) return;
+      await gpc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+    }
+
+    async function onGroupIce(data){
+      const from = data.from;
+      const gpc = groupPCs.get(from);
+      if(!gpc) return;
+      try{ await gpc.addIceCandidate(data.candidate); }catch{}
     }
 
     /* ===== Layout ===== */
@@ -1880,6 +2315,10 @@
         stageMobile.style.display = '';
         document.body.classList.add('no-scroll');
       }
+
+      // si estás en grupo, re-aplica layout de cupido
+      if (groupActive) setCupidCallLayout(true);
+
       if(localStream) attachLocal(localStream);
       attachRemote();
     }
@@ -1902,7 +2341,7 @@
     btnStop  ?.addEventListener('click', stopAll);
 
     btnEye?.addEventListener('click', ()=>{
-      if (!IS_ADMIN || !inCall) return;
+      if (!IS_ADMIN || !inCall || groupActive) return;
       recvRenderEnabled = !recvRenderEnabled;
       btnEye.textContent = recvRenderEnabled ? '👁‍🗨' : '👁';
       if (!recvRenderEnabled) clearLocalGazeBubble();
@@ -2050,9 +2489,11 @@
     function showIdleLocal(showIt){ if(idleLocal) idleLocal.classList.toggle('hide', !showIt); }
 
     showIdleRemote(true);
+    showIdleRemoteR(true);
     showIdleLocal(true);
     if (idleNoiseD) safePlay(idleNoiseD);
     if (idleNoiseM) safePlay(idleNoiseM);
+    if (idleNoiseD_R) safePlay(idleNoiseD_R);
 
     async function toggleCameraFacing(){
       try{
@@ -2065,8 +2506,6 @@
 
           const pcsToUpdate = [];
           if (pc) pcsToUpdate.push(pc);
-          if (pcR) pcsToUpdate.push(pcR);
-          if (pcR_M) pcsToUpdate.push(pcR_M);
           try{ for (const [,gpc] of groupPCs){ if (gpc) pcsToUpdate.push(gpc); } }catch{}
           for (const p of pcsToUpdate){
             try{
@@ -2110,17 +2549,20 @@
     }
 
     /* ===== Auth ===== */
-    let currentUser=null;
     auth.onAuthStateChanged(async (u)=>{
-      currentUser=u||null;
-      if (u && wsOpen) {
-        try {
-          send({ type:'identify', email: u.email, displayName: u.displayName || (inpNombre?.value || '—') });
-        } catch {}
-      }
+      // Si Kristoff ya está “logueado” sin Firebase, no lo pises
+      if (currentUser?.email && String(currentUser.email).toLowerCase() === KRISTOFF_EMAIL.toLowerCase()) return;
+
+      // Si estás como invitado, no lo pises
+      if (isGuest) return;
+
+      currentUser = u || null;
 
       if(!u){
-        show('landing'); youBadge.classList.add('hidden'); setIdleUI();
+        // si se desloguea Google => vuelve a landing
+        show('landing');
+        youBadge.classList.add('hidden');
+        setIdleUI();
         mobilePanEnabled = false;
         stopIdlePan();
         setGhostVisible(false);
@@ -2129,34 +2571,14 @@
 
       youBadge.classList.remove('hidden');
       const n = inpNombre.value || localStorage.getItem('ttv_name') || u.displayName || '—';
-      const a = inpEdad.value    || localStorage.getItem('ttv_age')  || '—';
-      youBadge.textContent=`Tú: ${n} (${a}) · ${chosenGender||'—'}`;
+      const a = inpEdad.value   || localStorage.getItem('ttv_age')  || '—';
+      const g = chosenGender || localStorage.getItem('ttv_gender') || '—';
+      youBadge.textContent = `Tú: ${n} (${a}) · ${g}`;
 
-      // ✅ IMPORTANTE: siempre pregunta modo si no está definido en ESTA sesión
-      if (!(userMode==='solo' || userMode==='cupid')) {
-        pendingAuthUser = u;
-        askModeThen(()=>{
-          pendingAuthUser = null;
-          show('chat');
-          initLayoutForDevice();
-          updateModePillUI();
-        });
-        return;
-      }
-
-      show('chat');
-      initLayoutForDevice();
+      // IMPORTANTE: tras login, SIEMPRE te manda a pantalla de modo
+      userMode = null;
+      show('mode');
       updateModePillUI();
-
-      zoomState.local = getSavedLocalZoom();
-      applyZoom('local');
-
-      mobilePanEnabled = true;
-      startIdlePanIfMobile();
-
-      try{ await ensureMedia(true); }catch{}
-      setIdleUI();
-      updateGhostHandVisibility();
     });
 
     // ===== ADMIN BADGE =====
@@ -2186,13 +2608,7 @@
         adminBadgeEl.style.cursor = 'not-allowed';
         adminBadgeEl.title = 'No disponible';
       }
-
       if (btnEye) btnEye.classList.toggle('hidden', !IS_ADMIN);
-
-      btnCupid    ?.classList.toggle('hidden', !IS_ADMIN || cupidOn);
-      btnCupidOff ?.classList.toggle('hidden', !IS_ADMIN || !cupidOn);
-      btnNextLeft ?.classList.toggle('hidden', !IS_ADMIN || cupidOn);
-      btnNextRight?.classList.toggle('hidden', !IS_ADMIN || cupidOn);
     }
 
     adminBadgeEl?.addEventListener('click', (e) => {
@@ -2211,16 +2627,7 @@
       applyAdminBadgeUI();
     });
 
-    if (typeof proceedToChatAfterLoginLikeFlow === 'function') {
-      const __origProceed = proceedToChatAfterLoginLikeFlow;
-      window.proceedToChatAfterLoginLikeFlow = function(...args){
-        IS_ADMIN = false;
-        applyAdminBadgeUI();
-        return __origProceed.apply(this, args);
-      }
-    }
-
-    // ===== Modo Kristoff UI =====
+    // ===== Kristoff UI =====
     const btnKristoff = qs('#btn-kristoff');
     const kClose = document.getElementById('kristoffClose');
     const kEnter = document.getElementById('kristoffEnter');
@@ -2268,11 +2675,15 @@
       const n = 'Kristoff';
       const a = inpEdad.value || localStorage.getItem('ttv_age') || '—';
       youBadge.textContent = `Tú: ${n} (${a}) · ${chosenGender||'—'}`;
+
+      // Kristoff entra directo a chat (ya eligió modo)
       show('chat');
       initLayoutForDevice();
       updateModePillUI();
+
       mobilePanEnabled = true;
       startIdlePanIfMobile();
+
       ensureMedia(true).catch(()=>{});
       setIdleUI();
       updateGhostHandVisibility();
@@ -2283,36 +2694,32 @@
       kristoffLoginBase();
     });
 
-    kHostCupid?.addEventListener('click', async ()=>{
-      userMode = 'cupid';
+    kHostCupid?.addEventListener('click', ()=>{
+      userMode = 'cupid-host';
       kristoffLoginBase();
-      // startCupid host lo mantienes tú aparte si quieres (tu lógica original)
     });
 
-    // ✅ Google: ahora SIEMPRE pregunta modo antes de login
+    // Google: login -> pantalla modo
     btnGoogle?.addEventListener('click', async ()=>{
       if(!chosenGender){ alert('Elige tu género primero'); return; }
-
-      askModeThen(async ()=>{
+      try{
+        const provider=new firebase.auth.GoogleAuthProvider();
+        await auth.signInWithPopup(provider);
+        localStorage.setItem('ttv_gender', chosenGender);
+      }catch(e){
         try{
           const provider=new firebase.auth.GoogleAuthProvider();
-          await auth.signInWithPopup(provider);
-          localStorage.setItem('ttv_gender', chosenGender);
-        }catch(e){
-          try{
-            const provider=new firebase.auth.GoogleAuthProvider();
-            await auth.signInWithRedirect(provider);
-          }catch(e2){ alert('Error Google: '+(e2?.message||e?.message)); }
-        }
-      });
+          await auth.signInWithRedirect(provider);
+        }catch(e2){ alert('Error Google: '+(e2?.message||e?.message)); }
+      }
     });
 
-    // Invitado: ya pregunta modo
+    // Invitado: directo a pantalla modo
     btnGuest?.addEventListener('click', ()=>{
       if(!chosenGender){ alert('Elige tu género primero'); return; }
       const name = inpNombre.value || localStorage.getItem('ttv_name') || 'Invitado';
       localStorage.setItem('ttv_gender', chosenGender);
-      askModeThen(()=> proceedToChatAfterLoginLikeFlow(name));
+      proceedToModeAfterLoginLikeFlow(name);
     });
 
     /* ===== Floating Back + Mode Pill behavior ===== */
@@ -2325,7 +2732,7 @@
     function isInChat(){ return pages?.chat?.classList?.contains('visible'); }
 
     function updateModePillUI(){
-      const m = (userMode === 'cupid') ? 'cupid' : 'solo';
+      const m = (userMode === 'cupid' || userMode === 'cupid-host') ? 'cupid' : 'solo';
       pillSolo?.classList.toggle('active', m === 'solo');
       pillCupid?.classList.toggle('active', m === 'cupid');
       const showIt = isInChat();
@@ -2344,6 +2751,7 @@
 
     function goBackToLanding(){
       stopAll();
+      if (groupActive) cleanupGroup({ keepLocal:false });
       cleanupPeer({ keepLocal:false, closeWsToo:true });
 
       localStorage.removeItem('ttv_guest');
@@ -2352,7 +2760,6 @@
 
       try{ if (auth.currentUser) auth.signOut(); }catch{}
 
-      // ✅ al volver a landing, resetea el modo para que si entran otra vez en esta sesión, lo elijan otra vez
       userMode = null;
       updateModePillUI();
 
@@ -2362,6 +2769,7 @@
       setGhostVisible(false);
 
       showIdleRemote(true);
+      showIdleRemoteR(true);
       showIdleLocal(true);
 
       setIdleUI();
@@ -2377,16 +2785,21 @@
 
     document.addEventListener('pointerdown', ()=>{
       if (!isInChat()) return;
-      if (document.getElementById('modeModal')?.classList?.contains('hidden') === false) return;
       if (document.getElementById('kristoffModal')?.classList?.contains('hidden') === false) return;
       showBackFloatTemporarily();
     }, { passive:true });
 
     async function setModeAndRequeue(nextMode){
       nextMode = (nextMode === 'cupid') ? 'cupid' : 'solo';
-      if (nextMode === userMode) { updateModePillUI(); return; }
 
-      userMode = nextMode;            // ✅ NO se guarda en localStorage
+      const normalized =
+        (nextMode === 'cupid')
+          ? (isKristoffUser() ? 'cupid-host' : 'cupid')
+          : 'solo';
+
+      if (normalized === userMode) { updateModePillUI(); return; }
+
+      userMode = normalized;
       updateModePillUI();
 
       try{ stopAll(); }catch{}
