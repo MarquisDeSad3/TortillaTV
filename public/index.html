@@ -207,7 +207,7 @@
     @media (min-width: 641px){ .mobile-dock{ display:none } }
 
     @media (max-width:640px){
-      .mobile-dock{ display:none !important; }
+      /* En móvil mostramos el dock de controles. Solo ocultamos la topbar de PC. */
       .topbar{ display:none !important; }
     }
 
@@ -1963,7 +1963,11 @@
         await connectWS();
 
         send({type:'find', mode: serverMode(), gender: chosenGender, displayName, age});
-        setStatus('En cola…');
+        // Mensaje más claro según modo
+const sm = serverMode();
+if (sm === 'cupid-host') setStatus('En cola Cupido (Kristoff) · Esperando 2 usuarios…');
+else if (sm === 'cupid') setStatus('En cola Cupido · Esperando a Kristoff + otra persona…');
+else setStatus('En cola…');
 
         ensureMedia().then(async()=>{
           if (!isMobile()) { await applyARConstraints(); }
