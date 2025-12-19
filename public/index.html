@@ -1365,7 +1365,6 @@
 
     /* ===== Estado WebRTC/WS ===== */
     let ws=null, wsOpen=false, myId=null, roomId=null, role=null;
-    let cupidHostRetryTimer = null; // reintentos automáticos (solo modo cupido-host)
     let pc=null, localStream=null, remoteStreamRef=null;
     let isQueuing=false, inCall=false, autoCycle=false, userHardStop=false;
     let layoutMode='split';
@@ -1800,21 +1799,10 @@
             handleCallEnded('peer-left');
           }
 
-// === CUPIDO (grupo) ===
-if (data.type === 'group-matched'){
-  // Si el host pidió grupo pero aún no hay 2 usuarios, el server manda pending:true y roomId:null
-  if (!data.roomId){
-    if (userMode === 'cupid-host'){
-      isQueuing = true;
-      setStatus('Cupido · Esperando 2 personas…');
-      overlayShow(true);
-      setSearchingUI();
-      scheduleCupidHostRetry(1300);
-    }
-    return;
-  }
-  await startGroupCall(data);
-}
+          // === CUPIDO (grupo) ===
+          if (data.type === 'group-matched'){
+            await startGroupCall(data);
+          }
           if (data.type === 'group-offer'){
             await onGroupOffer(data);
           }
@@ -1831,51 +1819,9 @@ if (data.type === 'group-matched'){
       });
     }
 
-function send(payload){
-  if(!wsOpen) return;
-  const type = String(payload?.type || '');
-
-  // Cualquier mensaje "group-*" debe llevar group:true y roomId del grupo
-  const isGroupMsg =
-    !!payload?.group ||
-    type.startsWith('group-');
-
-  const out = { ...payload };
-  if (isGroupMsg) out.group = true;
-
-  if (roomId) out.roomId = roomId;
-  out.from = myId;
-
-  try{
-    ws.send(JSON.stringify(out));
-  }catch(e){
-    console.warn('WS send failed:', e);
-  }
-}
-function clearCupidHostRetry(){
-  if (cupidHostRetryTimer){
-    clearTimeout(cupidHostRetryTimer);
-    cupidHostRetryTimer = null;
-  }
-}
-
-function requestCupidHostGroup(){
-  if (!wsOpen) return;
-  send({ type: 'cupid-find-group' });
-}
-
-function scheduleCupidHostRetry(delayMs = 1200){
-  clearCupidHostRetry();
-  cupidHostRetryTimer = setTimeout(()=>{
-    // Solo reintenta si seguimos en modo host, sin sala activa y el usuario no presionó "Detener"
-    if (userMode === 'cupid-host' && wsOpen && !groupActive && !userHardStop && isQueuing){
-      requestCupidHostGroup();
+    function send(payload){
+      if(wsOpen){ ws.send(JSON.stringify({ ...payload, roomId, from: myId })); }
     }
-  }, delayMs);
-}
-
-
-
 
     async function startWebRTC(role){
       await ensureMedia();
@@ -2016,18 +1962,8 @@ function scheduleCupidHostRetry(delayMs = 1200){
 
         await connectWS();
 
-clearCupidHostRetry();
-
-if (userMode === 'cupid-host'){
-  // Kristoff (host): pide sala de 3 (2 usuarios de la cola cupid)
-  setStatus('Cupido · Buscando 2 personas…');
-  requestCupidHostGroup();
-}else{
-  // Usuario normal: entra a cola (solo/cupid)
-  send({type:'find', mode: serverMode(), gender: chosenGender, displayName, age});
-  setStatus(userMode === 'cupid' ? 'Cupido · Esperando a Kristoff…' : 'En cola…');
-}
-
+        send({type:'find', mode: serverMode(), gender: chosenGender, displayName, age});
+        setStatus('En cola…');
 
         ensureMedia().then(async()=>{
           if (!isMobile()) { await applyARConstraints(); }
@@ -2055,19 +1991,6 @@ if (userMode === 'cupid-host'){
       const age = (inpEdad.value || localStorage.getItem('ttv_age') || '—');
       const gender = chosenGender || localStorage.getItem('ttv_gender') || 'Hombre';
 
-      // Cupido Host (Kristoff) NO entra a cola: pide un grupo de 2 usuarios
-      if (userMode === 'cupid-host'){
-        isQueuing = true;
-        clearCupidHostRetry();
-        if(!wsOpen){
-          connectWS().then(()=> requestCupidHostGroup());
-        } else {
-          requestCupidHostGroup();
-        }
-        return;
-      }
-
-      // Usuario normal: find estándar (solo/cupid)
       if(!wsOpen){
         connectWS().then(()=> send({type:'find', mode: serverMode(), gender, displayName, age}));
       } else {
@@ -2075,8 +1998,7 @@ if (userMode === 'cupid-host'){
       }
     }
 
-
-async function nextMatch(){
+    async function nextMatch(){
       userHardStop = false; autoCycle = true;
       try{
         send({type:'leave'});
@@ -2094,7 +2016,7 @@ async function nextMatch(){
     }
 
     function stopAll(){
-      userHardStop = true; autoCycle = false; isQueuing = false; clearCupidHostRetry();
+      userHardStop = true; autoCycle = false; isQueuing = false;
       try{ send({type:'leave'}); }catch{}
       if (groupActive) cleanupGroup({ keepLocal:true });
       cleanupPeer({ keepLocal:true, closeWsToo:false });
@@ -2215,7 +2137,6 @@ async function nextMatch(){
     }
 
     async function startGroupCall(data){
-      clearCupidHostRetry();
       // mata gaze, y cualquier pc 1vs1
       stopSendingGaze();
       recvRenderEnabled = false;

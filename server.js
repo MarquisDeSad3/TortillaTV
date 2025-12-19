@@ -26,8 +26,8 @@ const ADMIN_EMAILS = new Set([
 
 require("dotenv").config();
 const http = require("http");
-const path = require("path");
 const fs = require("fs");
+const path = require("path");
 const express = require("express");
 const { WebSocketServer } = require("ws");
 const { v4: uuid } = require("uuid");
@@ -49,22 +49,12 @@ const PING_INTERVAL_MS = 15_000;
 const app = express();
 app.use((req, _res, next) => { console.log("[HTTP]", req.method, req.url); next(); });
 // Sirve tu front desde ./public (ajusta si usas otra carpeta)
-const ROOT_DIR = process.cwd();
-const PUBLIC_DIR = path.join(ROOT_DIR, "public");
-const STATIC_DIR = fs.existsSync(PUBLIC_DIR) ? PUBLIC_DIR : ROOT_DIR;
-
-// Servir archivos estáticos. Si existe /public se usa; si no, sirve la carpeta actual (para uso con solo 2 archivos).
-app.use(express.static(STATIC_DIR));
-
-// Asegura que "/" responda con el index correcto (public/index.html o ./index.html)
-app.get("/", (req, res) => {
-  const idxPublic = path.join(PUBLIC_DIR, "index.html");
-  const idxRoot = path.join(ROOT_DIR, "index.html");
-  if (fs.existsSync(idxPublic)) return res.sendFile(idxPublic);
-  if (fs.existsSync(idxRoot)) return res.sendFile(idxRoot);
-  return res.status(404).send("index.html no encontrado");
-});
-
+const PUBLIC_DIR = path.join(process.cwd(), "public");
+if (fs.existsSync(PUBLIC_DIR)) {
+  app.use(express.static(PUBLIC_DIR));
+}
+// Fallback: si tienes index.html al lado de server.js
+app.use(express.static(process.cwd()));
 
 const server = http.createServer(app);
 
@@ -96,11 +86,10 @@ const clients = new Map();
 const rooms = new Map();
 
 /**
- * groupRooms (Cupido 3): roomId -> { roomId, hostId, aId, bId, createdAt }
- * Nota: Es independiente de `rooms` (1vs1). No se mezcla con roomId principal.
+ * groupRooms: roomId -> { hostId, aId, bId }
+ * (Modo CUPIDO: sala de 3 por señalización dirigida)
  */
 const groupRooms = new Map();
-
 
 /**
  * Colas de emparejamiento por “bucket”.
@@ -109,6 +98,7 @@ const groupRooms = new Map();
 const queues = {
   any: [],   // cola FIFO principal (modo SOLO)
   cupid: [], // cola FIFO especial (modo CUPIDO)
+  cupidHost: [], // cola FIFO para hosts (admins) en modo CUPIDO-HOST
 };
 
 // ===== Utilidades =====
@@ -191,103 +181,6 @@ function dequeueTwoForGroup(adminId, exclude = new Set()) {
   removeFromAnyQueue(picked[1]);
   return picked; // [userAId, userBId]
 }
-/**
- * Crea una sala de 3 (Cupido) y notifica a los 3.
- * Formato de mensaje para el cliente:
- * { type:'group-matched', group:true, roomId, hostId, peers:[{id,role,name,isAdmin,isPro},...] }
- */
-function createGroupRoomAndNotify(hostId, userAId, userBId) {
-  const Host = getClient(hostId);
-  const A = getClient(userAId);
-  const B = getClient(userBId);
-  if (!Host || !A || !B) return null;
-
-  const roomId = uuid();
-  const room = { roomId, hostId, aId: userAId, bId: userBId, createdAt: Date.now() };
-  groupRooms.set(roomId, room);
-
-  // Punteros para validación y teardown
-  Host.groupRoomId = roomId;
-  A.groupRoomId = roomId;
-  B.groupRoomId = roomId;
-
-  // Marcar como ocupados (evita que entren a colas)
-  Host.state = "in-room";
-  A.state = "in-room";
-  B.state = "in-room";
-
-  const peers = [
-    { id: hostId,  role: "host",  name: Host.name || "—", isAdmin: !!Host.isAdmin, isPro: !!Host.isPro },
-    { id: userAId, role: "guest", name: A.name   || "—", isAdmin: !!A.isAdmin,   isPro: !!A.isPro   },
-    { id: userBId, role: "guest", name: B.name   || "—", isAdmin: !!B.isAdmin,   isPro: !!B.isPro   },
-  ];
-
-  const payload = { type: "group-matched", group: true, roomId, hostId, peers };
-
-  safeSend(Host.ws, payload);
-  safeSend(A.ws, payload);
-  safeSend(B.ws, payload);
-
-  console.log("[GROUP]", roomId, "host:", hostId, "users:", userAId, userBId);
-  return roomId;
-}
-
-function groupRoomMembers(room) {
-  if (!room) return [];
-  return [room.hostId, room.aId, room.bId].filter(Boolean);
-}
-
-/**
- * Cierra una sala de 3 (Cupido) y devuelve a la cola a los participantes que NO hayan presionado "Detener".
- * - Host nunca se reencola automáticamente.
- * - El que se va (leaverId) queda idle.
- * - Los demás quedan waiting y se reencolan según su matchMode.
- */
-function teardownGroupRoom(roomId, reason = "group-teardown", leaverId = null) {
-  const room = groupRooms.get(roomId);
-  if (!room) return;
-
-  groupRooms.delete(roomId);
-
-  const ids = groupRoomMembers(room);
-
-  // Limpia punteros
-  for (const pid of ids) {
-    const C = getClient(pid);
-    if (C && C.groupRoomId === roomId) C.groupRoomId = null;
-  }
-
-  for (const pid of ids) {
-    const C = getClient(pid);
-    if (!C) continue;
-
-    // Notifica a los demás
-    if (pid !== leaverId) {
-      safeSend(C.ws, { type: "group-peer-left", group: true, roomId, from: leaverId, reason });
-    }
-
-    const isHost = pid === room.hostId;
-    if (isHost) {
-      C.state = "idle";
-      continue;
-    }
-
-    if (pid === leaverId) {
-      C.state = "idle";
-      continue;
-    }
-
-    if (C.state !== "idle") {
-      C.state = "waiting";
-      C.joinTs = Date.now();
-      enqueue(pid, queueKeyFor(C));
-    }
-  }
-
-  scheduleMatch();
-}
-
-
 
 function addSideRecentPeer(adminId, bId) {
   const A = clients.get(adminId);
@@ -352,7 +245,10 @@ function compactQueueInPlace(key = "any") {
 }
 
 function queueKeyFor(c){
-  return (c && c.matchMode === 'cupid') ? 'cupid' : 'any';
+  if (!c) return 'any';
+  if (c.matchMode === 'cupid') return 'cupid';
+  if (c.matchMode === 'cupid-host') return 'cupidHost';
+  return 'any';
 }
 
 // Busca una pareja válida sin O(n²):
@@ -518,6 +414,118 @@ function createSideRoomAndNotify(adminId, bId) {
   }
 }
 
+// ===== CUPIDO: salas de 3 (host + 2 usuarios) =====
+function isInGroupRoom(room, clientId) {
+  if (!room || !clientId) return false;
+  return room.hostId === clientId || room.aId === clientId || room.bId === clientId;
+}
+
+function dequeueValidCupidHost() {
+  const q = queues.cupidHost;
+  const rotations = q.length;
+  for (let rot = 0; rot < rotations && q.length; rot++) {
+    const hostId = q.shift();
+    const H = clients.get(hostId);
+    if (H) H.inQueue = false;
+    if (!H) continue;
+    if (H.state !== 'waiting') continue;
+    if (!H.isAdmin) continue;
+    if (H.matchMode !== 'cupid-host') continue;
+    return hostId;
+  }
+  return null;
+}
+
+function takeTwoCupidUsers(exclude = new Set()) {
+  const q = queues.cupid;
+  const idxs = [];
+  for (let i = 0; i < q.length && idxs.length < 2; i++) {
+    const uid = q[i];
+    const U = clients.get(uid);
+    if (!U) continue;
+    if (U.state !== 'waiting') continue;
+    if (U.matchMode !== 'cupid') continue;
+    if (exclude.has(uid)) continue;
+    idxs.push(i);
+  }
+  if (idxs.length < 2) return null;
+
+  // Remover desde el final para no reindexar mal
+  idxs.sort((a, b) => b - a);
+  const ids = [];
+  for (const idx of idxs) {
+    const [uid] = q.splice(idx, 1);
+    const U = clients.get(uid);
+    if (U) U.inQueue = false;
+    ids.push(uid);
+  }
+  ids.reverse();
+  return ids;
+}
+
+function createGroupRoomAndNotify(hostId, userAId, userBId) {
+  const H = getClient(hostId);
+  const A = getClient(userAId);
+  const B = getClient(userBId);
+  if (!H || !A || !B) return;
+
+  const roomId = uuid();
+  groupRooms.set(roomId, { hostId, aId: userAId, bId: userBId });
+
+  // Marcar estados
+  for (const c of [H, A, B]) {
+    c.groupRoomId = roomId;
+    c.state = 'in-room';
+    c.inQueue = false;
+  }
+
+  const peers = [
+    { id: hostId,  name: H.name || 'Kristoff', role: 'host', isAdmin: !!H.isAdmin, isPro: !!H.isPro },
+    { id: userAId, name: A.name || '—',       role: 'user', isAdmin: !!A.isAdmin, isPro: !!A.isPro },
+    { id: userBId, name: B.name || '—',       role: 'user', isAdmin: !!B.isAdmin, isPro: !!B.isPro },
+  ];
+
+  console.log('[MATCH-GROUP]', hostId, '<->', userAId, '<->', userBId, '->', roomId);
+
+  safeSend(H.ws, { type: 'group-matched', roomId, hostId, peers });
+  safeSend(A.ws, { type: 'group-matched', roomId, hostId, peers });
+  safeSend(B.ws, { type: 'group-matched', roomId, hostId, peers });
+}
+
+function teardownGroupRoom(roomId, reason = 'group-teardown', leaverId = null) {
+  const room = groupRooms.get(roomId);
+  if (!room) return;
+  groupRooms.delete(roomId);
+
+  const ids = [room.hostId, room.aId, room.bId].filter(Boolean);
+
+  // Notificar a los demás
+  for (const pid of ids) {
+    if (pid === leaverId) continue;
+    const c = getClient(pid);
+    if (!c) continue;
+    safeSend(c.ws, { type: 'group-peer-left', roomId, reason, leaverId });
+  }
+
+  // Reset + requeue (todos menos el que se fue)
+  for (const pid of ids) {
+    const c = getClient(pid);
+    if (!c) continue;
+    c.groupRoomId = null;
+    if (pid === leaverId) {
+      c.state = 'idle';
+      c.joinTs = 0;
+      c.inQueue = false;
+    } else {
+      c.state = 'waiting';
+      c.joinTs = Date.now();
+      enqueue(pid, queueKeyFor(c));
+    }
+  }
+
+  scheduleMatch();
+}
+
 
 async function runMatcher() {
   if (matchingInProgress) return;
@@ -526,7 +534,7 @@ async function runMatcher() {
     // Compactar colas sin copiar arrays gigantes
     for (const key of Object.keys(queues)) compactQueueInPlace(key);
 
-    // Consumir parejas hasta que no haya más
+    // Consumir parejas SOLO hasta que no haya más
     for (const key of ['any']) {
       while (true) {
         const pair = dequeueValidPair(key);
@@ -534,6 +542,25 @@ async function runMatcher() {
         const [aId, bId] = pair;
         createRoomAndNotify(aId, bId);
       }
+    }
+
+    // Consumir grupos CUPIDO (host + 2) hasta que no haya más
+    while (true) {
+      // Necesitamos al menos 1 host esperando y 2 usuarios en cola
+      if (queues.cupidHost.length < 1) break;
+      if (queues.cupid.length < 2) break;
+
+      const hostId = dequeueValidCupidHost();
+      if (!hostId) break;
+
+      const picked = takeTwoCupidUsers(new Set([hostId]));
+      if (!picked) {
+        // No hay dos aún: re-encolar host y cortar
+        const H = getClient(hostId);
+        if (H && H.state === 'waiting') enqueue(hostId, 'cupidHost');
+        break;
+      }
+      createGroupRoomAndNotify(hostId, picked[0], picked[1]);
     }
   } finally {
     matchingInProgress = false;
@@ -677,8 +704,7 @@ wss.on("connection", (ws) => {
     state: "idle",
     inQueue: false,        // 👈 evita O(n) con includes() y duplicados en cola
     roomId: null,
-    // ===== CUPIDO GRUPO (3 participantes) =====
-    groupRoomId: null,
+    groupRoomId: null,     // 👈 sala de 3 (modo CUPIDO)
     joinTs: 0,
     recentPeers: new Set(),
     lastFindTs: 0,
@@ -733,7 +759,19 @@ wss.on("connection", (ws) => {
 
         me.gender = msg.gender || "Hombre";
         me.name   = msg.displayName || "—";
-        me.matchMode = (msg.mode === 'cupid') ? 'cupid' : 'solo';
+        // Modos que entiende el front:
+        // - solo
+        // - cupid (usuario normal)
+        // - cupid-host (Kristoff/admin)
+        const reqMode = String(msg.mode || "solo");
+        if (reqMode === "cupid") me.matchMode = "cupid";
+        else if (reqMode === "cupid-host") me.matchMode = (me.isAdmin ? "cupid-host" : "cupid");
+        else me.matchMode = "solo";
+
+        // Si estaba en grupo CUPIDO, romperlo
+        if (me.groupRoomId) {
+          teardownGroupRoom(me.groupRoomId, "requeue", id);
+        }
 
         // Si estaba en sala, romperla
         if (me.roomId) {
@@ -744,7 +782,7 @@ wss.on("connection", (ws) => {
 
         me.state = "waiting";
         me.joinTs = Date.now();
-        enqueue(id, me.matchMode === 'cupid' ? 'cupid' : 'any');
+        enqueue(id, queueKeyFor(me));
         console.log("[WS] find -> queued");
 
         scheduleMatch();
@@ -789,102 +827,71 @@ case "cupid-find": {  // por si quieres forzar desde cliente (PC o móvil)
   break;
 }
 case "cupid-find-group": {
-  // Solo admins pueden iniciar el match de 3 (modo Cupido Host)
+  // Compatibilidad: fuerza al admin a entrar a la cola de CUPIDO-HOST
+  // (el emparejador arma el grupo cuando haya 2 usuarios en cola CUPIDO)
   if (!me.isAdmin) break;
 
-  // Si ya está en una sala de grupo, ciérrala antes de iniciar otra
+  me.matchMode = 'cupid-host';
+
   if (me.groupRoomId) {
-    teardownGroupRoom(me.groupRoomId, "host-new-group", me.id);
+    teardownGroupRoom(me.groupRoomId, 'requeue', id);
   }
-
-  // Evita elegir a su pareja principal actual (si está en 1:1)
-  const exclude = new Set();
   if (me.roomId) {
-    const main = rooms.get(me.roomId);
-    if (main) exclude.add(otherOf(main, me.id));
+    const r = rooms.get(me.roomId);
+    if (r) teardownRoom(me.roomId, 'requeue');
+    me.roomId = null;
   }
 
-  // Saca 2 usuarios de la cola cupid
-  const pair = dequeueTwoForGroup(me.id, exclude);
-  if (!pair) {
-    // No hay dos libres todavía
-    safeSend(me.ws, { type: "group-matched", group: true, roomId: null, hostId: me.id, peers: [], pending: true });
-    break;
-  }
-
-  const [userAId, userBId] = pair;
-
-  const gid = createGroupRoomAndNotify(me.id, userAId, userBId);
-  if (!gid) {
-    // Si falló, intenta reencolarlos
-    const A = getClient(userAId);
-    const B = getClient(userBId);
-    if (A) { A.state = "waiting"; A.joinTs = Date.now(); enqueue(userAId, queueKeyFor(A)); }
-    if (B) { B.state = "waiting"; B.joinTs = Date.now(); enqueue(userBId, queueKeyFor(B)); }
-    safeSend(me.ws, { type: "group-matched", group: true, roomId: null, hostId: me.id, peers: [], pending: true });
-  }
-
+  me.state = 'waiting';
+  me.joinTs = Date.now();
+  enqueue(id, 'cupidHost');
+  scheduleMatch();
   break;
 }
-
 // ====== NUEVO: señales dirigidas para grupo (3 participantes) ======
 case "group-offer":
 case "group-answer":
 case "group-ice": {
-  // Esperamos: { type:'group-offer'|'group-answer'|'group-ice', group:true, roomId, to, sdp|candidate }
-  if (!msg.group || !msg.to || !msg.roomId) break;
+  // Esperamos: { type:'group-offer'|'group-answer'|'group-ice', to, roomId, sdp|candidate }
+  if (!msg.to || !msg.roomId) break;
 
   const room = groupRooms.get(msg.roomId);
   if (!room) break;
+  if (!isInGroupRoom(room, id) || !isInGroupRoom(room, msg.to)) break;
 
   const dst = getClient(msg.to);
   if (!dst) break;
 
-  // Seguridad: ambos deben pertenecer a la misma sala de grupo
-  const ids = new Set(groupRoomMembers(room));
-  if (!ids.has(id) || !ids.has(msg.to)) break;
-
-  const sender = getClient(id);
-  if (!sender || sender.groupRoomId !== msg.roomId) break;
-  if (dst.groupRoomId !== msg.roomId) break;
-
-  // reenviar sin tocar el tipo (el cliente ya distingue group-*)
+  // reenviamos al destinatario con 'from'
   safeSend(dst.ws, {
     type: msg.type,
-    group: true,
-    roomId: msg.roomId,
     from: id,
+    roomId: msg.roomId,
     sdp: msg.sdp,
-    candidate: msg.candidate
+    candidate: msg.candidate,
   });
   break;
 }
-
 
 // ====== NUEVO: cierre dirigido de grupo (para disolver la llamada de 3) ======
 case "group-close": {
-  // Esperamos: { type:'group-close', group:true, roomId, to, reason? }
-  if (!msg.group || !msg.to || !msg.roomId) break;
-
+  // Esperamos: { type:'group-close', to, roomId, reason? }
+  if (!msg.to || !msg.roomId) break;
   const room = groupRooms.get(msg.roomId);
   if (!room) break;
+  if (!isInGroupRoom(room, id) || !isInGroupRoom(room, msg.to)) break;
 
   const dst = getClient(msg.to);
   if (!dst) break;
 
-  const ids = new Set(groupRoomMembers(room));
-  if (!ids.has(id) || !ids.has(msg.to)) break;
-
   safeSend(dst.ws, {
-    type: "group-close",
-    group: true,
-    roomId: msg.roomId,
+    type: 'group-close',
     from: id,
-    reason: msg.reason || "group-close",
+    roomId: msg.roomId,
+    reason: msg.reason || 'group-close'
   });
   break;
 }
-
 
 
 // Bypass de señales con side:true
@@ -927,40 +934,24 @@ case "leave-side": {
   break;
 } 
 case "group-release": {
-  // Marca al cliente como disponible de nuevo (para Cupido 3).
-  // Si estaba en una sala de grupo, la cierra y reencola según corresponda.
-  if (me.groupRoomId) {
-    teardownGroupRoom(me.groupRoomId, "group-release", id);
-    me.groupRoomId = null;
-  }
-
-  if (me.isAdmin) {
-    // Host no se mete a la cola automáticamente
-    me.state = "idle";
-    break;
-  }
-
+  // Marca al cliente como disponible de nuevo
   me.state = "waiting";
   me.joinTs = Date.now();
-  enqueue(id, me.matchMode === "cupid" ? "cupid" : "any");
+  enqueue(id, queueKeyFor(me));
   scheduleMatch();
   break;
 }
 
 
-
       case "leave": {
-        // Si está en una sala de grupo (Cupido 3), ciérrala primero
+        // Si está en sala de 3 (CUPIDO), disolverla primero
         if (me.groupRoomId) {
-          const gid = me.groupRoomId;
-          // El que llama leave queda idle (no se reencola)
-          me.state = "idle";
-          teardownGroupRoom(gid, "peer-leave-group", id);
-          me.groupRoomId = null;
+          teardownGroupRoom(me.groupRoomId, "peer-leave", id);
+          scheduleMatch();
+          break;
         }
 
-        // sala que en realidad es la SIDE de algún admin?
-
+        //sala que en realidad es la SIDE de algún admin?
   if (me.roomId) {
     let sideHandled = false;
     for (const [aid, acli] of clients) {
@@ -988,7 +979,7 @@ case "group-release": {
               if (other.state !== "idle") {
                 other.state = "waiting";
                 other.joinTs = Date.now();
-                enqueue(otherId, queueKeyFor(B));
+                enqueue(otherId, queueKeyFor(other));
               }
             }
             if (r.timers?.offer)  clearTimeout(r.timers.offer);
@@ -1037,11 +1028,11 @@ case "group-release": {
   ws.on("close", () => {
     const me = getClient(id);
     if (!me) return;
-// Si estaba en un grupo (Cupido 3), derríbalo y reencola a los demás
-if (me.groupRoomId) {
-  teardownGroupRoom(me.groupRoomId, "disconnect-group", id);
-  me.groupRoomId = null;
-}
+
+    // Si estaba en sala de 3 (CUPIDO), disolverla y reencolar al resto
+    if (me.groupRoomId) {
+      teardownGroupRoom(me.groupRoomId, "disconnect", id);
+    }
 
     // Si el que se va es ADMIN y tiene SIDE viva, derríbala y reencola al otro
   if (me.isAdmin && me.sideRoomId) {
@@ -1058,15 +1049,6 @@ if (me.groupRoomId) {
       }
     }
     if (sideHandled) {
-
-      // Fallback: si estaba en modo grupo (sin roomId/sideRoomId) y quedó en "in-room", libéralo
-if (!me.roomId && !me.sideRoomId && me.state === "in-room") {
-  me.state = "waiting";
-  me.joinTs = Date.now();
-  enqueue(id);
-  scheduleMatch();
-}
-
       // No sigas con la lógica de sala principal para este caso
       clients.delete(id);
       console.log("[WS] closed (side):", id);
@@ -1087,7 +1069,7 @@ if (!me.roomId && !me.sideRoomId && me.state === "in-room") {
           if (other.state !== "idle") {
             other.state = "waiting";
             other.joinTs = Date.now();
-            enqueue(otherId, queueKeyFor(B));
+            enqueue(otherId, queueKeyFor(other));
           }
         }
         if (r.timers?.offer)  clearTimeout(r.timers.offer);
@@ -1112,9 +1094,9 @@ const interval = setInterval(() => {
     teardownSideRoom(id, "pong-timeout-admin-side");
   }
 
-  // Si estaba en un grupo (Cupido 3), derríbalo y reencola a los demás
+  // Si estaba en sala de 3 (CUPIDO), disolverla y reencolar al resto
   if (c?.groupRoomId) {
-    teardownGroupRoom(c.groupRoomId, "pong-timeout-group", id);
+    teardownGroupRoom(c.groupRoomId, "pong-timeout", id);
   }
 
   clients.delete(id);
