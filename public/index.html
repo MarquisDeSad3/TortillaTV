@@ -537,6 +537,7 @@
       color:#111;
       border-color:#ddd;
     }
+    #videoShell{ position:relative; }
   </style>
 </head>
 <body class="font-sans ar-1-1">
@@ -737,25 +738,26 @@
             </div>
           </div><!-- /#stage -->
 
-          <!-- PiP (PC · Cupido) => SIEMPRE Kristoff (para participantes); para host es su self -->
-          <div id="pip" style="
-            display:none;
-            position:fixed;
-            left:50%;
-            top:0;
-            transform:translate(-50%, 0);
-            width:clamp(220px, 18vw, 360px);
-            aspect-ratio:4/3;
-            z-index:100;
-            border-radius:14px;
-            overflow:hidden;
-            box-shadow:0 12px 26px rgba(0,0,0,.28);
-            border:1px solid rgba(255,255,255,.45);
-            background:#000;
-          ">
-            <video id="pipVideo" autoplay playsinline
-                  style="width:100%;height:100%;object-fit:cover;"></video>
-          </div>
+         <div id="pip" style="
+  display:none;
+  position:absolute;
+  left:50%;
+  top:50%;
+  transform:translate(-50%, -50%);
+  width:clamp(180px, 24vw, 340px);
+  aspect-ratio:4/3;
+  z-index:120;
+  border-radius:14px;
+  overflow:hidden;
+  box-shadow:0 12px 26px rgba(0,0,0,.28);
+  border:1px solid rgba(255,255,255,.45);
+  background:#000;
+  pointer-events:none;
+">
+  <video id="pipVideo" autoplay playsinline
+        style="width:100%;height:100%;object-fit:cover;"></video>
+</div>
+
 
           <!-- MÓVIL: pantalla partida full-bleed -->
           <div id="stageMobile" class="layout-mobile-fixed" style="display:none;">
@@ -917,6 +919,11 @@
             0%,100%{ transform: translateY(-6px) scale(1); }
             50%{ transform: translateY(8px) scale(1.02); }
           }
+          #cupidMini{
+  touch-action:none;
+  user-select:none;
+}
+
         </style>
       </div>
     </div>
@@ -1002,6 +1009,7 @@
       show('chat');
       initLayoutForDevice();
       updateModePillUI();
+      enableCupidMiniDrag();
 
       zoomState.local = getSavedLocalZoom();
       applyZoom('local');
@@ -1489,6 +1497,110 @@
       if (remoteTileR) remoteTileR.style.display = (on && isGroupHost()) ? '' : 'none';
       if (localTile)   localTile.style.display   = (on && isGroupHost()) ? 'none' : '';
     }
+    // ===== PiP draggable (WhatsApp) para móvil =====
+function enableCupidMiniDrag(){
+  if(!cupidMini) return;
+
+  // solo queremos drag en móvil
+  if(!isMobile()) return;
+
+  // restaurar última posición
+  try{
+    const saved = JSON.parse(localStorage.getItem('ttv_cupidMini_pos') || 'null');
+    if(saved && typeof saved.x === 'number' && typeof saved.y === 'number'){
+      cupidMini.style.left = saved.x + 'px';
+      cupidMini.style.top  = saved.y + 'px';
+      cupidMini.style.bottom = 'auto';
+    }
+  }catch{}
+
+  let dragging = false;
+  let startX=0, startY=0, baseLeft=0, baseTop=0;
+
+  const clamp = (v, min, max)=> Math.max(min, Math.min(max, v));
+
+  const onDown = (e)=>{
+    if(cupidMini.style.display === 'none') return;
+    dragging = true;
+
+    const p = (e.touches && e.touches[0]) ? e.touches[0] : e;
+    startX = p.clientX;
+    startY = p.clientY;
+
+    const r = cupidMini.getBoundingClientRect();
+    baseLeft = r.left;
+    baseTop  = r.top;
+
+    cupidMini.style.transition = 'none';
+    e.preventDefault?.();
+  };
+
+  const onMove = (e)=>{
+    if(!dragging) return;
+    const p = (e.touches && e.touches[0]) ? e.touches[0] : e;
+
+    const dx = p.clientX - startX;
+    const dy = p.clientY - startY;
+
+    const w = cupidMini.offsetWidth;
+    const h = cupidMini.offsetHeight;
+
+    const pad = 10;
+    const maxX = window.innerWidth  - w - pad;
+    const maxY = window.innerHeight - h - pad;
+
+    const nx = clamp(baseLeft + dx, pad, maxX);
+    const ny = clamp(baseTop  + dy, pad + 52, maxY);
+
+    cupidMini.style.left = nx + 'px';
+    cupidMini.style.top  = ny + 'px';
+    cupidMini.style.bottom = 'auto';
+
+    e.preventDefault?.();
+  };
+
+  const snapToCorner = ()=>{
+    const r = cupidMini.getBoundingClientRect();
+    const w = r.width, h = r.height;
+    const pad = 10;
+
+    const left  = pad;
+    const right = window.innerWidth - w - pad;
+
+    const top    = pad + 52;
+    const bottom = window.innerHeight - h - pad;
+
+    const midX = r.left + w/2;
+    const midY = r.top  + h/2;
+
+    const targetX = (midX < window.innerWidth/2) ? left : right;
+    const targetY = (midY < window.innerHeight/2) ? top  : bottom;
+
+    cupidMini.style.transition = 'left .12s ease, top .12s ease';
+    cupidMini.style.left = targetX + 'px';
+    cupidMini.style.top  = targetY + 'px';
+    cupidMini.style.bottom = 'auto';
+
+    try{
+      localStorage.setItem('ttv_cupidMini_pos', JSON.stringify({ x: targetX, y: targetY }));
+    }catch{}
+  };
+
+  const onUp = ()=>{
+    if(!dragging) return;
+    dragging = false;
+    snapToCorner();
+  };
+
+  cupidMini.addEventListener('touchstart', onDown, { passive:false });
+  window.addEventListener('touchmove', onMove, { passive:false });
+  window.addEventListener('touchend', onUp);
+
+  // mouse para test en desktop devtools
+  cupidMini.addEventListener('mousedown', onDown);
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup', onUp);
+}
 
     async function ensureMedia(autoPlay=true){
       try{
@@ -2033,6 +2145,30 @@ else setStatus('En cola…');
     }
 
     /* ===== CUPIDO GRUPO: señalización ===== */
+    // ===== FIX: ICE buffer por peer (3-way estable) =====
+const pendingGroupIce = new Map(); // peerId -> RTCIceCandidateInit[]
+
+function queueGroupIce(peerId, cand){
+  if(!peerId || !cand) return;
+  const arr = pendingGroupIce.get(peerId) || [];
+  arr.push(cand);
+  pendingGroupIce.set(peerId, arr);
+}
+
+async function flushGroupIce(peerId){
+  const gpc = groupPCs.get(peerId);
+  if(!gpc) return;
+  if(!gpc.remoteDescription) return;
+
+  const arr = pendingGroupIce.get(peerId);
+  if(!arr || !arr.length) return;
+
+  pendingGroupIce.delete(peerId);
+  for(const c of arr){
+    try{ await gpc.addIceCandidate(c); }catch{}
+  }
+}
+
     function shouldInitiateTo(peerId){
       const a = String(myId||'');
       const b = String(peerId||'');
@@ -2132,9 +2268,45 @@ else setStatus('En cola…');
           overlayShow(false);
           enableControls();
         }
-        if(st === 'failed' || st === 'disconnected'){
-          handleCallEnded('conn:'+st);
-        }
+       if(st === 'failed' || st === 'disconnected'){
+  console.warn('[GROUP] peer link lost:', peerId, st);
+
+  // Cierra solo ese PC
+  try{ gpc.close(); }catch{}
+  groupPCs.delete(peerId);
+  groupStreams.delete(peerId);
+  groupConnected.delete(peerId);
+
+  // limpia video correspondiente
+  if(isMobile()){
+    if(peerId === groupHostId){
+      try{ remoteVideoM.srcObject = null; }catch{}
+    } else {
+      try{ remoteVideo2M.srcObject = null; }catch{}
+    }
+  } else {
+    if(isGroupHost()){
+      const slot = groupSlotByPeer.get(peerId);
+      if(slot === 'left'){
+        try{ remoteVideo.srcObject = null; }catch{}
+      } else {
+        try{ remoteVideoR.srcObject = null; }catch{}
+      }
+    } else {
+      if(peerId === groupHostId){
+        try{ pipVideo.srcObject = null; }catch{}
+      } else {
+        try{ remoteVideo.srcObject = null; }catch{}
+      }
+    }
+  }
+
+  // si se fueron todos, entonces sí cierra el grupo
+  if(groupPCs.size === 0){
+    handleCallEnded('group-empty');
+  }
+}
+
       };
 
       return gpc;
@@ -2208,6 +2380,8 @@ else setStatus('En cola…');
       }
 
       await gpc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+      await flushGroupIce(from);
+
       const ans = await gpc.createAnswer();
       await gpc.setLocalDescription(ans);
       send({ type:'group-answer', to: from, sdp: ans });
@@ -2218,14 +2392,37 @@ else setStatus('En cola…');
       const gpc = groupPCs.get(from);
       if(!gpc) return;
       await gpc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+      await flushGroupIce(from);
+
     }
 
     async function onGroupIce(data){
-      const from = data.from;
-      const gpc = groupPCs.get(from);
-      if(!gpc) return;
-      try{ await gpc.addIceCandidate(data.candidate); }catch{}
-    }
+  const from = data.from;
+  const cand = data.candidate;
+  if(!from || !cand) return;
+
+  const gpc = groupPCs.get(from);
+
+  // si aún no existe PC => guardamos
+  if(!gpc){
+    queueGroupIce(from, cand);
+    return;
+  }
+
+  // si aún no hay remoteDescription => guardamos
+  if(!gpc.remoteDescription){
+    queueGroupIce(from, cand);
+    return;
+  }
+
+  try{
+    await gpc.addIceCandidate(cand);
+  }catch{
+    // por timing, lo guardamos y luego flusheamos
+    queueGroupIce(from, cand);
+  }
+}
+
 
     /* ===== Layout ===== */
     function setLayout(mode){
