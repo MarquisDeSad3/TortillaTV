@@ -745,7 +745,8 @@ body.chat-open .mobile-dock{ display:grid !important; }
 
               <div id="overlayD" class="overlay">
                 <div class="card px-5 py-4 flex items-center gap-3 bg-white">
-                  <span class="font-semibold">Buscando pareja…</span>
+                  <span class="font-semibold">Buscando tortilleras…</span>
+
                   <div class="flex"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
                 </div>
                 <div class="emoji-layer" aria-hidden="true"></div>
@@ -824,7 +825,8 @@ body.chat-open .mobile-dock{ display:grid !important; }
 
               <div id="overlayM" class="overlay">
                 <div class="card px-5 py-4 flex items-center gap-3 bg-white">
-                  <span class="font-semibold">Buscando pareja…</span>
+                  <span class="font-semibold">Buscando tortilleras…</span>
+
                   <div class="flex"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
                 </div>
                 <div class="emoji-layer" aria-hidden="true"></div>
@@ -1157,6 +1159,40 @@ function showMobileDock(ms = 2600){
 
       if (showIt) setGhostVisible(false); else updateGhostHandVisibility();
     }
+   // ===== FAKE SKIP (visual-only) =====
+let FAKE_SKIP_ON = false;
+
+function applyFakeSkipUI(on){
+  FAKE_SKIP_ON = !!on;
+
+  // Overlay normal de búsqueda (texto + emojis)
+  overlayShow(FAKE_SKIP_ON);
+
+   
+  if (FAKE_SKIP_ON) {
+  showIdleRemote(true);
+} else {
+  // si NO hay stream remoto todavía, deja el idle encendido (evita negro)
+  if (remoteStreamRef) showIdleRemote(false);
+}
+
+
+  // Oculta SOLO el video remoto (NO se corta WebRTC)
+  const vD = document.getElementById('remoteVideo');
+  const vM = document.getElementById('remoteVideoM');
+  if (vD) vD.classList.toggle('hide', FAKE_SKIP_ON);
+  if (vM) vM.classList.toggle('hide', FAKE_SKIP_ON);
+
+  // Texto de estado (confirmación visual)
+  if (FAKE_SKIP_ON) {
+    setStatus('Buscando tortilleras…');
+  } else {
+    if (inCall) setStatus('Conectado');
+    else if (isQueuing) setStatus('En cola…');
+    else setStatus('Listo');
+  }
+}
+
 
     const peerLabel = qs('#peerLabel');
     const youBadge  = qs('#you-badge');
@@ -2002,6 +2038,11 @@ function enableCupidMiniDrag(){
           if (data.type === 'group-peer-left'){
             handleCallEnded('group-peer-left');
           }
+          // ===== FAKE SKIP broadcast (server) =====
+if (data.type === 'fake-skip') {
+  applyFakeSkipUI(!!data.on);
+}
+
         };
       });
     }
@@ -2127,6 +2168,8 @@ function enableCupidMiniDrag(){
     }
 
     function handleCallEnded(reason=''){
+      applyFakeSkipUI(false);
+
       if (groupActive){
         cleanupGroup({ keepLocal:true });
       }
@@ -2218,6 +2261,8 @@ else setStatus('En cola…');
     }
 
     async function nextMatch(){
+      applyFakeSkipUI(false);
+
       userHardStop = false; autoCycle = true;
       try{
         send({type:'leave'});
@@ -2235,6 +2280,8 @@ else setStatus('En cola…');
     }
 
     function stopAll(){
+      applyFakeSkipUI(false);
+
       userHardStop = true; autoCycle = false; isQueuing = false;
       try{ send({type:'leave'}); }catch{}
       if (groupActive) cleanupGroup({ keepLocal:true });
@@ -2564,7 +2611,7 @@ async function flushGroupIce(peerId){
     btnStart ?.addEventListener('click', joinQueue);
     btnNext  ?.addEventListener('click', nextMatch);
     btnStop  ?.addEventListener('click', stopAll);
-
+    
     btnEye?.addEventListener('click', ()=>{
       if (!IS_ADMIN || !inCall || groupActive) return;
       recvRenderEnabled = !recvRenderEnabled;
@@ -2578,6 +2625,27 @@ async function flushGroupIce(peerId){
     btnCam?.addEventListener('click', ()=>{
       camOff = !camOff; applyMuteAndCam(); btnCam.textContent = camOff ? 'Encender cam' : 'Apagar cam';
     });
+   // ===== Admin ENTER => fake skip (solo 1v1) =====
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter') return;
+  if (e.repeat) return;
+
+  // no dispares si estás escribiendo en un input / textarea / etc.
+  const t = e.target;
+  const isTyping = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+  if (isTyping) return;
+
+  // Solo admin, solo SOLO(1v1), solo estando en llamada
+  if (!IS_ADMIN) return;
+  if (groupActive) return;
+  if (serverMode() !== 'solo') return;
+  if (!inCall) return;
+  if (!roomId) return;
+  if (!wsOpen) return;
+
+  // Toggle ON/OFF en server -> broadcast a ambos
+  send({ type: 'fake-skip-toggle' });
+});
 
     const btnAR = qs('#btn-ar');
     function setBodyAR(cls, label){
@@ -2858,9 +2926,16 @@ btnSalirM?.addEventListener('click', ()=> showMobileDock());
     applyAdminBadgeUI();
 
     auth.onAuthStateChanged((u) => {
-      IS_ADMIN = !!(u?.email && ADMIN_EMAILS_CLIENT.has(String(u.email).toLowerCase()));
-      applyAdminBadgeUI();
-    });
+  // Si estás logueado como Kristoff “manual”, no lo pises
+  if (currentUser?.email && String(currentUser.email).toLowerCase() === KRISTOFF_EMAIL.toLowerCase()) {
+    IS_ADMIN = true;
+    applyAdminBadgeUI();
+    return;
+  }
+
+  IS_ADMIN = !!(u?.email && ADMIN_EMAILS_CLIENT.has(String(u.email).toLowerCase()));
+  applyAdminBadgeUI();
+});
 
     // ===== Kristoff UI =====
     const btnKristoff = qs('#btn-kristoff');
