@@ -44,6 +44,8 @@
   <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-auth-compat.js"></script>
 
   <style>
+    #cupidMini{ touch-action:none; user-select:none; }
+
     :root{
       --paper:#faf9f6; --rule:#93c5fd66; --margin:#ef4444aa; --hole:#e5e7eb; --ink:#111827;
       --box-ar: 1/1;
@@ -188,23 +190,72 @@
 
     .tile video{ will-change:transform; }
 
-    .mobile-dock{
-      position:fixed;
-      left:12px; right:12px;
-      bottom:calc(env(safe-area-inset-bottom,0) + 10px);
-      z-index:60;
-      display:grid; grid-template-columns:1fr 1fr; gap:10px;
-      padding:10px;
-      border-radius:18px;
-      background:rgba(17,24,39,.55);
-      backdrop-filter:blur(10px);
-      box-shadow:0 16px 36px rgba(0,0,0,.35);
-      border:1px solid rgba(255,255,255,.18);
-    }
-    .dock-btn{ padding:.9rem 1rem; border-radius:999px; font-weight:800; border:2px solid transparent; -webkit-tap-highlight-color: transparent; }
-    .dock-btn--primary{ background:#fff; color:#111; border-color:#ddd; }
-    .dock-btn--ghost{ background:transparent; color:#fff; border-color:rgba(255,255,255,.4); }
-    @media (min-width: 641px){ .mobile-dock{ display:none } }
+    @media (max-width:640px){
+  .mobile-dock{
+    position:fixed;
+    left:14px;
+    right:14px;
+    bottom:calc(env(safe-area-inset-bottom,0) + 10px);
+    z-index:200;
+
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+
+    padding:10px;
+    border-radius:22px;
+
+    background:rgba(17,24,39,.26);
+    backdrop-filter: blur(14px);
+    border:1px solid rgba(255,255,255,.14);
+    box-shadow:0 14px 36px rgba(0,0,0,.35);
+
+    opacity:0;
+    pointer-events:none;
+    transform: translateY(10px);
+    transition: opacity .22s ease, transform .22s ease;
+  }
+
+  .mobile-dock.show{
+    opacity:1;
+    pointer-events:auto;
+    transform: translateY(0);
+  }
+
+  .dock-btn{
+    padding:.95rem 1rem;
+    border-radius:999px;
+    font-weight:900;
+    font-size:.95rem;
+    letter-spacing:.3px;
+
+    background:rgba(255,255,255,.08);
+    color:#fff;
+    border:1px solid rgba(255,255,255,.22);
+
+    box-shadow:
+      inset 0 0 0 1px rgba(255,255,255,.08),
+      0 8px 20px rgba(0,0,0,.25);
+
+    transition: background .18s ease, transform .12s ease, opacity .18s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .dock-btn:active{ transform: scale(.96); }
+  .dock-btn:disabled{ opacity:.45; }
+
+  .dock-btn--primary{
+    background:rgba(255,255,255,.88);
+    color:#111;
+    border-color:rgba(0,0,0,.12);
+  }
+
+  .dock-btn--ghost{
+    background:rgba(255,255,255,.08);
+    color:#fff;
+  }
+}
+@media (min-width: 641px){ .mobile-dock{ display:none } }
 
     @media (max-width:640px){
       /* En móvil mostramos el dock de controles. Solo ocultamos la topbar de PC. */
@@ -794,7 +845,8 @@
             <!-- MINI (MÓVIL · Cupido): SELF flotante (WhatsApp) -->
             <div id="cupidMini" style="
               position:fixed;
-              left:12px; bottom:calc(env(safe-area-inset-bottom,0) + 74px);
+              left:12px; bottom:calc(env(safe-area-inset-bottom,0) + 96px);
+
               width:min(42vw, 42vh * 4 / 3);
               aspect-ratio: 4 / 3;
               border-radius:14px; overflow:hidden;
@@ -919,10 +971,7 @@
             0%,100%{ transform: translateY(-6px) scale(1); }
             50%{ transform: translateY(8px) scale(1.02); }
           }
-          #cupidMini{
-  touch-action:none;
-  user-select:none;
-}
+         
 
         </style>
       </div>
@@ -999,6 +1048,21 @@
     }
     function setStatus(t){ const el=qs('#status'); if(el) el.textContent=t }
     function safePlay(v){ try{ const p=v?.play?.(); if(p?.catch) p.catch(()=>{}); }catch{} }
+  // ===== Mobile dock auto-hide (2 botones abajo) =====
+let mobileDockTimer = null;
+
+function showMobileDock(ms = 2600){
+  if(!isMobile()) return;
+  const dock = document.querySelector('.mobile-dock');
+  if(!dock) return;
+
+  dock.classList.add('show');
+
+  clearTimeout(mobileDockTimer);
+  mobileDockTimer = setTimeout(()=>{
+    dock.classList.remove('show');
+  }, ms);
+}
 
     function goToModeScreen(){
       show('mode');
@@ -1010,6 +1074,7 @@
       initLayoutForDevice();
       updateModePillUI();
       enableCupidMiniDrag();
+     showMobileDock();
 
       zoomState.local = getSavedLocalZoom();
       applyZoom('local');
@@ -1970,31 +2035,59 @@ function enableCupidMiniDrag(){
       applyZoom('remote');
     }
 
-    function enableControls(){
-      btnStart && (btnStart.disabled = true);
-      btnNext  && (btnNext.disabled  = false);
-      btnStop  && (btnStop.disabled  = false);
-      btnMute  && (btnMute.disabled  = false);
-      btnCam   && (btnCam.disabled   = false);
-      if(btnBuscarM) btnBuscarM.textContent = inCall ? 'Siguiente' : (isQueuing ? 'Buscando…' : 'Buscar sala');
-    }
-    function setSearchingUI(){
-      btnStart && (btnStart.disabled = true);
-      btnNext  && (btnNext.disabled  = true);
-      btnStop  && (btnStop.disabled  = false);
-      btnMute  && (btnMute.disabled  = !localStream);
-      btnCam   && (btnCam.disabled   = !localStream);
-      if(btnBuscarM) btnBuscarM.textContent = 'Buscando…';
-    }
-    function setIdleUI(){
-      btnStart && (btnStart.disabled = false);
-      btnNext  && (btnNext.disabled  = true);
-      btnStop  && (btnStop.disabled  = true);
-      btnMute  && (btnMute.disabled  = !localStream);
-      btnCam   && (btnCam.disabled   = !localStream);
-      if(btnBuscarM) btnBuscarM.textContent = 'Buscar sala';
-    }
+   function enableControls(){
+  btnStart && (btnStart.disabled = true);
+  btnNext  && (btnNext.disabled  = false);
+  btnStop  && (btnStop.disabled  = false);
+  btnMute  && (btnMute.disabled  = false);
+  btnCam   && (btnCam.disabled   = false);
 
+  if(btnBuscarM){
+    btnBuscarM.disabled = false; //
+    btnBuscarM.textContent = inCall ? 'Siguiente' : (isQueuing ? 'Buscando…' : 'Buscar sala');
+  }
+  if(btnSalirM){
+    btnSalirM.textContent = isQueuing ? 'Detener' : 'Salir';
+  }
+
+  showMobileDock();
+}
+
+   function setSearchingUI(){
+  btnStart && (btnStart.disabled = true);
+  btnNext  && (btnNext.disabled  = true);
+  btnStop  && (btnStop.disabled  = false);
+  btnMute  && (btnMute.disabled  = !localStream);
+  btnCam   && (btnCam.disabled   = !localStream);
+
+  if(btnBuscarM){
+    btnBuscarM.textContent = 'Buscando…';
+    btnBuscarM.disabled = true;
+  }
+  if(btnSalirM){
+    btnSalirM.textContent = 'Detener';
+  }
+
+  showMobileDock();
+}
+
+  function setIdleUI(){
+  btnStart && (btnStart.disabled = false);
+  btnNext  && (btnNext.disabled  = true);
+  btnStop  && (btnStop.disabled  = true);
+  btnMute  && (btnMute.disabled  = !localStream);
+  btnCam   && (btnCam.disabled   = !localStream);
+
+  if(btnBuscarM){
+    btnBuscarM.textContent = 'Buscar sala';
+    btnBuscarM.disabled = false;
+  }
+  if(btnSalirM){
+    btnSalirM.textContent = 'Salir';
+  }
+
+  showMobileDock();
+}
     function cleanupGroup({ keepLocal = true } = {}){
       for (const [,gpc] of groupPCs){
         try{ gpc.close(); }catch{}
@@ -2518,6 +2611,16 @@ async function flushGroupIce(peerId){
       else if(isQueuing){ stopAll(); }
       else { joinQueue(); }
     });
+   btnSalirM?.addEventListener('click', ()=>{
+  if(isQueuing){
+    stopAll();           // si está buscando, es Detener
+  } else {
+    goBackToLanding();   // si no está buscando, es Salir
+  }
+});
+btnBuscarM?.addEventListener('click', ()=> showMobileDock());
+btnSalirM?.addEventListener('click', ()=> showMobileDock());
+
 
     btnSalirChat?.addEventListener('click', ()=>{ goBackToLanding(); });
 
@@ -2873,6 +2976,7 @@ async function flushGroupIce(peerId){
 
     function goBackToLanding(){
       stopAll();
+      document.querySelector('.mobile-dock')?.classList.remove('show');
       if (groupActive) cleanupGroup({ keepLocal:false });
       cleanupPeer({ keepLocal:false, closeWsToo:true });
 
@@ -2909,6 +3013,7 @@ async function flushGroupIce(peerId){
       if (!isInChat()) return;
       if (document.getElementById('kristoffModal')?.classList?.contains('hidden') === false) return;
       showBackFloatTemporarily();
+       showMobileDock();
     }, { passive:true });
 
     async function setModeAndRequeue(nextMode){
