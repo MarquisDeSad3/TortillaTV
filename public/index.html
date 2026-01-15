@@ -255,7 +255,8 @@
     color:#fff;
   }
 }
-@media (min-width: 641px){ .mobile-dock{ display:none } }
+@media (min-width: 641px){ .mobile-dock{ display:none; } }
+
 
     @media (max-width:640px){
       /* En móvil mostramos el dock de controles. Solo ocultamos la topbar de PC. */
@@ -589,6 +590,10 @@
       border-color:#ddd;
     }
     #videoShell{ position:relative; }
+    /* Dock SOLO visible cuando estas en chat */
+body:not(.chat-open) .mobile-dock{ display:none !important; }
+body.chat-open .mobile-dock{ display:grid !important; }
+
   </style>
 </head>
 <body class="font-sans ar-1-1">
@@ -871,10 +876,7 @@
           </div><!-- /#stageMobile -->
         </div><!-- /#videoShell -->
 
-        <div class="mobile-dock sm:hidden" role="toolbar" aria-label="Controles de sala">
-          <button id="btn-buscar-m" class="dock-btn dock-btn--primary">Buscar sala</button>
-          <button id="btn-salir-m" class="dock-btn dock-btn--ghost">Salir</button>
-        </div>
+        
 
         <div class="mt-6 flex items-center justify-center">
           <button id="btn-salir-chat" class="rounded-full border-2 border-neutral-900/30 bg-white/80 px-5 py-2 text-sm font-semibold shadow">Salir</button>
@@ -977,7 +979,10 @@
       </div>
     </div>
   </div>
-
+  <div class="mobile-dock sm:hidden" role="toolbar" aria-label="Controles de sala">
+          <button id="btn-buscar-m" class="dock-btn dock-btn--primary">Buscar sala</button>
+          <button id="btn-salir-m" class="dock-btn dock-btn--ghost">Salir</button>
+        </div>
   <script>
     /* ==== Viewport fix cross-browser ==== */
     function setVHVars(){
@@ -1040,12 +1045,17 @@
     function qs(s,root=document){ return root.querySelector(s) }
     const pages = { landing: qs('#page-landing'), mode: qs('#page-mode'), chat: qs('#page-chat') };
 
-    function show(k){
-      Object.values(pages).forEach(p=>{ p.classList.add('hidden'); p.classList.remove('visible') });
-      pages[k].classList.remove('hidden');
-      pages[k].classList.add('visible');
-      window.scrollTo({top:0,behavior:'smooth'});
-    }
+   function show(k){
+  Object.values(pages).forEach(p=>{ p.classList.add('hidden'); p.classList.remove('visible') });
+  pages[k].classList.remove('hidden');
+  pages[k].classList.add('visible');
+
+  // ✅ Control del dock: solo en chat
+  document.body.classList.toggle('chat-open', k === 'chat');
+
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
     function setStatus(t){ const el=qs('#status'); if(el) el.textContent=t }
     function safePlay(v){ try{ const p=v?.play?.(); if(p?.catch) p.catch(()=>{}); }catch{} }
   // ===== Mobile dock auto-hide (2 botones abajo) =====
@@ -3047,5 +3057,6 @@ btnSalirM?.addEventListener('click', ()=> showMobileDock());
       if (k === 'chat') showBackFloatTemporarily();
     };
   </script>
+  
 </body>
 </html>
