@@ -1,0 +1,3137 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <!-- Bloqueo de zoom/pinch en móvil -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+  <title>TortillaTV</title>
+  <meta name="theme-color" content="#0b1324" />
+
+  <!-- Fuentes y Tailwind -->
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@800&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/webgazer/dist/webgazer.min.js"></script>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ["Inter","system-ui","Segoe UI","Roboto"], display: ["Caveat","ui-serif"] },
+          colors: { paper: "#faf9f6", rule: "#93c5fd66", marginRed: "#ef4444aa" },
+          keyframes: {
+            pageFlipIn: { "0%": { transform:"rotateY(-90deg) translateX(-20px)", opacity:0 }, "100%": { transform:"rotateY(0) translateX(0)", opacity:1 } },
+            noteSlide: { "0%":{ transform:"translateX(0%)" }, "100%":{ transform:"translateX(-100%)" } },
+            inkSweep: { "0%":{ transform:"translateX(-120%) skewX(-8deg)" , opacity:.0}, "60%":{opacity:.45}, "100%":{ transform:"translateX(120%) skewX(-8deg)", opacity:0 } },
+            scribbleFlow: { "0%":{ strokeDashoffset:0 }, "100%":{ strokeDashoffset:-1400 } },
+            wobbleIn: { "0%":{ transform:"translateY(12px) scale(.98)", opacity:0 }, "100%":{ transform:"translateY(0) scale(1)", opacity:1 } }
+          },
+          animation: {
+            pageFlipIn: "pageFlipIn .6s ease both",
+            noteSlide: "noteSlide .7s cubic-bezier(.22,.61,.36,1) both",
+            inkSweep: "inkSweep 1.4s ease-out .15s 1",
+            scribbleFlow: "scribbleFlow 5s linear 2s infinite",
+            wobbleIn: "wobbleIn .65s ease-out .25s both"
+          },
+          boxShadow: { card: "0 12px 30px rgba(0,0,0,.07)" }
+        }
+      }
+    }
+  </script>
+
+  <!-- Firebase (compat) SOLO login Google -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-auth-compat.js"></script>
+
+  <style>
+    #cupidMini{ touch-action:none; user-select:none; }
+
+    :root{
+      --paper:#faf9f6; --rule:#93c5fd66; --margin:#ef4444aa; --hole:#e5e7eb; --ink:#111827;
+      --box-ar: 1/1;
+      --vh: 1vh; --dvh: 1dvh;
+    }
+    body.ar-1-1{ --box-ar: 1/1; }
+    body.ar-4-3{ --box-ar: 4/3; }
+    body.ar-16-9{ --box-ar: 16/9; }
+
+    html,body{ height:100%; background:var(--paper); color:var(--ink); -webkit-font-smoothing:antialiased; -webkit-text-size-adjust:100%; }
+
+    #noteScroller { display:flex; justify-content:flex-start; gap:0.2ch; align-items:center; }
+    #noteScroller .slide { font-size: 0.75em; }
+
+    body.no-scroll{ position:fixed; inset:0; overflow:hidden; width:100%; height:calc(var(--dvh) * 100); }
+    * { touch-action: manipulation; }
+
+    .paper-bg{ position:relative; min-height:calc(var(--dvh) * 100); background-image:repeating-linear-gradient(0deg, transparent, transparent 32px, var(--rule) 33px, var(--rule) 34px); }
+    .paper-bg::before{ content:""; position:absolute; inset:0; background:linear-gradient(90deg, transparent 56px, var(--margin) 59px, transparent 62px); pointer-events:none }
+    .paper-holes{ position:absolute; left:18px; top:96px; display:flex; flex-direction:column; gap:96px; pointer-events:none }
+    .paper-hole{ width:18px; height:18px; border-radius:999px; background:var(--hole); box-shadow:inset 0 2px 4px rgba(0,0,0,.2) }
+    .book{ perspective:1200px }
+    .page{ transform-origin:left center; backface-visibility:hidden; transform-style:preserve-3d; transition:opacity .4s ease }
+    .page.hidden{ opacity:0; pointer-events:none; transform:rotateY(-90deg) translateX(-20px) }
+    .page.visible{ opacity:1; transform:rotateY(0); animation:pageFlipIn .6s ease both }
+    .card{ background:rgba(255,255,255,.8); border:2px solid rgba(17,24,39,.1); border-radius:20px; padding:12px; box-shadow:0 12px 30px rgba(0,0,0,.07); backdrop-filter:blur(6px) }
+
+    .hero{ position:relative; min-height:78vh; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center }
+    .ttv{ position:relative; display:inline-block }
+    .ttv .word{ display:inline-block; transform-origin:50% 70%; animation:ttv-wobble 2.4s ease-in-out infinite }
+    .ttv .word:nth-child(2){ animation-delay:.15s }
+    .ttv .word:nth-child(3){ animation-delay:.3s }
+    .ttv .accent{ display:inline-block; padding-inline:.15em; transform:rotate(-2deg); text-shadow:0 2px 0 #ffe4e6 }
+
+    .ttv::before{
+      content:""; position:absolute; inset:auto 0 -8px 0; height:28%;
+      background:linear-gradient(90deg, rgba(244,63,94,.28), rgba(244,63,94,.6), rgba(244,63,94,.28));
+      filter:blur(10px); transform-origin:left center; pointer-events:none;
+      animation:inkSweep 1.4s ease-out .15s 1;
+    }
+
+    .note{ font-family:"Caveat", ui-serif; font-weight:800; background:#fff7cc; color:#0b1324; border-radius:.5rem; box-shadow:0 4px 0 rgba(0,0,0,.2); transform:rotate(-4deg); overflow:hidden; }
+    .note-tiny{ font-size:clamp(30px,8vw,36px); padding:.05em .35em; min-width:auto; line-height:1.05; }
+    .note-at-title{ position:absolute; left:-10px; top:-14px; z-index:5; }
+
+    @keyframes ttv-wobble{ 0%,100%{ transform:translateY(0) } 25%{ transform:translateY(-4px) } 50%{ transform:translateY(2px) } 75%{ transform:translateY(-2px) } }
+
+    .scribble{ width:min(920px,92vw); height:32px; margin-inline:auto }
+    .scribble path{ stroke:rgba(239,68,68,.82); stroke-width:6; fill:none; stroke-linecap:round; stroke-dasharray:1400; animation:scribble 1.8s ease forwards, scribbleFlow 5s linear 2s infinite; filter: drop-shadow(0 0 6px rgba(239,68,68,.45)); }
+
+    .idle-video{
+      position:absolute; inset:0;
+      width:100%; height:100%;
+      object-fit:cover;
+      transform:scale(1.22);
+      z-index:2;
+      pointer-events:none;
+    }
+    .hide{ display:none !important; }
+
+    video{ width:100%; height:100%; background:#000; display:block; object-position:center center; -webkit-user-select:none; user-select:none; }
+    video.mirror{ transform: scaleX(-1) }
+
+    .stage{ position:relative; width:100%; }
+    .layout-split{
+      display:grid; grid-template-columns:1fr 1fr; gap:1rem;
+    }
+    .layout-split .tile{
+      position:relative;
+      border-radius:16px; overflow:hidden; background:#000;
+      height:auto;
+      aspect-ratio: var(--box-ar);
+      display:block;
+    }
+    .layout-split .tile video{
+      position:absolute; inset:0; width:100%; height:100%;
+    }
+    #stage .tile.local  video{ object-fit: cover; }
+    #stage .tile.remote video{ object-fit: contain; background:#000; }
+    body.remote-portrait #stage .tile.remote video{ object-fit: cover; }
+
+    .layout-mobile-fixed{
+      position:fixed; inset:0; height:calc(var(--dvh) * 100);
+      display:grid; grid-template-rows:1fr 1fr; grid-template-columns:1fr;
+      background:#000; z-index:0;
+    }
+    .pane{ position:relative; overflow:hidden; background:#000; }
+    .pane video{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+    .pane video.contain{ object-fit: contain; background:#000; }
+
+    .pip{ display:none !important; }
+
+    /* === TOPBAR: estilo pill como el selector Solo/Cupido === */
+    .topbar .btn{
+      padding:.55rem .95rem;
+      border-radius:999px;
+      font-weight:900;
+      font-size:.92rem;
+      border:1px solid rgba(17,24,39,.22);
+      color:#111;
+      background:rgba(255,255,255,.88);
+      box-shadow:0 10px 22px rgba(0,0,0,.08);
+      transition: transform .08s ease, background .12s ease, opacity .12s ease;
+    }
+    .topbar .btn:active{ transform: translateY(1px); }
+    .topbar .btn:disabled{ opacity:.55 }
+
+    .overlay{
+      position:absolute; inset:0;
+      display:flex; align-items:center; justify-content:center;
+      background:rgba(0,0,0,.25); z-index:20;
+      pointer-events:none;
+      opacity:0; visibility:hidden;
+      transition: opacity .18s linear, visibility 0s linear .18s;
+    }
+    .overlay.show{
+      opacity:1; visibility:visible;
+      transition: opacity .18s linear;
+    }
+
+    .overlay .card{ pointer-events:auto; }
+
+    .dot{ width:10px; height:10px; border-radius:999px; background:#ef4444; margin:0 4px; animation:b .9s infinite alternate }
+    .dot:nth-child(2){ animation-delay:.15s } .dot:nth-child(3){ animation-delay:.3s }
+
+    .full-bleed{ width:100vw; position:relative; left:50%; right:50%; margin-left:-50vw; margin-right:-50vw; }
+    @media (min-width: 640px){
+      .card.stretch{ height:100%; display:flex; flex-direction:column; }
+      .card.stretch > .tile{ flex:1 1 auto; }
+    }
+
+    @media (max-width: 640px){
+      .topbar{ display:none; }
+      main{ padding:0 !important; }
+      .book{ padding:0 !important; }
+      .full-bleed{ margin:0; left:0; right:0; width:100%; }
+    }
+
+    .zoom-controls{ position:absolute; right:10px; bottom:10px; display:flex; gap:6px; z-index:20; }
+    .zoom-btn{ width:30px; height:30px; border-radius:999px; display:grid; place-items:center; font-weight:800; background:rgba(255,255,255,.9); border:2px solid rgba(17,24,39,.35); box-shadow:0 8px 18px rgba(0,0,0,.18) }
+    .zoom-btn:active{ transform:translateY(1px) }
+
+    .tile video{ will-change:transform; }
+
+    @media (max-width:640px){
+  .mobile-dock{
+    position:fixed;
+    left:14px;
+    right:14px;
+    bottom:calc(env(safe-area-inset-bottom,0) + 10px);
+    z-index:200;
+
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+
+    padding:10px;
+    border-radius:22px;
+
+    background:rgba(17,24,39,.26);
+    backdrop-filter: blur(14px);
+    border:1px solid rgba(255,255,255,.14);
+    box-shadow:0 14px 36px rgba(0,0,0,.35);
+
+    opacity:0;
+    pointer-events:none;
+    transform: translateY(10px);
+    transition: opacity .22s ease, transform .22s ease;
+  }
+
+  .mobile-dock.show{
+    opacity:1;
+    pointer-events:auto;
+    transform: translateY(0);
+  }
+
+  .dock-btn{
+    padding:.95rem 1rem;
+    border-radius:999px;
+    font-weight:900;
+    font-size:.95rem;
+    letter-spacing:.3px;
+
+    background:rgba(255,255,255,.08);
+    color:#fff;
+    border:1px solid rgba(255,255,255,.22);
+
+    box-shadow:
+      inset 0 0 0 1px rgba(255,255,255,.08),
+      0 8px 20px rgba(0,0,0,.25);
+
+    transition: background .18s ease, transform .12s ease, opacity .18s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .dock-btn:active{ transform: scale(.96); }
+  .dock-btn:disabled{ opacity:.45; }
+
+  .dock-btn--primary{
+    background:rgba(255,255,255,.88);
+    color:#111;
+    border-color:rgba(0,0,0,.12);
+  }
+
+  .dock-btn--ghost{
+    background:rgba(255,255,255,.08);
+    color:#fff;
+  }
+}
+@media (min-width: 641px){ .mobile-dock{ display:none; } }
+
+
+    @media (max-width:640px){
+      /* En móvil mostramos el dock de controles. Solo ocultamos la topbar de PC. */
+      .topbar{ display:none !important; }
+    }
+
+    .cam-switch{
+      position:fixed; left:12px;
+      bottom:calc(env(safe-area-inset-bottom,0) + 12px);
+      z-index:70; width:42px; height:42px; border-radius:999px;
+      display:grid; place-items:center; font-size:18px; font-weight:900;
+      background:rgba(17,24,39,.75); color:#fff; border:2px solid rgba(255,255,255,.25);
+      backdrop-filter:blur(8px); box-shadow:0 10px 28px rgba(0,0,0,.28);
+      -webkit-tap-highlight-color: transparent;
+    }
+    @media (min-width:641px){ .cam-switch{ display:none } }
+
+    .idle{
+      position:absolute; inset:0; display:grid; place-items:center;
+      background:#000; color:#fff; text-align:center; font-weight:800;
+      text-shadow:0 2px 10px rgba(0,0,0,.6); z-index:1;
+    }
+    .idle.hide{ display:none; }
+
+    .static-noise{
+      background:
+        repeating-linear-gradient(0deg, rgba(255,255,255,.05) 0 2px, transparent 2px 4px),
+        repeating-linear-gradient(90deg, rgba(255,255,255,.035) 0 2px, transparent 2px 3px),
+        #000;
+      animation:tvNoise 1s steps(8) infinite;
+    }
+    @keyframes tvNoise{
+      0%{ filter:contrast(140%) brightness(115%); }
+      100%{ filter:contrast(140%) brightness(115%); transform:translateY(-1px); }
+    }
+
+    .swipe-tip{ display:none !important; }
+
+    .gear-btn{
+      position:fixed; left:12px; top:calc(env(safe-area-inset-top,0) + 12px);
+      z-index:80; width:42px; height:42px; border-radius:999px;
+      display:grid; place-items:center; font-size:18px; font-weight:900;
+      background:rgba(17,24,39,.75); color:#fff; border:2px solid rgba(255,255,255,.25);
+      backdrop-filter:blur(8px); box-shadow:0 10px 28px rgba(0,0,0,.28);
+    }
+    @media (min-width:641px){ .gear-btn{ display:none } }
+
+    .sheet{
+      position:fixed; right:12px; top:60px; z-index:81;
+      background:rgba(17,24,39,.92); color:#fff; border-radius:14px;
+      border:1px solid rgba(255,255,255,.2); padding:10px 12px; min-width:180px;
+      box-shadow:0 16px 36px rgba(0,0,0,.35); display:none;
+    }
+    .sheet.show{ display:block; }
+    .sheet .row{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:6px 2px; }
+    .switch{ appearance:none; width:40px; height:22px; border-radius:999px; position:relative; background:#444; outline:none; cursor:pointer; }
+    .switch:checked{ background:#22c55e; }
+    .switch::after{ content:""; position:absolute; top:3px; left:3px; width:16px; height:16px; border-radius:999px; background:#fff; transition:left .2s; }
+    .switch:checked::after{ left:21px; }
+
+    .topbar .sep{ width:1px; height:24px; background:rgba(0,0,0,.15); margin:0 6px; }
+
+    @media (max-width:640px){
+      #idleNoiseM.lr-pan{
+        will-change: transform;
+        animation: noisePan 1.8s ease-in-out infinite alternate;
+        -webkit-animation: noisePan 1.8s ease-in-out infinite alternate;
+      }
+      @keyframes noisePan{
+        0%   { transform: scale(1.22) translateX(-6%); }
+        100% { transform: scale(1.22) translateX( 6%); }
+      }
+      @-webkit-keyframes noisePan{
+        0%   { -webkit-transform: scale(1.22) translateX(-6%); }
+        100% { -webkit-transform: scale(1.22) translateX( 6%); }
+      }
+    }
+
+    .emoji-layer{ position:absolute; inset:0; pointer-events:none; overflow:hidden; }
+    .swipe-emoji{
+      position:absolute; font-size:18px;
+      filter: drop-shadow(0 2px 6px rgba(0,0,0,.35));
+      opacity:0; transform: translate3d(0,0,0) scale(0.9) rotate(0deg);
+      animation: emojiFloat .95s ease-out forwards;
+    }
+    @keyframes emojiFloat{
+      0%   { opacity:0; transform: translateY(6px) scale(.9) rotate(0deg); }
+      20%  { opacity:1; }
+      100% { opacity:0; transform: translateY(-26px) scale(1.06) rotate(12deg); }
+    }
+
+    @media (max-width:640px){
+      .cube-hint{ display:none !important; }
+      .cube{
+        --cube: min(44vw, 44vh);
+        --z: calc(var(--cube) / 2);
+        width: var(--cube); height: var(--cube);
+        transform-style: preserve-3d;
+        animation: cubeSpin 3.2s ease-in-out infinite;
+      }
+      .cube .face{
+        position:absolute; inset:0; display:grid; place-items:center;
+        font-size:clamp(22px, 8vw, 36px); font-weight:900; color:#fff;
+        background:rgba(17,24,39,.22); border:1px solid rgba(255,255,255,.15);
+        border-radius:14px; backdrop-filter: blur(6px);
+      }
+      .cube .front  { transform: translateZ(var(--z)); }
+      .cube .back   { transform: rotateY(180deg) translateZ(var(--z)); }
+      .cube .left   { transform: rotateY(-90deg) translateZ(var(--z)); }
+      .cube .right  { transform: rotateY(90deg) translateZ(var(--z)); }
+      .cube .top    { transform: rotateX(90deg) translateZ(var(--z)); }
+      .cube .bottom { transform: rotateX(-90deg) translateZ(var(--z)); }
+
+      @keyframes cubeSpin{
+        0%   { transform: rotateX(-12deg) rotateY(0deg); }
+        50%  { transform: rotateX(12deg)  rotateY(180deg); }
+        100% { transform: rotateX(-12deg) rotateY(360deg); }
+      }
+
+      #pane-remote.searching{ animation: remoteSway 1.6s ease-in-out infinite; }
+      @keyframes remoteSway{
+        0%   { transform: translateX(-2%) rotateZ(-0.3deg); }
+        50%  { transform: translateX( 2%) rotateZ( 0.3deg); }
+        100% { transform: translateX(-2%) rotateZ(-0.3deg); }
+      }
+    }
+
+    @media (max-width:640px){
+      .swipe-ghost{
+        position:absolute; inset:0; pointer-events:none; z-index:22;
+        display:none;
+      }
+      .swipe-ghost.show{ display:block; }
+
+      .swipe-ghost .hand{
+        position:absolute;
+        left:14px; top:40%;
+        transform: translateY(-50%);
+        width: clamp(160px, 30vw, 240px);
+        opacity:.85;
+        filter: drop-shadow(0 6px 14px rgba(0,0,0,.4));
+        animation: ghostSeq 2.6s ease-in-out infinite;
+        transform-origin: left center;
+      }
+
+      @keyframes ghostSeq{
+        0%   { transform: translateY(-50%) translateX(0) scale(.9);  opacity:0; }
+        10%  { transform: translateY(-50%) translateX(0) scale(1.05); opacity:.95; }
+        20%  { transform: translateY(-50%) translateX(0) scale(1.0); opacity:.8; }
+        50%  { transform: translateY(-50%) translateX(120px) scale(1); opacity:.4; }
+        60%  { transform: translateY(-50%) translateX(120px) scale(.98); opacity:0; }
+        100% { transform: translateY(-50%) translateX(0) scale(.96); opacity:0; }
+      }
+    }
+
+    /* ===== Admin Badge ===== */
+    .admin-badge{
+      position:fixed; top:12px; right:12px; z-index:1000;
+      border-radius:999px; padding:.45rem .8rem;
+      font-weight:800; font-size:.85rem; line-height:1;
+      border:2px solid rgba(0,0,0,.18);
+      box-shadow:0 10px 26px rgba(0,0,0,.16), inset 0 0 0 9999px rgba(255,255,255,.08);
+      display:flex; align-items:center; gap:.45rem;
+      -webkit-tap-highlight-color: transparent;
+      user-select:none;
+    }
+    .admin-badge .badge-inner{ position:relative; display:flex; align-items:center; gap:.45rem; }
+    .admin-badge .badge-icon{ font-size:1rem; transform:translateY(1px); }
+    .admin-badge .badge-text{ letter-spacing:.4px; }
+
+    .admin-badge.admin-off{
+      background:linear-gradient(180deg,#f3f4f6,#e5e7eb);
+      color:#111827;
+      cursor:pointer;
+    }
+    .admin-badge.admin-off .badge-icon{ filter:grayscale(1) opacity(.9); }
+
+    .admin-badge.admin-on{
+      background: linear-gradient(135deg,#fbbf24 0%, #f59e0b 22%, #a855f7 70%, #7c3aed 100%);
+      color:#fff;
+      border-color: rgba(255,255,255,.28);
+      box-shadow:
+        0 12px 30px rgba(124,58,237,.35),
+        0 0 0 1px rgba(255,255,255,.12) inset,
+        0 0 22px rgba(168,85,247,.55);
+      animation: badgePulse 2.2s ease-in-out infinite;
+    }
+    @keyframes badgePulse{
+      0%,100%{ transform: translateZ(0) scale(1); }
+      50%    { transform: translateZ(0) scale(1.03); }
+    }
+
+    .admin-badge.admin-on::after{
+      content:""; position:absolute; inset:-2px;
+      background:linear-gradient(120deg, transparent 40%, rgba(255,255,255,.45) 50%, transparent 60%);
+      filter: blur(1px);
+      transform: translateX(-120%);
+      animation: shine 3.6s ease-in-out infinite;
+      border-radius:inherit; pointer-events:none;
+    }
+    @keyframes shine{
+      0%{ transform: translateX(-120%); opacity:.0; }
+      45%{ opacity:.0; }
+      55%{ opacity:.8; }
+      100%{ transform: translateX(120%); opacity:0; }
+    }
+
+    .sparkles{
+      position:absolute; inset:-6px; pointer-events:none;
+      background:
+        radial-gradient(circle at 12% 30%, rgba(255,255,255,.85) 0 2px, transparent 3px) no-repeat,
+        radial-gradient(circle at 78% 40%, rgba(255,255,255,.75) 0 1.8px, transparent 2.8px) no-repeat,
+        radial-gradient(circle at 52% 18%, rgba(255,255,255,.9) 0 1.6px, transparent 2.6px) no-repeat,
+        radial-gradient(circle at 66% 74%, rgba(255,255,255,.7) 0 2px, transparent 3px) no-repeat,
+        radial-gradient(circle at 28% 68%, rgba(255,255,255,.7) 0 1.6px, transparent 2.6px) no-repeat;
+      animation: twinkle 2.2s linear infinite;
+      opacity:0;
+    }
+    .admin-badge.admin-on .sparkles{ opacity:1; }
+    @keyframes twinkle{
+      0%   { transform: translateY(0);   filter: drop-shadow(0 0 6px rgba(255,255,255,.5)); }
+      50%  { transform: translateY(-1px); filter: drop-shadow(0 0 10px rgba(255,255,255,.9)); }
+      100% { transform: translateY(0);    filter: drop-shadow(0 0 6px rgba(255,255,255,.5)); }
+    }
+
+    .admin-badge:active{ transform: translateY(1px); }
+
+    /* ===== GAZE bubble ===== */
+    .gaze-layer{ position:absolute; inset:0; pointer-events:none; z-index:26; }
+    .gaze-bubble{
+      position:absolute;
+      width:30px; height:30px;
+      border-radius:999px;
+      background:
+        radial-gradient(40% 40% at 30% 30%, rgba(255,255,255,.95), rgba(255,255,255,.35) 60%, rgba(255,255,255,0) 100%),
+        radial-gradient(90% 90% at 60% 70%, rgba(173,216,230,.25), rgba(255,255,255,0) 70%);
+      box-shadow:
+        0 8px 16px rgba(0,0,0,.18),
+        inset 0 0 0 1.5px rgba(255,255,255,.9),
+        inset 0 0 18px rgba(255,255,255,.18);
+      backdrop-filter: blur(2px);
+      -webkit-backdrop-filter: blur(2px);
+      transform: translate(-50%,-50%) scale(1);
+      transform-origin: 50% 50%;
+      opacity: 0;
+      will-change: transform, opacity, filter;
+      transition: opacity .12s linear;
+    }
+    .gaze-bubble::after{
+      content:"";
+      position:absolute; inset:0;
+      background: radial-gradient(60% 40% at 28% 28%, rgba(255,255,255,.9), rgba(255,255,255,0) 60%);
+      border-radius:inherit;
+      filter: blur(0.4px);
+      pointer-events:none;
+    }
+    .gaze-bubble::before{
+      content:"";
+      position:absolute; inset:-2px;
+      border-radius:inherit;
+      background: conic-gradient(
+        from 0deg,
+        rgba(255,0,128,.10),
+        rgba(0,128,255,.10),
+        rgba(0,255,180,.10),
+        rgba(255,255,0,.10),
+        rgba(255,0,128,.10)
+      );
+      mix-blend-mode: soft-light;
+      filter: blur(6px) saturate(115%);
+      opacity:.65;
+      pointer-events:none;
+    }
+    .gaze-bubble.show{ opacity:1; }
+
+    /* ===== Floating Back + Mode pill ===== */
+    .back-float{
+      position:fixed;
+      left:12px;
+      top:calc(env(safe-area-inset-top,0) + 12px);
+      z-index:1200;
+      width:44px; height:44px;
+      border-radius:999px;
+      display:grid; place-items:center;
+      font-weight:900; font-size:18px;
+      background:rgba(17,24,39,.75);
+      color:#fff;
+      border:2px solid rgba(255,255,255,.25);
+      backdrop-filter:blur(8px);
+      box-shadow:0 10px 28px rgba(0,0,0,.28);
+      -webkit-tap-highlight-color: transparent;
+      opacity:0; pointer-events:none;
+      transform: translateY(-6px) scale(.98);
+      transition: opacity .18s ease, transform .18s ease;
+    }
+    .back-float.show{
+      opacity:1; pointer-events:auto;
+      transform: translateY(0) scale(1);
+    }
+    .mode-pill{
+      position:fixed;
+      left:50%;
+      top:calc(env(safe-area-inset-top,0) + 12px);
+      transform:translateX(-50%);
+      z-index:1190;
+      display:flex;
+      gap:6px;
+      padding:6px;
+      border-radius:999px;
+      background:rgba(17,24,39,.55);
+      border:1px solid rgba(255,255,255,.18);
+      backdrop-filter:blur(10px);
+      box-shadow:0 16px 36px rgba(0,0,0,.25);
+      opacity:0; pointer-events:none;
+      transition: opacity .18s ease;
+    }
+    .mode-pill.show{ opacity:1; pointer-events:auto; }
+    .mode-pill button{
+      padding:.5rem .85rem;
+      border-radius:999px;
+      font-weight:900;
+      font-size:.9rem;
+      border:1px solid rgba(255,255,255,.22);
+      color:#fff;
+      background:rgba(255,255,255,.08);
+      -webkit-tap-highlight-color: transparent;
+    }
+    .mode-pill button.active{
+      background:#fff;
+      color:#111;
+      border-color:#ddd;
+    }
+    #videoShell{ position:relative; }
+    /* Dock SOLO visible cuando estas en chat */
+body:not(.chat-open) .mobile-dock{ display:none !important; }
+body.chat-open .mobile-dock{ display:grid !important; }
+
+  </style>
+</head>
+<body class="font-sans ar-1-1">
+
+  <!-- BADGE ADMIN (siempre visible) -->
+  <button id="adminBadge" type="button" aria-label="Administrador"
+    class="admin-badge admin-off">
+    <span class="badge-inner">
+      <span class="badge-icon" aria-hidden="true">🔒</span>
+      <span class="badge-text">Admin</span>
+      <span class="sparkles" aria-hidden="true"></span>
+    </span>
+  </button>
+
+  <div class="paper-bg">
+    <div class="paper-holes"><div class="paper-hole"></div><div class="paper-hole"></div><div class="paper-hole"></div></div>
+
+    <main class="book mx-auto max-w-5xl px-6 py-10">
+
+      <!-- LANDING -->
+      <section id="page-landing" class="page visible">
+        <div class="hero">
+          <h1 class="font-display font-extrabold select-none ttv animate-wobbleIn" style="font-size:clamp(56px,10vw,140px); line-height:.9; text-shadow:0 1px 0 #fff, 0 10px 18px rgba(0,0,0,.15)">
+            <span class="note note-tiny note-at-title">
+              <span class="scroller" id="noteScroller">
+                <span class="slide" id="noteCurr">anal</span>
+                <span class="slide" id="noteNext" style="margin-left:1ch">—</span>
+              </span>
+            </span>
+            <span class="word">Tortilla</span><span class="accent text-rose-600">TV</span>
+          </h1>
+
+          <p class="mt-4 text-neutral-700 text-lg">Video chat aleatorio</p>
+
+          <!-- Género -->
+          <div class="mt-6 grid grid-cols-3 gap-3 max-w-md">
+            <button data-gen="Hombre" class="gen card py-4 flex flex-col items-center gap-2">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M14.5 3H21v6" stroke="#111827" stroke-width="1.8" stroke-linecap="round"/><path d="M21 3l-7.5 7.5" stroke="#111827" stroke-width="1.8" stroke-linecap="round"/><circle cx="9" cy="15" r="5.5" stroke="#111827" stroke-width="1.8"/></svg>
+              <span class="font-semibold">Hombre</span>
+            </button>
+            <button data-gen="Mujer" class="gen card py-4 flex flex-col items-center gap-2">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="8" r="5.5" stroke="#111827" stroke-width="1.8"/><path d="M12 13.5v6M9.5 17h5" stroke="#111827" stroke-width="1.8" stroke-linecap="round"/></svg>
+              <span class="font-semibold">Mujer</span>
+            </button>
+            <button data-gen="Lada" class="gen card py-4 flex flex-col items-center gap-2">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 14l2-5h12l2 5v4a1 1 0 0 1-1 1h-1" stroke="#111827" stroke-width="1.8" stroke-linejoin="round"/><circle cx="8" cy="19" r="1.6" fill="#111827"/><circle cx="18" cy="19" r="1.6" fill="#111827"/><path d="M6 14h12" stroke="#111827" stroke-width="1.8" stroke-linecap="round"/></svg>
+              <span class="font-semibold">Un Lada</span>
+            </button>
+          </div>
+          <p id="genElegido" class="mt-2 text-sm text-neutral-600"></p>
+
+          <!-- Form extra: nombre y edad (aparece tras elegir sexo) -->
+          <div id="extraForm" class="mt-4 max-w-md w-full grid grid-cols-1 gap-3" style="display:none">
+            <label class="card flex items-center gap-3">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="8" r="4" stroke="#111827" stroke-width="1.6"/><path d="M4 20c1.6-3.2 4.7-5 8-5s6.4 1.8 8 5" stroke="#111827" stroke-width="1.6" stroke-linecap="round"/></svg>
+              <input id="inpNombre" class="w-full bg-transparent outline-none" type="text" placeholder="Tu nombre" maxlength="32">
+            </label>
+            <label class="card flex items-center gap-3">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 7h10M7 12h10M7 17h6" stroke="#111827" stroke-width="1.6" stroke-linecap="round"/><rect x="3" y="4" width="18" height="16" rx="2" stroke="#111827" stroke-width="1.6"/></svg>
+              <input id="inpEdad" class="w-full bg-transparent outline-none" type="number" inputmode="numeric" min="18" max="99" placeholder="Edad (18+)" />
+            </label>
+          </div>
+
+          <!-- Google login -->
+          <button id="btn-google" class="mt-6 rounded-xl border-2 border-neutral-900/40 bg-white/90 px-7 py-3.5 font-semibold shadow disabled:opacity-50" disabled>
+            Iniciar con Google
+          </button>
+
+          <!-- Invitado -->
+          <button id="btn-guest"
+            class="mt-3 rounded-xl border-2 border-neutral-900/40 bg-white/90 px-7 py-3.5 font-semibold shadow">
+            Entrar como invitado
+          </button>
+
+          <button id="btn-kristoff" class="mt-3 rounded-xl border-2 border-neutral-900/40 bg-gradient-to-br from-amber-200/80 via-white/90 to-fuchsia-200/80 px-7 py-3.5 font-extrabold shadow">
+            ✨ Modo Kristoff
+          </button>
+
+          <svg class="scribble mt-6" viewBox="0 0 1200 100" preserveAspectRatio="none" aria-hidden="true">
+            <path d="M10,70 C200,20 400,120 600,60 C800,0 1000,120 1190,50"/>
+          </svg>
+        </div>
+      </section>
+
+      <!-- ===== NUEVA PANTALLA: SELECCIÓN DE MODO (después del login) ===== -->
+      <section id="page-mode" class="page hidden">
+        <div class="hero">
+          <h2 class="font-extrabold text-3xl sm:text-4xl">Elige tu modo</h2>
+          <p class="mt-2 text-neutral-700 text-lg">
+            <b>Solo</b> (1 vs 1) o <b>Cupido</b> (sala de 3 con Kristoff).
+          </p>
+
+          <div class="mt-6 grid grid-cols-1 gap-3 max-w-md w-full">
+            <button id="modeScreenSolo"
+              class="rounded-2xl border-2 border-black/20 bg-white/90 px-5 py-4 text-left shadow">
+              <div class="font-extrabold text-lg">🧍 Modo Solo</div>
+              <div class="text-neutral-700 text-sm">Chat aleatorio normal (1 vs 1)</div>
+            </button>
+
+            <button id="modeScreenCupid"
+              class="rounded-2xl border-2 border-black/20 bg-white/90 px-5 py-4 text-left shadow">
+              <div class="font-extrabold text-lg">💘 Modo Cupido</div>
+              <div class="text-neutral-700 text-sm">Sala de 3: tú + otra persona + Kristoff (host)</div>
+            </button>
+          </div>
+
+          <button id="modeScreenBack"
+            class="mt-6 rounded-full border-2 border-neutral-900/30 bg-white/80 px-5 py-2 text-sm font-semibold shadow">
+            Volver
+          </button>
+        </div>
+      </section>
+
+      <!-- SALA -->
+      <section id="page-chat" class="page hidden">
+        <!-- Topbar PC -->
+        <div class="card p-3 mb-4 topbar">
+          <div class="flex flex-wrap items-center gap-2">
+            <button id="btn-start" class="btn">Buscar</button>
+            <button id="btn-next"  class="btn" disabled>Siguiente</button>
+            <button id="btn-stop"  class="btn" disabled>Detener</button>
+            <span class="sep"></span>
+            <button id="btn-mute"  class="btn" disabled>Mute</button>
+            <button id="btn-cam"   class="btn" disabled>Apagar cam</button>
+
+            <button id="btn-eye" class="btn hidden" title="Ver mirada de la pareja">👁</button>
+
+            <div class="ml-auto flex items-center gap-2">
+              <button id="btn-ar" class="btn">AR: 1:1</button>
+            </div>
+
+            <div class="flex items-center gap-2 text-sm w-full">
+              <span id="status" class="text-neutral-700">Listo</span>
+              <span id="peerLabel" class="text-neutral-700 hidden">Pareja: —</span>
+              <span id="you-badge" class="ml-auto text-xs px-2 py-1 rounded-full border border-black/20 bg-white/70 hidden">Tú: —</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Video PC y contenedor móvil -->
+        <div id="videoShell" class="full-bleed">
+          <!-- PC: 50/50 -->
+          <div id="stage" class="stage layout-split">
+            <!-- REMOTO (PC) -->
+            <div class="tile remote" id="remoteTile">
+              <video id="idleNoiseD" class="idle-video"
+                    src="./assets/noise.mp4" muted playsinline autoplay loop preload="auto"></video>
+              <video id="remoteVideo" autoplay playsinline></video>
+
+              <div id="overlayD" class="overlay">
+                <div class="card px-5 py-4 flex items-center gap-3 bg-white">
+                  <span class="font-semibold">Buscando tortilleras…</span>
+
+                  <div class="flex"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+                </div>
+                <div class="emoji-layer" aria-hidden="true"></div>
+              </div>
+
+              <div class="zoom-controls sm:flex hidden" aria-label="Zoom remoto">
+                <button id="fitRemote" class="zoom-btn" title="Ver completo">⤢</button>
+                <button id="zoomOutRemote" class="zoom-btn" title="Alejar">−</button>
+                <button id="zoomInRemote" class="zoom-btn" title="Acercar">+</button>
+              </div>
+            </div>
+
+            <!-- REMOTO DERECHO (PC · CUPIDO HOST) -->
+            <div class="tile remote" id="remoteTileR" style="display:none">
+              <video id="idleNoiseD_R" class="idle-video"
+                    src="./assets/noise.mp4" muted playsinline autoplay loop preload="auto"></video>
+              <video id="remoteVideoR" autoplay playsinline></video>
+
+              <div id="overlayD_R" class="overlay">
+                <div class="card px-5 py-4 flex items-center gap-3 bg-white">
+                  <span class="font-semibold">Buscando otra persona…</span>
+                  <div class="flex"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+                </div>
+              </div>
+
+              <div class="zoom-controls sm:flex hidden" aria-label="Zoom remoto derecho">
+                <button id="fitRemoteR" class="zoom-btn" title="Ver completo">⤢</button>
+                <button id="zoomOutRemoteR" class="zoom-btn" title="Alejar">−</button>
+                <button id="zoomInRemoteR" class="zoom-btn" title="Acercar">+</button>
+              </div>
+            </div>
+
+            <!-- LOCAL (PC) -->
+            <div class="tile local" id="localTile">
+              <video id="localVideo" autoplay playsinline muted class="mirror"></video>
+
+              <div class="zoom-controls sm:flex hidden" aria-label="Zoom local">
+                <button id="resetLocal" class="zoom-btn" title="Reset">⟲</button>
+                <button id="zoomOutLocal" class="zoom-btn" title="Alejar">−</button>
+                <button id="zoomInLocal" class="zoom-btn" title="Acercar">+</button>
+              </div>
+
+              <div class="gaze-layer" id="gazeLayerLocalD" aria-hidden="true">
+                <div class="gaze-bubble" id="gazeBubbleLocalD"></div>
+              </div>
+            </div>
+          </div><!-- /#stage -->
+
+         <div id="pip" style="
+  display:none;
+  position:absolute;
+  left:50%;
+  top:50%;
+  transform:translate(-50%, -50%);
+  width:clamp(180px, 24vw, 340px);
+  aspect-ratio:4/3;
+  z-index:120;
+  border-radius:14px;
+  overflow:hidden;
+  box-shadow:0 12px 26px rgba(0,0,0,.28);
+  border:1px solid rgba(255,255,255,.45);
+  background:#000;
+  pointer-events:none;
+">
+  <video id="pipVideo" autoplay playsinline
+        style="width:100%;height:100%;object-fit:cover;"></video>
+</div>
+
+
+          <!-- MÓVIL: pantalla partida full-bleed -->
+          <div id="stageMobile" class="layout-mobile-fixed" style="display:none;">
+            <div class="pane" id="pane-remote">
+              <video id="idleNoiseM" class="idle-video"
+                    src="./assets/noise.mp4" muted playsinline autoplay loop preload="auto"></video>
+              <video id="remoteVideoM" autoplay playsinline></video>
+
+              <div id="overlayM" class="overlay">
+                <div class="card px-5 py-4 flex items-center gap-3 bg-white">
+                  <span class="font-semibold">Buscando tortilleras…</span>
+
+                  <div class="flex"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+                </div>
+                <div class="emoji-layer" aria-hidden="true"></div>
+              </div>
+
+              <div id="swipe-ghost" class="swipe-ghost sm:hidden" aria-hidden="true">
+                <img src="assets/hand.png" alt="hand" class="hand" />
+              </div>
+            </div>
+
+            <div class="pane" id="pane-local">
+              <div id="idle-local" class="idle static-noise"><div>Preparando cámara…</div></div>
+              <video id="localVideoM" autoplay playsinline muted class="mirror"></video>
+
+              <!-- NUEVO: remoto #2 en Cupido (oculto hasta llamada grupal) -->
+              <video id="remoteVideo2M" autoplay playsinline class="hide"></video>
+
+              <div class="gaze-layer" id="gazeLayerLocalM" aria-hidden="true">
+                <div class="gaze-bubble" id="gazeBubbleLocalM"></div>
+              </div>
+            </div>
+
+            <!-- MINI (MÓVIL · Cupido): SELF flotante (WhatsApp) -->
+            <div id="cupidMini" style="
+              position:fixed;
+              left:12px; bottom:calc(env(safe-area-inset-bottom,0) + 96px);
+
+              width:min(42vw, 42vh * 4 / 3);
+              aspect-ratio: 4 / 3;
+              border-radius:14px; overflow:hidden;
+              box-shadow:0 16px 36px rgba(0,0,0,.35);
+              z-index:62;
+              display:none;
+              background:#000;
+            ">
+              <video id="idleNoiseM_R" class="idle-video"
+                    src="./assets/noise.mp4" muted playsinline autoplay loop preload="auto"></video>
+
+              <video id="cupidSelfVideoM" autoplay playsinline muted class="mirror"
+                    style="width:100%;height:100%;object-fit:cover;"></video>
+
+              <div id="overlayM_R" class="overlay show">
+                <div class="card px-4 py-3 flex items-center gap-3 bg-white">
+                  <span class="font-semibold">Conectando…</span>
+                  <div class="flex"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+                </div>
+              </div>
+            </div>
+          </div><!-- /#stageMobile -->
+        </div><!-- /#videoShell -->
+
+        
+
+        <div class="mt-6 flex items-center justify-center">
+          <button id="btn-salir-chat" class="rounded-full border-2 border-neutral-900/30 bg-white/80 px-5 py-2 text-sm font-semibold shadow">Salir</button>
+        </div>
+
+        <div id="swipe-tip" class="swipe-tip sm:hidden">
+          <div class="swipe-hand" aria-hidden="true"></div>
+          <span>Desliza → empezar / siguiente — ← detener</span>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Botón mini: cambiar cámara (móvil) -->
+  <button id="btn-swapcam" class="cam-switch" aria-label="Cambiar cámara">↻</button>
+
+  <!-- Engranaje ajustes (móvil) -->
+  <button id="btn-gear" class="gear-btn" aria-label="Ajustes">⚙</button>
+  <div id="gear-sheet" class="sheet">
+    <div class="row"><span>Mute micrófono</span><input id="sw-mute" type="checkbox" class="switch"></div>
+  </div>
+
+  <!-- Floating BACK (aparece al tocar la pantalla en la sala) -->
+  <button id="btn-back-float" class="back-float" aria-label="Volver">←</button>
+
+  <!-- Selector de cola (Solo/Cupido) — visible en sala (PC y móvil) -->
+  <div id="modePill" class="mode-pill" role="toolbar" aria-label="Modo">
+    <button id="pillSolo" type="button">Solo</button>
+    <button id="pillCupid" type="button">Cupido</button>
+  </div>
+
+  <!-- ===== MODAL: Kristoff password ===== -->
+  <div id="kristoffModal" class="fixed inset-0 z-[2100] hidden">
+    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+      <div class="card w-full max-w-md relative overflow-hidden">
+        <div class="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <div class="k-logo">
+            <div class="k-orb"></div>
+            <div class="k-text">K</div>
+          </div>
+        </div>
+
+        <div class="relative">
+          <div class="flex items-center justify-between">
+            <h2 class="font-extrabold text-xl">Modo Kristoff</h2>
+            <button id="kristoffClose" class="text-sm font-bold px-3 py-1 rounded-full border border-black/20 bg-white/60">✕</button>
+          </div>
+
+          <div id="kristoffStepPass" class="mt-4">
+            <p class="text-neutral-700">Introduce la contraseña.</p>
+            <div class="mt-3 flex gap-2">
+              <input id="kristoffPass" type="password" class="w-full rounded-xl border-2 border-black/20 bg-white/90 px-4 py-3 font-semibold outline-none" placeholder="Contraseña" />
+              <button id="kristoffEnter" class="rounded-xl border-2 border-black/20 bg-white/90 px-4 py-3 font-extrabold">Entrar</button>
+            </div>
+            <p id="kristoffErr" class="mt-2 text-sm text-rose-600 hidden">Contraseña incorrecta.</p>
+          </div>
+
+          <div id="kristoffStepMode" class="mt-4 hidden">
+            <p class="text-neutral-700">Elige qué quieres hacer:</p>
+            <div class="mt-3 grid grid-cols-1 gap-3">
+              <button id="kristoffHostCupid" class="rounded-2xl border-2 border-black/20 bg-white/90 px-5 py-4 text-left shadow">
+                <div class="font-extrabold text-lg">💘 Modo Cupido (Host)</div>
+                <div class="text-neutral-700 text-sm">Creas sala de 3: tú + 2 usuarios en cola Cupido.</div>
+              </button>
+              <button id="kristoffSolo" class="rounded-2xl border-2 border-black/20 bg-white/90 px-5 py-4 text-left shadow">
+                <div class="font-extrabold text-lg">🧍 Modo Solo</div>
+                <div class="text-neutral-700 text-sm">Entras al chat normal (1 vs 1).</div>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <style>
+          .k-logo{ width:110px; height:110px; border-radius:999px; position:relative; display:grid; place-items:center;
+            animation: kFloat 2.8s ease-in-out infinite; filter: drop-shadow(0 16px 34px rgba(0,0,0,.22));
+          }
+          .k-orb{
+            position:absolute; inset:0; border-radius:999px;
+            background: radial-gradient(circle at 30% 30%, rgba(255,255,255,.95), rgba(255,255,255,.25) 55%, rgba(255,255,255,0) 75%),
+                        conic-gradient(from 0deg, rgba(251,191,36,.35), rgba(168,85,247,.35), rgba(34,211,238,.25), rgba(251,191,36,.35));
+            border:2px solid rgba(255,255,255,.55);
+            backdrop-filter: blur(6px);
+          }
+          .k-text{
+            position:relative;
+            font-family: Inter, system-ui;
+            font-weight: 900;
+            font-size: 44px;
+            color: rgba(17,24,39,.85);
+            text-shadow: 0 2px 0 rgba(255,255,255,.7);
+          }
+          @keyframes kFloat{
+            0%,100%{ transform: translateY(-6px) scale(1); }
+            50%{ transform: translateY(8px) scale(1.02); }
+          }
+         
+
+        </style>
+      </div>
+    </div>
+  </div>
+  <div class="mobile-dock sm:hidden" role="toolbar" aria-label="Controles de sala">
+          <button id="btn-buscar-m" class="dock-btn dock-btn--primary">Buscar sala</button>
+          <button id="btn-salir-m" class="dock-btn dock-btn--ghost">Salir</button>
+        </div>
+  <script>
+    /* ==== Viewport fix cross-browser ==== */
+    function setVHVars(){
+      const h = window.innerHeight;
+      document.documentElement.style.setProperty('--dvh', h / 100 + 'px');
+    }
+    setVHVars();
+    window.addEventListener('resize', setVHVars);
+    window.addEventListener('orientationchange', setVHVars);
+
+    window.addEventListener('DOMContentLoaded', () => {
+      if (location.hash) history.replaceState(null, document.title, location.pathname + location.search);
+    });
+
+    (function(){
+      const p = new URLSearchParams(location.search);
+      const wsOverride = p.get('ws');
+      window.WS_SIGNALLING_URL = wsOverride || ((location.protocol === 'https:') ? `wss://${location.host}` : `ws://${location.host}`);
+    })();
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBVuvV7NOaqkN6arT3xPTBdxMZg7TTPhlM",
+      authDomain: "tortillatv-bf0c6.firebaseapp.com",
+      projectId: "tortillatv-bf0c6",
+      storageBucket: "tortillatv-bf0c6.firebasestorage.app",
+      messagingSenderId: "193994912181",
+      appId: "1:193994912181:web:03464c47f30fc5ac4d69fc"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+
+    // ===== Kristoff =====
+    const KRISTOFF_PASSWORD = "diazcanelsingao";
+    const KRISTOFF_EMAIL = "christophergomez6903@gmail.com";
+
+    // userMode: 'solo' | 'cupid' | 'cupid-host'
+    let userMode = null;
+    let currentUser = null;
+    let isGuest = false;
+
+    function openModal(id){ const el = document.getElementById(id); if(el) el.classList.remove('hidden'); }
+    function closeModal(id){ const el = document.getElementById(id); if(el) el.classList.add('hidden'); }
+
+    function isKristoffUser(){
+      const email =
+        (auth?.currentUser?.email ||
+         currentUser?.email ||
+         window.KRISTOFF_EMAIL ||
+         '').toLowerCase();
+      return email === KRISTOFF_EMAIL.toLowerCase();
+    }
+
+    function serverMode(){
+      if (userMode === 'cupid-host') return 'cupid-host';
+      if (userMode === 'cupid') return 'cupid';
+      return 'solo';
+    }
+
+    /* ===== Helpers UI ===== */
+    function qs(s,root=document){ return root.querySelector(s) }
+    const pages = { landing: qs('#page-landing'), mode: qs('#page-mode'), chat: qs('#page-chat') };
+
+   function show(k){
+  Object.values(pages).forEach(p=>{ p.classList.add('hidden'); p.classList.remove('visible') });
+  pages[k].classList.remove('hidden');
+  pages[k].classList.add('visible');
+
+  // ✅ Control del dock: solo en chat
+  document.body.classList.toggle('chat-open', k === 'chat');
+
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+    function setStatus(t){ const el=qs('#status'); if(el) el.textContent=t }
+    function safePlay(v){ try{ const p=v?.play?.(); if(p?.catch) p.catch(()=>{}); }catch{} }
+  // ===== Mobile dock auto-hide (2 botones abajo) =====
+let mobileDockTimer = null;
+
+function showMobileDock(ms = 2600){
+  if(!isMobile()) return;
+  const dock = document.querySelector('.mobile-dock');
+  if(!dock) return;
+
+  dock.classList.add('show');
+
+  clearTimeout(mobileDockTimer);
+  mobileDockTimer = setTimeout(()=>{
+    dock.classList.remove('show');
+  }, ms);
+}
+
+    function goToModeScreen(){
+      show('mode');
+      updateModePillUI();
+    }
+    function enterChatFromMode(mode){
+      userMode = mode; // 'solo' | 'cupid' | 'cupid-host'
+      show('chat');
+      initLayoutForDevice();
+      updateModePillUI();
+      enableCupidMiniDrag();
+     showMobileDock();
+
+      zoomState.local = getSavedLocalZoom();
+      applyZoom('local');
+
+      mobilePanEnabled = true;
+      startIdlePanIfMobile();
+
+      ensureMedia(true).catch(()=>{});
+      setIdleUI();
+      updateGhostHandVisibility();
+    }
+
+    qs('#modeScreenSolo')?.addEventListener('click', ()=> enterChatFromMode('solo'));
+    qs('#modeScreenCupid')?.addEventListener('click', ()=>{
+      // si Kristoff entra por aquí (raro), lo dejamos como host
+      enterChatFromMode(isKristoffUser() ? 'cupid-host' : 'cupid');
+    });
+    qs('#modeScreenBack')?.addEventListener('click', ()=> goBackToLanding());
+
+    function overlayEl(){
+      return (layoutMode === 'split')
+        ? document.getElementById('overlayD')
+        : document.getElementById('overlayM');
+    }
+    function overlayEmojiLayer(){
+      const root = overlayEl();
+      return root ? root.querySelector('.emoji-layer') : null;
+    }
+    let searchEmojiTimer = null;
+    const EMOJIS = ['👋','💬','🎭','🎥','✨','😄','🤝','🍀','🧑‍🤝‍🧑','🌟'];
+    function spawnSearchEmoji(){
+      const layer = overlayEmojiLayer(); if(!layer) return;
+      const span = document.createElement('span');
+      span.className = 'swipe-emoji';
+      span.textContent = EMOJIS[Math.floor(Math.random()*EMOJIS.length)];
+
+      const rect = layer.getBoundingClientRect();
+      const x = Math.random() * rect.width;
+      const y = Math.random() * rect.height * 0.6 + rect.height*0.2;
+      span.style.left = x + 'px';
+      span.style.top  = y + 'px';
+
+      const dir = Math.random() < .5 ? -1 : 1;
+      span.animate(
+        [
+          { transform:`translate(${dir*4}px, 6px) scale(.9)`, opacity:0 },
+          { transform:`translate(${dir*14}px, -26px) scale(1.06) rotate(12deg)`, opacity:1 },
+          { transform:`translate(${dir*20}px, -36px) scale(1.06) rotate(18deg)`, opacity:0 }
+        ],
+        { duration: 950, easing: 'ease-out', fill: 'forwards' }
+      );
+
+      layer.appendChild(span);
+      setTimeout(()=> span.remove(), 980);
+    }
+    function startSearchEmojis(){
+      stopSearchEmojis();
+      searchEmojiTimer = setInterval(spawnSearchEmoji, 420);
+    }
+    function stopSearchEmojis(){
+      if(searchEmojiTimer){ clearInterval(searchEmojiTimer); searchEmojiTimer=null; }
+    }
+    function overlayShow(showIt){
+      const ov = overlayEl(); if(!ov) return;
+      ov.classList.toggle('show', !!showIt);
+      if(showIt) startSearchEmojis(); else stopSearchEmojis();
+
+      const pane = document.getElementById('pane-remote');
+      if(pane){ pane.classList.toggle('searching', !!showIt); }
+
+      if (showIt) setGhostVisible(false); else updateGhostHandVisibility();
+    }
+   // ===== FAKE SKIP (visual-only) =====
+let FAKE_SKIP_ON = false;
+
+function applyFakeSkipUI(on){
+  FAKE_SKIP_ON = !!on;
+
+  // Overlay normal de búsqueda (texto + emojis)
+  overlayShow(FAKE_SKIP_ON);
+
+   
+  if (FAKE_SKIP_ON) {
+  showIdleRemote(true);
+} else {
+  // si NO hay stream remoto todavía, deja el idle encendido (evita negro)
+  if (remoteStreamRef) showIdleRemote(false);
+}
+
+
+  // Oculta SOLO el video remoto (NO se corta WebRTC)
+  const vD = document.getElementById('remoteVideo');
+  const vM = document.getElementById('remoteVideoM');
+  if (vD) vD.classList.toggle('hide', FAKE_SKIP_ON);
+  if (vM) vM.classList.toggle('hide', FAKE_SKIP_ON);
+
+  // Texto de estado (confirmación visual)
+  if (FAKE_SKIP_ON) {
+    setStatus('Buscando tortilleras…');
+  } else {
+    if (inCall) setStatus('Conectado');
+    else if (isQueuing) setStatus('En cola…');
+    else setStatus('Listo');
+  }
+}
+
+
+    const peerLabel = qs('#peerLabel');
+    const youBadge  = qs('#you-badge');
+
+    /* ===== Letrero con deslizamiento ===== */
+    const NOTE_WORDS = ["anal","beso","charla","broma","random","a ochoa lo fusilaron","papi cogieron a maduro","Bombardeen a canel","BOYOOO","a ochoa lo fusilaron","aayyyy","si quieres","tu propia pagina","https://instagram.com/marquisdsad3"];
+    let noteIdx = 0;
+    const scroller = document.getElementById('noteScroller');
+    const noteCurr = document.getElementById('noteCurr');
+    const noteNext = document.getElementById('noteNext');
+
+    function cycleNote(){
+      if(!scroller) return;
+      const nextText = NOTE_WORDS[(noteIdx+1) % NOTE_WORDS.length];
+      noteNext.textContent = nextText;
+
+      scroller.style.transform = 'translateX(0%)';
+      void scroller.offsetWidth;
+      scroller.style.transition = 'transform .7s cubic-bezier(.22,.61,.36,1)';
+      scroller.style.transform = 'translateX(-100%)';
+
+      scroller.addEventListener('transitionend', onEnded, { once:true });
+      function onEnded(){
+        noteIdx = (noteIdx+1) % NOTE_WORDS.length;
+        noteCurr.textContent = nextText;
+        scroller.style.transition = 'none';
+        scroller.style.transform = 'translateX(0%)';
+      }
+    }
+    setInterval(cycleNote, 2200);
+
+    /* ===== Estado landing + auth ===== */
+    let chosenGender=null;
+    const genButtons=[...document.querySelectorAll('.gen')];
+    const genElegido=qs('#genElegido');
+    const btnGoogle=qs('#btn-google');
+    const extraForm=qs('#extraForm');
+    const inpNombre=qs('#inpNombre');
+    const inpEdad=qs('#inpEdad');
+
+    function validateLoginEnable(){ btnGoogle.disabled = !chosenGender; }
+
+    genButtons.forEach(b=>{
+      b.addEventListener('click', ()=>{
+        genButtons.forEach(x=>x.classList.remove('ring','ring-rose-400'));
+        b.classList.add('ring','ring-rose-400');
+        chosenGender=b.getAttribute('data-gen');
+        genElegido.textContent='Has elegido: '+chosenGender;
+        extraForm.style.display='grid';
+        validateLoginEnable();
+      });
+    });
+
+    [inpNombre, inpEdad].forEach(el=>{
+      el?.addEventListener('input', ()=>{
+        localStorage.setItem('ttv_name', inpNombre.value||'');
+        localStorage.setItem('ttv_age',  inpEdad.value||'');
+      });
+    });
+
+    /* ===== Refs ===== */
+    const btnStart=qs('#btn-start'), btnNext=qs('#btn-next'), btnStop=qs('#btn-stop'), btnSalirChat=qs('#btn-salir-chat');
+    const btnMute = qs('#btn-mute'), btnCam = qs('#btn-cam'), btnEye = qs('#btn-eye');
+
+    const localVideo=qs('#localVideo'), remoteVideo=qs('#remoteVideo'), pip=qs('#pip'), pipVideo=qs('#pipVideo');
+    const localVideoM=qs('#localVideoM'), remoteVideoM=qs('#remoteVideoM');
+    const remoteVideo2M = qs('#remoteVideo2M');
+    const cupidMini = qs('#cupidMini');
+    const cupidSelfVideoM = qs('#cupidSelfVideoM');
+
+    const localTile = qs('#localTile');
+
+    // ===== GRUPO DE 3 (Cupido) =====
+    let groupActive = false;
+    let groupPeers = [];
+    const groupPCs = new Map();
+    const groupStreams = new Map();
+    const groupSlotByPeer = new Map();
+    const groupConnected = new Set();
+    let groupHostId = null;
+    let groupRoomId = null;
+
+    const remoteTileR  = qs('#remoteTileR');
+    const remoteVideoR = qs('#remoteVideoR');
+    const idleNoiseD_R = qs('#idleNoiseD_R');
+
+    // ===== GAZE =====
+    let gazeDC = null;
+    let sendingGaze = false;
+    let recvRenderEnabled = false;
+    let sendGazeTimer = null;
+    let gazeReady = false;
+
+    const faceDetector = ('FaceDetector' in window) ? new FaceDetector({ fastMode:true }) : null;
+    let A = [1,0,0, 0,1,0];
+    const autoCalBuf = [];
+
+    function applyAffine(u, v){
+      const [a,b,c,d,e,f] = A;
+      return [a*u + b*v + c, d*u + e*v + f];
+    }
+    function fitAffine(samples){
+      if (samples.length < 4) return;
+
+      let xx = [0,0,0, 0,0,0, 0,0,0], xy = [0,0, 0,0, 0,0];
+      for (const s of samples){
+        const u=s.ur, v=s.vr, w=1, x=s.xr, y=s.yr;
+        xx[0]+=u*u; xx[1]+=u*v; xx[2]+=u*w;
+        xx[3]+=v*u; xx[4]+=v*v; xx[5]+=v*w;
+        xx[6]+=w*u; xx[7]+=w*v; xx[8]+=w*w;
+
+        xy[0]+=u*x; xy[1]+=u*y;
+        xy[2]+=v*x; xy[3]+=v*y;
+        xy[4]+=w*x; xy[5]+=w*y;
+      }
+      const inv = inv3(xx); if(!inv) return;
+
+      const a = inv[0]*xy[0] + inv[1]*xy[2] + inv[2]*xy[4];
+      const d = inv[0]*xy[1] + inv[1]*xy[3] + inv[2]*xy[5];
+      const b = inv[3]*xy[0] + inv[4]*xy[2] + inv[5]*xy[4];
+      const e = inv[3]*xy[1] + inv[4]*xy[3] + inv[5]*xy[5];
+      const c = inv[6]*xy[0] + inv[7]*xy[2] + inv[8]*xy[4];
+      const f = inv[6]*xy[1] + inv[7]*xy[3] + inv[8]*xy[5];
+
+      const alpha = 0.3;
+      A = [
+        alpha*a + (1-alpha)*A[0],
+        alpha*b + (1-alpha)*A[1],
+        alpha*c + (1-alpha)*A[2],
+        alpha*d + (1-alpha)*A[3],
+        alpha*e + (1-alpha)*A[4],
+        alpha*f + (1-alpha)*A[5],
+      ];
+    }
+    function inv3(m){
+      const [a,b,c, d,e,f, g,h,i] = m;
+      const A =  (e*i - f*h), B = -(d*i - f*g), C =  (d*h - e*g);
+      const det = a*A + b*B + c*C;
+      if (Math.abs(det) < 1e-6) return null;
+      const D = -(b*i - c*h), E =  (a*i - c*g), F = -(a*h - b*g);
+      const G =  (b*f - c*e), H = -(a*f - c*d), I =  (a*e - b*d);
+      const invDet = 1/det;
+      return [A*invDet, D*invDet, G*invDet,
+              B*invDet, E*invDet, H*invDet,
+              C*invDet, F*invDet, I*invDet];
+    }
+
+    function clamp01(t){ return Math.max(0, Math.min(1, t)); }
+
+    async function ensureGazeEngine(){
+      if (gazeReady) return;
+      try{
+        webgazer.setRegression('ridge')
+                .setTracker('clmtrackr')
+                .showVideoPreview(false)
+                .showPredictionPoints(false)
+                .begin();
+        await new Promise(r=>setTimeout(r, 1000));
+        gazeReady = true;
+      }catch(e){ console.warn('WebGazer init error', e); }
+    }
+    async function getGazePrediction(){
+      try{ return await webgazer.getCurrentPrediction(); }catch{ return null; }
+    }
+    function currentRemoteElement(){
+      return (layoutMode === 'split') ? document.getElementById('remoteVideo')
+                                      : document.getElementById('remoteVideoM');
+    }
+
+    const bubblePhys = {
+      x: .5, y: .5, tx: .5, ty: .5, vx: 0, vy: 0,
+      k: 28, c: 6,
+      scaleX: 1, scaleY: 1, rot: 0,
+      lastT: 0, raf: 0,
+    };
+
+    function renderGazeOnMyLocalVideo(u, v){
+      if (!recvRenderEnabled) return;
+
+      const isSplit = (layoutMode === 'split');
+      const bubble = document.getElementById(isSplit ? 'gazeBubbleLocalD' : 'gazeBubbleLocalM');
+      if (!bubble) return;
+
+      const vLocal = document.getElementById(isSplit ? 'localVideo' : 'localVideoM');
+      const mirrored = vLocal?.classList?.contains('mirror');
+      const uu = mirrored ? (1 - u) : u;
+
+      bubble.classList.add('show');
+
+      bubblePhys.tx = uu;
+      bubblePhys.ty = v;
+      if (!bubblePhys.raf) {
+        bubblePhys.lastT = performance.now();
+        bubblePhys.raf = requestAnimationFrame(t => bubbleAnimLoop(t, bubble));
+      }
+    }
+    function bubbleAnimLoop(t, bubble){
+      const dt = Math.min(0.035, Math.max(0.001, (t - bubblePhys.lastT) / 1000));
+      bubblePhys.lastT = t;
+
+      const ax = bubblePhys.k * (bubblePhys.tx - bubblePhys.x) - bubblePhys.c * bubblePhys.vx;
+      const ay = bubblePhys.k * (bubblePhys.ty - bubblePhys.y) - bubblePhys.c * bubblePhys.vy;
+      bubblePhys.vx += ax * dt;
+      bubblePhys.vy += ay * dt;
+      bubblePhys.x  += bubblePhys.vx * dt;
+      bubblePhys.y  += bubblePhys.vy * dt;
+
+      const speed = Math.hypot(bubblePhys.vx, bubblePhys.vy);
+      const dir   = Math.atan2(bubblePhys.vy, bubblePhys.vx);
+
+      const sAmt = Math.min(0.28, speed * 0.45);
+      bubblePhys.scaleX = 1 + sAmt;
+      bubblePhys.scaleY = 1 - sAmt * 0.7;
+
+      bubblePhys.rot = dir * 0.25;
+
+      const wobble = 0.03 * Math.sin(t * 0.008);
+      const scaleX = bubblePhys.scaleX + wobble;
+      const scaleY = bubblePhys.scaleY - wobble * 0.6;
+
+      const base = 30;
+      const extra = Math.min(6, speed * 12);
+      bubble.style.width  = (base + extra) + 'px';
+      bubble.style.height = (base + extra) + 'px';
+
+      bubble.style.left = (bubblePhys.x * 100) + '%';
+      bubble.style.top  = (bubblePhys.y * 100) + '%';
+      bubble.style.transform =
+        `translate(-50%,-50%) rotate(${bubblePhys.rot}rad) scale(${scaleX}, ${scaleY})`;
+
+      const sx = Math.max(-8, Math.min(8, bubblePhys.vx * 24));
+      const sy = Math.max(-8, Math.min(8, bubblePhys.vy * 24));
+      bubble.style.boxShadow =
+        `${sx}px ${sy}px 16px rgba(0,0,0,.16),
+         inset 0 0 0 1.5px rgba(255,255,255,.9),
+         inset 0 0 18px rgba(255,255,255,.18)`;
+
+      if (recvRenderEnabled) {
+        bubblePhys.raf = requestAnimationFrame(tt => bubbleAnimLoop(tt, bubble));
+      } else {
+        bubblePhys.raf = 0;
+      }
+    }
+    function clearLocalGazeBubble(){
+      document.getElementById('gazeBubbleLocalD')?.classList.remove('show');
+      document.getElementById('gazeBubbleLocalM')?.classList.remove('show');
+    }
+
+    const stage=qs('#stage'), stageMobile=qs('#stageMobile');
+    const btnBuscarM=qs('#btn-buscar-m'), btnSalirM=qs('#btn-salir-m');
+
+    const gearBtn = qs('#btn-gear'), gearSheet = qs('#gear-sheet'), swMute = qs('#sw-mute');
+
+    const idleNoiseD = qs('#idleNoiseD');
+    const idleNoiseM = qs('#idleNoiseM');
+    const idleLocal  = qs('#idle-local');
+
+    const swipeGhost = document.getElementById('swipe-ghost');
+    function setGhostVisible(showIt){
+      if(!swipeGhost) return;
+      swipeGhost.classList.toggle('show', !!showIt);
+    }
+    function isPageChatVisible(){
+      return pages?.chat?.classList.contains('visible');
+    }
+    function updateGhostHandVisibility(){
+      const idleRemoteVisible = !!idleNoiseM && !idleNoiseM.classList.contains('hide');
+      const mustShow = isMobile() && isPageChatVisible() && !isQueuing && !inCall && idleRemoteVisible;
+      setGhostVisible(mustShow);
+    }
+
+    // === Invitado ===
+    const btnGuest = qs('#btn-guest');
+
+    function proceedToModeAfterLoginLikeFlow(displayName='Invitado'){
+      currentUser = { displayName };
+      isGuest = true;
+      localStorage.setItem('ttv_guest', '1');
+      youBadge.classList.remove('hidden');
+
+      const n = inpNombre.value || localStorage.getItem('ttv_name') || displayName || '—';
+      const a = inpEdad.value    || localStorage.getItem('ttv_age')  || '—';
+      youBadge.textContent = `Tú: ${n} (${a}) · ${chosenGender||'—'}`;
+
+      // ir a pantalla de modo (NO chat)
+      show('mode');
+      updateModePillUI();
+    }
+
+    /* ===== Estado WebRTC/WS ===== */
+    let ws=null, wsOpen=false, myId=null, roomId=null, role=null;
+    let pc=null, localStream=null, remoteStreamRef=null;
+    let isQueuing=false, inCall=false, autoCycle=false, userHardStop=false;
+    let layoutMode='split';
+    let micMuted=false, camOff=false;
+    let currentFacing = 'user';
+
+    const iceServers = [
+      { urls: 'stun:stun.l.google.com:19302' },
+      {
+        urls: [
+          'turn:45.76.60.11:3478?transport=udp',
+          'turn:45.76.60.11:3478?transport=tcp'
+        ],
+        username: 'tortilla',
+        credential: 'Cl4uD1@2025'
+      }
+    ];
+
+    /* ===== ZOOM STATE (PC) ===== */
+    const zoomState = { local: 1, remote: 1 };
+    const ZOOM_MAX = 4;
+    const ZOOM_STEP = 0.15;
+    const ZOOM_MIN_LOCAL  = 1;
+    const ZOOM_MIN_REMOTE = 0.35;
+
+    const CAM_ZOOM_KEY = 'ttv_local_zoom';
+    function getSavedLocalZoom(){
+      const z = parseFloat(localStorage.getItem(CAM_ZOOM_KEY));
+      return Number.isFinite(z) ? Math.min(ZOOM_MAX, Math.max(ZOOM_MIN_LOCAL, z)) : 1;
+    }
+    function saveLocalZoom(z){
+      localStorage.setItem(CAM_ZOOM_KEY, String(z));
+    }
+
+    function applyZoom(which){
+      const v = (which==='local') ? localVideo : remoteVideo;
+      if(!v) return;
+      const z = zoomState[which];
+      const mirror = v.classList.contains('mirror');
+      v.style.transformOrigin = 'center center';
+      v.style.transform = mirror ? `scaleX(-1) scale(${z})` : `scale(${z})`;
+    }
+    function changeZoom(which, delta){
+      const isRemote = (which === 'remote');
+      const min = isRemote ? ZOOM_MIN_REMOTE : ZOOM_MIN_LOCAL;
+      const next = Math.min(ZOOM_MAX, Math.max(min, (zoomState[which] + delta)));
+      zoomState[which] = Number(next.toFixed(2));
+      applyZoom(which);
+    }
+
+    qs('#zoomInLocal') ?.addEventListener('click', ()=>{
+      changeZoom('local', +ZOOM_STEP);
+      saveLocalZoom(zoomState.local);
+    });
+    qs('#zoomOutLocal')?.addEventListener('click', ()=>{
+      changeZoom('local', -ZOOM_STEP);
+      saveLocalZoom(zoomState.local);
+    });
+    qs('#resetLocal')  ?.addEventListener('click', ()=>{
+      zoomState.local = 1;
+      applyZoom('local');
+      saveLocalZoom(1);
+    });
+
+    qs('#zoomInRemote')?.addEventListener('click', ()=> changeZoom('remote', +ZOOM_STEP));
+    qs('#zoomOutRemote')?.addEventListener('click',()=> changeZoom('remote', -ZOOM_STEP));
+    qs('#fitRemote')  ?.addEventListener('click', ()=> { zoomState.remote=1; applyZoom('remote'); });
+
+    async function getStream({ facing = 'user' } = {}){
+      const base = isMobile()
+        ? {
+            video: { facingMode: { ideal: facing } },
+            audio: { echoCancellation:true, noiseSuppression:true }
+          }
+        : {
+            video: { width:{ideal:1280}, height:{ideal:720}, frameRate:{ideal:30}, facingMode:{ ideal:facing } },
+            audio: { echoCancellation:true, noiseSuppression:true }
+          };
+
+      try{
+        return await navigator.mediaDevices.getUserMedia(base);
+      }catch(e){
+        try{
+          if (base.video && base.video.facingMode) delete base.video.facingMode;
+          return await navigator.mediaDevices.getUserMedia(base);
+        }catch(err){ throw err; }
+      }
+    }
+
+    function setPipVisible(on){
+      if(!pip) return;
+      if (isMobile()) { pip.style.display = 'none'; return; }
+      pip.style.display = on ? 'block' : 'none';
+    }
+
+    function showIdleRemoteR(showIt){
+      if (idleNoiseD_R) idleNoiseD_R.classList.toggle('hide', !showIt);
+      if (showIt && idleNoiseD_R){ idleNoiseD_R.muted = true; safePlay(idleNoiseD_R); }
+    }
+
+    function isGroupHost(){
+      return !!groupHostId && myId === groupHostId;
+    }
+
+    function setCupidCallLayout(active){
+      const on = !!active;
+
+      if (isMobile()){
+        // móvil: 2 panes remotos + self flotante
+        if (cupidMini) cupidMini.style.display = on ? '' : 'none';
+        remoteVideo2M?.classList.toggle('hide', !on);
+        localVideoM?.classList.toggle('hide', on);
+
+        setPipVisible(false);
+        return;
+      }
+
+      // PC: PiP SIEMPRE
+      setPipVisible(on);
+
+      // Host: 2 remotos grandes, PiP = self (Kristoff)
+      if (remoteTileR) remoteTileR.style.display = (on && isGroupHost()) ? '' : 'none';
+      if (localTile)   localTile.style.display   = (on && isGroupHost()) ? 'none' : '';
+    }
+    // ===== PiP draggable (WhatsApp) para móvil =====
+function enableCupidMiniDrag(){
+  if(!cupidMini) return;
+
+  // solo queremos drag en móvil
+  if(!isMobile()) return;
+
+  // restaurar última posición
+  try{
+    const saved = JSON.parse(localStorage.getItem('ttv_cupidMini_pos') || 'null');
+    if(saved && typeof saved.x === 'number' && typeof saved.y === 'number'){
+      cupidMini.style.left = saved.x + 'px';
+      cupidMini.style.top  = saved.y + 'px';
+      cupidMini.style.bottom = 'auto';
+    }
+  }catch{}
+
+  let dragging = false;
+  let startX=0, startY=0, baseLeft=0, baseTop=0;
+
+  const clamp = (v, min, max)=> Math.max(min, Math.min(max, v));
+
+  const onDown = (e)=>{
+    if(cupidMini.style.display === 'none') return;
+    dragging = true;
+
+    const p = (e.touches && e.touches[0]) ? e.touches[0] : e;
+    startX = p.clientX;
+    startY = p.clientY;
+
+    const r = cupidMini.getBoundingClientRect();
+    baseLeft = r.left;
+    baseTop  = r.top;
+
+    cupidMini.style.transition = 'none';
+    e.preventDefault?.();
+  };
+
+  const onMove = (e)=>{
+    if(!dragging) return;
+    const p = (e.touches && e.touches[0]) ? e.touches[0] : e;
+
+    const dx = p.clientX - startX;
+    const dy = p.clientY - startY;
+
+    const w = cupidMini.offsetWidth;
+    const h = cupidMini.offsetHeight;
+
+    const pad = 10;
+    const maxX = window.innerWidth  - w - pad;
+    const maxY = window.innerHeight - h - pad;
+
+    const nx = clamp(baseLeft + dx, pad, maxX);
+    const ny = clamp(baseTop  + dy, pad + 52, maxY);
+
+    cupidMini.style.left = nx + 'px';
+    cupidMini.style.top  = ny + 'px';
+    cupidMini.style.bottom = 'auto';
+
+    e.preventDefault?.();
+  };
+
+  const snapToCorner = ()=>{
+    const r = cupidMini.getBoundingClientRect();
+    const w = r.width, h = r.height;
+    const pad = 10;
+
+    const left  = pad;
+    const right = window.innerWidth - w - pad;
+
+    const top    = pad + 52;
+    const bottom = window.innerHeight - h - pad;
+
+    const midX = r.left + w/2;
+    const midY = r.top  + h/2;
+
+    const targetX = (midX < window.innerWidth/2) ? left : right;
+    const targetY = (midY < window.innerHeight/2) ? top  : bottom;
+
+    cupidMini.style.transition = 'left .12s ease, top .12s ease';
+    cupidMini.style.left = targetX + 'px';
+    cupidMini.style.top  = targetY + 'px';
+    cupidMini.style.bottom = 'auto';
+
+    try{
+      localStorage.setItem('ttv_cupidMini_pos', JSON.stringify({ x: targetX, y: targetY }));
+    }catch{}
+  };
+
+  const onUp = ()=>{
+    if(!dragging) return;
+    dragging = false;
+    snapToCorner();
+  };
+
+  cupidMini.addEventListener('touchstart', onDown, { passive:false });
+  window.addEventListener('touchmove', onMove, { passive:false });
+  window.addEventListener('touchend', onUp);
+
+  // mouse para test en desktop devtools
+  cupidMini.addEventListener('mousedown', onDown);
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup', onUp);
+}
+
+    async function ensureMedia(autoPlay=true){
+      try{
+        if (localStream){
+          const v = localStream.getVideoTracks?.()[0];
+          const a = localStream.getAudioTracks?.()[0];
+          const vOk = !!v && v.readyState === 'live';
+          const aOk = !!a && a.readyState === 'live';
+          if (vOk && aOk){
+            attachLocal(localStream, autoPlay);
+            applyMuteAndCam();
+            return localStream;
+          }
+        }
+
+        const stream = await getStream({ facing: currentFacing });
+
+        if(!localStream){
+          localStream = stream;
+        }else{
+          const newV = stream.getVideoTracks?.()[0];
+          const newA = stream.getAudioTracks?.()[0];
+
+          const oldV = localStream.getVideoTracks?.()[0];
+          const oldA = localStream.getAudioTracks?.()[0];
+
+          if (oldV) { try{ oldV.stop(); }catch{}; try{ localStream.removeTrack(oldV); }catch{} }
+          if (oldA) { try{ oldA.stop(); }catch{}; try{ localStream.removeTrack(oldA); }catch{} }
+
+          if (newV) localStream.addTrack(newV);
+          if (newA) localStream.addTrack(newA);
+
+          const pcsToUpdate = [];
+          if (pc) pcsToUpdate.push(pc);
+          try{
+            for (const [,gpc] of groupPCs){ if (gpc) pcsToUpdate.push(gpc); }
+          }catch{}
+          for (const p of pcsToUpdate){
+            try{
+              const senders = p?.getSenders?.() || [];
+              const sV = senders.find(s=>s.track && s.track.kind==='video');
+              const sA = senders.find(s=>s.track && s.track.kind==='audio');
+              if (sV && newV) await sV.replaceTrack(newV);
+              if (sA && newA) await sA.replaceTrack(newA);
+            }catch{}
+          }
+        }
+
+        attachLocal(localStream, autoPlay);
+        applyMuteAndCam();
+        return localStream;
+      }catch(e){
+        alert("Permite cámara y micrófono para continuar.\n" + (e?.message||e));
+        throw e;
+      }
+    }
+
+    function attachLocal(stream, autoPlay=true){
+      // Cupido móvil: self preview flotante
+      if (groupActive && isMobile()){
+        if (cupidSelfVideoM){
+          cupidSelfVideoM.srcObject = stream;
+          cupidSelfVideoM.muted = true;
+          if(autoPlay) safePlay(cupidSelfVideoM);
+        }
+        if (localVideoM) localVideoM.srcObject = null;
+        if (localVideo)  localVideo.srcObject = null;
+
+        // PiP no en móvil
+        if (pipVideo) pipVideo.srcObject = null;
+        showIdleLocal(false);
+        return;
+      }
+
+      if(layoutMode==='split'){
+        localVideo.srcObject = stream; if(autoPlay) safePlay(localVideo);
+        if(localVideoM) localVideoM.srcObject = null;
+        applyZoom('local');
+      }else{
+        localVideoM.srcObject = stream; if(autoPlay) safePlay(localVideoM);
+        if(localVideo) localVideo.srcObject = null;
+      }
+
+      // PiP: SOLO lo manejamos para host o no-grupo; participante lo maneja attachGroupStream(host)
+      if (!groupActive || isGroupHost()){
+        if (pipVideo){
+          pipVideo.srcObject = stream;
+          pipVideo.muted = true;
+          if(autoPlay) safePlay(pipVideo);
+        }
+      }
+
+      showIdleLocal(false);
+    }
+
+    function attachRemote(){
+      if(!remoteStreamRef) return;
+      if(layoutMode==='split'){
+        remoteVideo.srcObject = remoteStreamRef; safePlay(remoteVideo);
+        if(remoteVideoM) remoteVideoM.srcObject = null;
+        applyZoom('remote');
+      }else{
+        remoteVideoM.srcObject = remoteStreamRef; safePlay(remoteVideoM);
+        if(remoteVideo) remoteVideo.srcObject = null;
+      }
+      showIdleRemote(false);
+      overlayShow(false);
+      setGhostVisible(false);
+    }
+
+    function wireGazeDC(ch){
+      gazeDC = ch;
+      gazeDC.onopen = ()=> console.log('gazeDC open');
+      gazeDC.onmessage = (e)=>{
+        try{
+          const msg = JSON.parse(e.data);
+          if (msg.t === 'guv') {
+            renderGazeOnMyLocalVideo(msg.u, msg.v);
+          }
+        }catch{}
+      };
+    }
+
+    function makePC(){
+      pc = new RTCPeerConnection({iceServers});
+
+      if (role === 'offer') {
+        const ch = pc.createDataChannel('gaze');
+        wireGazeDC(ch);
+      }
+      pc.ondatachannel = (e)=>{
+        if (e.channel.label === 'gaze') wireGazeDC(e.channel);
+      };
+
+      pc.onicecandidate = (e)=>{ if(e.candidate) send({type:'ice', candidate:e.candidate}); };
+      pc.ontrack = (e)=>{ remoteStreamRef = e.streams[0]; attachRemote(); setupRemoteRatioWatchers(); };
+      pc.onconnectionstatechange = ()=> {
+        const st = pc.connectionState;
+        if(st==='connected'){
+          inCall = true; setStatus('Conectado'); overlayShow(false); enableControls();
+          startSendingGazeAuto();
+        }
+        if(st==='disconnected' || st==='failed'){ handleCallEnded('conn:'+st); }
+        if(st==='closed'){ setStatus('Cerrado'); }
+      };
+      return pc;
+    }
+
+    function getVideoContentRect(videoEl){
+      const elRect = videoEl.getBoundingClientRect();
+      const vw = videoEl.videoWidth  || 0;
+      const vh = videoEl.videoHeight || 0;
+      if (!vw || !vh) return elRect;
+
+      const style = getComputedStyle(videoEl);
+      const fit = (style.objectFit || 'fill').trim();
+
+      const arVideo = vw / vh;
+      const arBox   = elRect.width / elRect.height;
+
+      let w = elRect.width, h = elRect.height;
+      let x = elRect.left,  y = elRect.top;
+
+      if (fit === 'contain' || fit === 'scale-down') {
+        if (arVideo > arBox) {
+          h = elRect.width / arVideo;
+          y = elRect.top + (elRect.height - h) / 2;
+        } else {
+          w = elRect.height * arVideo;
+          x = elRect.left + (elRect.width - w) / 2;
+        }
+      } else if (fit === 'cover') {
+        if (arVideo > arBox) {
+          w = elRect.height * arVideo;
+          x = elRect.left + (elRect.width - w) / 2;
+        } else {
+          h = elRect.width / arVideo;
+          y = elRect.top + (elRect.height - h) / 2;
+        }
+      }
+      return { left:x, top:y, width:w, height:h };
+    }
+
+    async function computeAndSendGaze(){
+      if (!gazeDC || gazeDC.readyState !== 'open') return;
+
+      const vidEl = currentRemoteElement(); if (!vidEl) return;
+      const pred = await getGazePrediction(); if (!pred) return;
+
+      const crect = getVideoContentRect(vidEl);
+      const ur = clamp01((pred.x - crect.left) / crect.width);
+      const vr = clamp01((pred.y - crect.top)  / crect.height);
+
+      if (faceDetector){
+        try{
+          const faces = await faceDetector.detect(vidEl);
+          if (faces && faces[0]){
+            const bx = faces[0].boundingBox;
+            const cx = clamp01((bx.x + bx.width*0.5 - crect.left) / crect.width);
+            const cy = clamp01((bx.y + bx.height*0.38 - crect.top)  / crect.height);
+
+            const dist = Math.hypot(ur - cx, vr - cy);
+            if (dist < 0.18){
+              autoCalBuf.push({ ur, vr, xr:cx, yr:cy });
+              if (autoCalBuf.length > 60) autoCalBuf.shift();
+              if (autoCalBuf.length >= 8) fitAffine(autoCalBuf);
+            }
+          }
+        }catch{}
+      }
+
+      let [u,v] = applyAffine(ur, vr);
+      u = clamp01(u); v = clamp01(v);
+
+      computeAndSendGaze._lp = computeAndSendGaze._lp || { u, v };
+      const k = 0.35;
+      u = computeAndSendGaze._lp.u = (1-k)*computeAndSendGaze._lp.u + k*u;
+      v = computeAndSendGaze._lp.v = (1-k)*computeAndSendGaze._lp.v + k*v;
+
+      try{
+        gazeDC.send(JSON.stringify({ t:'guv', u:+u.toFixed(4), v:+v.toFixed(4) }));
+      }catch{}
+    }
+
+    async function startSendingGazeAuto(){
+      if (sendingGaze) return;
+      // no gaze en grupo
+      if (groupActive) return;
+
+      sendingGaze = true;
+      await ensureGazeEngine();
+      sendGazeTimer = setInterval(computeAndSendGaze, 66);
+    }
+    function stopSendingGaze(){
+      sendingGaze = false;
+      if (sendGazeTimer){ clearInterval(sendGazeTimer); sendGazeTimer = null; }
+    }
+
+    function connectWS(){
+      return new Promise((resolve,reject)=>{
+        if(ws && wsOpen) return resolve();
+        try{ ws = new WebSocket(window.WS_SIGNALLING_URL); }catch(e){ return reject(e); }
+
+        ws.onopen = () => {
+          wsOpen = true;
+
+          // identify: siempre manda displayName (aunque no haya email)
+          try{
+            const email =
+              auth?.currentUser?.email ||
+              currentUser?.email ||
+              window.KRISTOFF_EMAIL ||
+              null;
+
+            const displayName =
+              auth?.currentUser?.displayName ||
+              currentUser?.displayName ||
+              (inpNombre?.value || localStorage.getItem('ttv_name') || '—');
+
+            ws.send(JSON.stringify({ type:'identify', email, displayName }));
+          }catch{}
+
+          resolve();
+        };
+
+        ws.onerror = (e)=>{ console.error("WS error", e); reject(e); };
+        ws.onclose = ()=>{ wsOpen=false; };
+
+        ws.onmessage = async (msg)=>{
+          const data = JSON.parse(msg.data);
+
+          if(data.type==='welcome'){ myId=data.id; }
+
+          if (data.type === 'role') {
+            IS_ADMIN = !!data.isAdmin;
+            applyAdminBadgeUI();
+          }
+
+          // === SOLO 1vs1 ===
+          if(data.type==='matched'){
+            if (serverMode() !== 'solo') return;
+            roomId=data.roomId; role=data.role;
+            setStatus('Pareja encontrada · Conectando…');
+            overlayShow(true);
+            if(data.peer && data.peer.name){
+              peerLabel.classList.remove('hidden');
+              peerLabel.textContent = 'Pareja: '+(data.peer.name||'—');
+            }
+            try{ await startWebRTC(role); }catch(e){ setStatus('Error WebRTC: '+e.message); overlayShow(false); }
+          }
+
+          if(data.type==='offer'){
+            if (serverMode() !== 'solo') return;
+            await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+            const answer = await pc.createAnswer(); await pc.setLocalDescription(answer);
+            send({type:'answer', sdp:answer});
+          }
+          if(data.type==='answer'){
+            if (serverMode() !== 'solo') return;
+            await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+          }
+          if(data.type==='ice'){
+            if (serverMode() !== 'solo') return;
+            try{ await pc.addIceCandidate(data.candidate); }catch(e){}
+          }
+          if(data.type==='peer-left'){
+            if (serverMode() !== 'solo') return;
+            handleCallEnded('peer-left');
+          }
+
+          // === CUPIDO (grupo) ===
+          if (data.type === 'group-matched'){
+            await startGroupCall(data);
+          }
+          if (data.type === 'group-offer'){
+            await onGroupOffer(data);
+          }
+          if (data.type === 'group-answer'){
+            await onGroupAnswer(data);
+          }
+          if (data.type === 'group-ice'){
+            await onGroupIce(data);
+          }
+          if (data.type === 'group-peer-left'){
+            handleCallEnded('group-peer-left');
+          }
+          // ===== FAKE SKIP broadcast (server) =====
+if (data.type === 'fake-skip') {
+  applyFakeSkipUI(!!data.on);
+}
+
+        };
+      });
+    }
+
+    function send(payload){
+      if(wsOpen){ ws.send(JSON.stringify({ ...payload, roomId, from: myId })); }
+    }
+
+    async function startWebRTC(role){
+      await ensureMedia();
+      if (!isMobile()) { await applyARConstraints(); }
+
+      makePC();
+      localStream.getTracks().forEach(t=>pc.addTrack(t, localStream));
+      tuneSender();
+
+      if(role==='offer'){
+        const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
+        send({type:'offer', sdp:offer});
+      }
+    }
+
+    function cleanupPeer({ keepLocal = true, closeWsToo = false } = {}){
+      if(pc){ try{pc.close()}catch{}; pc=null; }
+      if(!keepLocal && localStream){
+        localStream.getTracks().forEach(t=>t.stop());
+        localStream=null;
+        localVideo.srcObject=null; localVideoM.srcObject=null; pipVideo.srcObject=null;
+      }
+      remoteVideo.srcObject=null; remoteVideoM.srcObject=null; remoteStreamRef=null;
+      roomId=null; role=null; inCall=false;
+
+      if (remoteVideo2M) remoteVideo2M.srcObject = null;
+      if (remoteVideoR) remoteVideoR.srcObject = null;
+
+      if(closeWsToo && ws){ try{ ws.close(); }catch{} ws=null; wsOpen=false; }
+      peerLabel.classList.add('hidden'); peerLabel.textContent='Pareja: —';
+      document.body.classList.remove('remote-portrait');
+      zoomState.remote = 1;
+      gazeDC = null;
+      applyZoom('remote');
+    }
+
+   function enableControls(){
+  btnStart && (btnStart.disabled = true);
+  btnNext  && (btnNext.disabled  = false);
+  btnStop  && (btnStop.disabled  = false);
+  btnMute  && (btnMute.disabled  = false);
+  btnCam   && (btnCam.disabled   = false);
+
+  if(btnBuscarM){
+    btnBuscarM.disabled = false; //
+    btnBuscarM.textContent = inCall ? 'Siguiente' : (isQueuing ? 'Buscando…' : 'Buscar sala');
+  }
+  if(btnSalirM){
+    btnSalirM.textContent = isQueuing ? 'Detener' : 'Salir';
+  }
+
+  showMobileDock();
+}
+
+   function setSearchingUI(){
+  btnStart && (btnStart.disabled = true);
+  btnNext  && (btnNext.disabled  = true);
+  btnStop  && (btnStop.disabled  = false);
+  btnMute  && (btnMute.disabled  = !localStream);
+  btnCam   && (btnCam.disabled   = !localStream);
+
+  if(btnBuscarM){
+    btnBuscarM.textContent = 'Buscando…';
+    btnBuscarM.disabled = true;
+  }
+  if(btnSalirM){
+    btnSalirM.textContent = 'Detener';
+  }
+
+  showMobileDock();
+}
+
+  function setIdleUI(){
+  btnStart && (btnStart.disabled = false);
+  btnNext  && (btnNext.disabled  = true);
+  btnStop  && (btnStop.disabled  = true);
+  btnMute  && (btnMute.disabled  = !localStream);
+  btnCam   && (btnCam.disabled   = !localStream);
+
+  if(btnBuscarM){
+    btnBuscarM.textContent = 'Buscar sala';
+    btnBuscarM.disabled = false;
+  }
+  if(btnSalirM){
+    btnSalirM.textContent = 'Salir';
+  }
+
+  showMobileDock();
+}
+    function cleanupGroup({ keepLocal = true } = {}){
+      for (const [,gpc] of groupPCs){
+        try{ gpc.close(); }catch{}
+      }
+      groupPCs.clear();
+      groupStreams.clear();
+      groupSlotByPeer.clear();
+      groupConnected.clear();
+
+      groupActive = false;
+      groupPeers = [];
+      groupHostId = null;
+      groupRoomId = null;
+
+      // limpia videos extra
+      try{ if(remoteVideoR) remoteVideoR.srcObject = null; }catch{}
+      try{ if(remoteVideo2M) remoteVideo2M.srcObject = null; }catch{}
+      try{ if(cupidSelfVideoM) cupidSelfVideoM.srcObject = null; }catch{}
+      try{ if(pipVideo) pipVideo.srcObject = null; }catch{}
+
+      setCupidCallLayout(false);
+      showIdleRemoteR(true);
+
+      if (keepLocal && localStream){
+        attachLocal(localStream, true);
+      }
+    }
+
+    function handleCallEnded(reason=''){
+      applyFakeSkipUI(false);
+
+      if (groupActive){
+        cleanupGroup({ keepLocal:true });
+      }
+
+      cleanupPeer({ keepLocal:true, closeWsToo:false });
+
+      if(autoCycle && !userHardStop){
+        setStatus('Buscando siguiente…');
+        overlayShow(true);
+        setSearchingUI();
+
+        const r = String(reason || '');
+        setTimeout(()=>{
+          if (!inCall && autoCycle && !userHardStop && wsOpen && !roomId) {
+            findNext();
+          }
+        }, r.startsWith('conn:') ? 150 : 2000);
+      }else{
+        overlayShow(false);
+        setIdleUI();
+      }
+
+      showIdleRemote(true);
+      updateGhostHandVisibility();
+      stopSendingGaze();
+      clearLocalGazeBubble();
+      recvRenderEnabled = false;
+    }
+
+    async function joinQueue(){
+      if(!currentUser && !isGuest && !auth?.currentUser){ alert('Inicia sesión con Google o entra como invitado'); return; }
+      if(isQueuing) return;
+
+      isQueuing = true; autoCycle = true; userHardStop = false;
+      overlayShow(true);
+      setSearchingUI();
+
+      try{
+        if(!chosenGender) chosenGender = localStorage.getItem('ttv_gender') || 'Hombre';
+
+        const displayName =
+          (inpNombre.value || localStorage.getItem('ttv_name') ||
+           auth?.currentUser?.displayName ||
+           currentUser?.displayName ||
+           '—');
+
+        const age = (inpEdad.value || localStorage.getItem('ttv_age') || '—');
+
+        await connectWS();
+
+        send({type:'find', mode: serverMode(), gender: chosenGender, displayName, age});
+        // Mensaje más claro según modo
+const sm = serverMode();
+if (sm === 'cupid-host') setStatus('En cola Cupido (Kristoff) · Esperando 2 usuarios…');
+else if (sm === 'cupid') setStatus('En cola Cupido · Esperando a Kristoff + otra persona…');
+else setStatus('En cola…');
+
+        ensureMedia().then(async()=>{
+          if (!isMobile()) { await applyARConstraints(); }
+        }).catch(()=>{
+          try{ send({type:'leave'}); }catch{}
+          setStatus('Permite cámara y micrófono para continuar');
+          overlayShow(false);
+          isQueuing=false; autoCycle=false;
+          setIdleUI();
+        });
+      }catch{
+        setStatus('Error de conexión WS');
+        overlayShow(false);
+        isQueuing=false; autoCycle=false;
+        setIdleUI();
+      }
+    }
+
+    function findNext(){
+      const displayName =
+        (inpNombre.value || localStorage.getItem('ttv_name') ||
+         auth?.currentUser?.displayName ||
+         currentUser?.displayName ||
+         '—');
+      const age = (inpEdad.value || localStorage.getItem('ttv_age') || '—');
+      const gender = chosenGender || localStorage.getItem('ttv_gender') || 'Hombre';
+
+      if(!wsOpen){
+        connectWS().then(()=> send({type:'find', mode: serverMode(), gender, displayName, age}));
+      } else {
+        send({type:'find', mode: serverMode(), gender, displayName, age});
+      }
+    }
+
+    async function nextMatch(){
+      applyFakeSkipUI(false);
+
+      userHardStop = false; autoCycle = true;
+      try{
+        send({type:'leave'});
+        if (groupActive) cleanupGroup({ keepLocal:true });
+
+        cleanupPeer({ keepLocal:true, closeWsToo:false });
+        setStatus('Buscando siguiente…');
+        overlayShow(true);
+        setSearchingUI();
+
+        await ensureMedia();
+        if (!isMobile()) { await applyARConstraints(); }
+        findNext();
+      }catch{ setStatus('Error WS (siguiente)'); }
+    }
+
+    function stopAll(){
+      applyFakeSkipUI(false);
+
+      userHardStop = true; autoCycle = false; isQueuing = false;
+      try{ send({type:'leave'}); }catch{}
+      if (groupActive) cleanupGroup({ keepLocal:true });
+      cleanupPeer({ keepLocal:true, closeWsToo:false });
+      overlayShow(false);
+      setStatus('Detenido'); setIdleUI();
+      updateGhostHandVisibility();
+      stopSendingGaze();
+      clearLocalGazeBubble();
+      recvRenderEnabled = false;
+    }
+
+    /* ===== CUPIDO GRUPO: señalización ===== */
+    // ===== FIX: ICE buffer por peer (3-way estable) =====
+const pendingGroupIce = new Map(); // peerId -> RTCIceCandidateInit[]
+
+function queueGroupIce(peerId, cand){
+  if(!peerId || !cand) return;
+  const arr = pendingGroupIce.get(peerId) || [];
+  arr.push(cand);
+  pendingGroupIce.set(peerId, arr);
+}
+
+async function flushGroupIce(peerId){
+  const gpc = groupPCs.get(peerId);
+  if(!gpc) return;
+  if(!gpc.remoteDescription) return;
+
+  const arr = pendingGroupIce.get(peerId);
+  if(!arr || !arr.length) return;
+
+  pendingGroupIce.delete(peerId);
+  for(const c of arr){
+    try{ await gpc.addIceCandidate(c); }catch{}
+  }
+}
+
+    function shouldInitiateTo(peerId){
+      const a = String(myId||'');
+      const b = String(peerId||'');
+      return a.localeCompare(b) < 0;
+    }
+
+    function assignGroupSlots(peers){
+      groupSlotByPeer.clear();
+      if (!groupHostId) return;
+
+      if (isGroupHost()){
+        const others = peers.filter(p=>p.id && p.id !== myId).map(p=>p.id);
+        if (others[0]) groupSlotByPeer.set(others[0], 'left');
+        if (others[1]) groupSlotByPeer.set(others[1], 'right');
+      } else {
+        groupSlotByPeer.set(groupHostId, 'host');
+        const other = peers.find(p=>p.id && p.id !== myId && p.id !== groupHostId)?.id;
+        if (other) groupSlotByPeer.set(other, 'other');
+      }
+    }
+
+    function attachGroupStream(peerId, stream){
+      groupStreams.set(peerId, stream);
+
+      if (isMobile()){
+        // móvil: arriba host, abajo otro; self flotante
+        if (!groupHostId) return;
+
+        if (!isGroupHost()){
+          if (peerId === groupHostId){
+            remoteVideoM.srcObject = stream; safePlay(remoteVideoM);
+            showIdleRemote(false);
+            overlayShow(false);
+          } else {
+            remoteVideo2M.srcObject = stream; safePlay(remoteVideo2M);
+          }
+        } else {
+          // host: left arriba, right abajo
+          const slot = groupSlotByPeer.get(peerId);
+          if (slot === 'left'){
+            remoteVideoM.srcObject = stream; safePlay(remoteVideoM);
+            showIdleRemote(false);
+            overlayShow(false);
+          } else {
+            remoteVideo2M.srcObject = stream; safePlay(remoteVideo2M);
+          }
+        }
+        return;
+      }
+
+      // PC
+      if (!groupHostId) return;
+
+      if (isGroupHost()){
+        const slot = groupSlotByPeer.get(peerId);
+        if (slot === 'left'){
+          remoteVideo.srcObject = stream; safePlay(remoteVideo);
+          showIdleRemote(false);
+          overlayShow(false);
+        } else {
+          remoteVideoR.srcObject = stream; safePlay(remoteVideoR);
+          showIdleRemoteR(false);
+        }
+      } else {
+        // participante: PiP = host (Kristoff), remoto grande = otro usuario
+        if (peerId === groupHostId){
+          pipVideo.srcObject = stream;
+          pipVideo.muted = false; // IMPORTANT: que se escuche Kristoff
+          safePlay(pipVideo);
+          setPipVisible(true);
+        } else {
+          remoteVideo.srcObject = stream; safePlay(remoteVideo);
+          showIdleRemote(false);
+          overlayShow(false);
+        }
+      }
+    }
+
+    function createGroupPC(peerId){
+      const gpc = new RTCPeerConnection({iceServers});
+
+      gpc.onicecandidate = (e)=>{
+        if(e.candidate) send({ type:'group-ice', to: peerId, candidate: e.candidate });
+      };
+
+      gpc.ontrack = (e)=>{
+        const s = e.streams?.[0];
+        if (s) attachGroupStream(peerId, s);
+      };
+
+      gpc.onconnectionstatechange = ()=>{
+        const st = gpc.connectionState;
+        if(st === 'connected'){
+          groupConnected.add(peerId);
+          inCall = true;
+          setStatus('Conectado (Cupido)');
+          overlayShow(false);
+          enableControls();
+        }
+       if(st === 'failed' || st === 'disconnected'){
+  console.warn('[GROUP] peer link lost:', peerId, st);
+
+  // Cierra solo ese PC
+  try{ gpc.close(); }catch{}
+  groupPCs.delete(peerId);
+  groupStreams.delete(peerId);
+  groupConnected.delete(peerId);
+
+  // limpia video correspondiente
+  if(isMobile()){
+    if(peerId === groupHostId){
+      try{ remoteVideoM.srcObject = null; }catch{}
+    } else {
+      try{ remoteVideo2M.srcObject = null; }catch{}
+    }
+  } else {
+    if(isGroupHost()){
+      const slot = groupSlotByPeer.get(peerId);
+      if(slot === 'left'){
+        try{ remoteVideo.srcObject = null; }catch{}
+      } else {
+        try{ remoteVideoR.srcObject = null; }catch{}
+      }
+    } else {
+      if(peerId === groupHostId){
+        try{ pipVideo.srcObject = null; }catch{}
+      } else {
+        try{ remoteVideo.srcObject = null; }catch{}
+      }
+    }
+  }
+
+  // si se fueron todos, entonces sí cierra el grupo
+  if(groupPCs.size === 0){
+    handleCallEnded('group-empty');
+  }
+}
+
+      };
+
+      return gpc;
+    }
+
+    async function startGroupCall(data){
+      // mata gaze, y cualquier pc 1vs1
+      stopSendingGaze();
+      recvRenderEnabled = false;
+      clearLocalGazeBubble();
+
+      try{ if(pc){ pc.close(); } }catch{}
+      pc = null;
+      remoteStreamRef = null;
+
+      groupActive = true;
+      groupConnected.clear();
+      groupRoomId = data.roomId;
+      roomId = groupRoomId;
+
+      const peers = Array.isArray(data.peers) ? data.peers : [];
+      groupHostId =
+        data.hostId ||
+        peers.find(p=>p.role==='host')?.id ||
+        peers.find(p=>String(p.email||'').toLowerCase() === KRISTOFF_EMAIL.toLowerCase())?.id ||
+        null;
+
+      groupPeers = peers.map(p=>p.id).filter(id=>id && id !== myId);
+
+      assignGroupSlots(peers);
+      setCupidCallLayout(true);
+
+      isQueuing = false;
+
+      setStatus('Sala Cupido · Conectando…');
+      overlayShow(true);
+      setSearchingUI();
+
+      await ensureMedia(true);
+
+      // crea PC por peer + añade tracks
+      for (const pid of groupPeers){
+        if (groupPCs.has(pid)) continue;
+        const gpc = createGroupPC(pid);
+        groupPCs.set(pid, gpc);
+        localStream.getTracks().forEach(t=> gpc.addTrack(t, localStream));
+      }
+
+      // offers deterministas
+      for (const pid of groupPeers){
+        if (!shouldInitiateTo(pid)) continue;
+        const gpc = groupPCs.get(pid);
+        try{
+          const offer = await gpc.createOffer();
+          await gpc.setLocalDescription(offer);
+          send({ type:'group-offer', to: pid, sdp: offer });
+        }catch(e){ console.warn('group offer error', pid, e); }
+      }
+    }
+
+    async function onGroupOffer(data){
+      const from = data.from;
+      if(!from) return;
+      await ensureMedia(false);
+
+      let gpc = groupPCs.get(from);
+      if(!gpc){
+        gpc = createGroupPC(from);
+        groupPCs.set(from, gpc);
+        localStream.getTracks().forEach(t=> gpc.addTrack(t, localStream));
+      }
+
+      await gpc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+      await flushGroupIce(from);
+
+      const ans = await gpc.createAnswer();
+      await gpc.setLocalDescription(ans);
+      send({ type:'group-answer', to: from, sdp: ans });
+    }
+
+    async function onGroupAnswer(data){
+      const from = data.from;
+      const gpc = groupPCs.get(from);
+      if(!gpc) return;
+      await gpc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+      await flushGroupIce(from);
+
+    }
+
+    async function onGroupIce(data){
+  const from = data.from;
+  const cand = data.candidate;
+  if(!from || !cand) return;
+
+  const gpc = groupPCs.get(from);
+
+  // si aún no existe PC => guardamos
+  if(!gpc){
+    queueGroupIce(from, cand);
+    return;
+  }
+
+  // si aún no hay remoteDescription => guardamos
+  if(!gpc.remoteDescription){
+    queueGroupIce(from, cand);
+    return;
+  }
+
+  try{
+    await gpc.addIceCandidate(cand);
+  }catch{
+    // por timing, lo guardamos y luego flusheamos
+    queueGroupIce(from, cand);
+  }
+}
+
+
+    /* ===== Layout ===== */
+    function setLayout(mode){
+      layoutMode = mode;
+      if(mode==='split'){
+        stage.style.display = '';
+        stage.classList.add('layout-split');
+        stageMobile.style.display = 'none';
+        document.body.classList.remove('no-scroll');
+      }else{
+        stage.style.display = 'none';
+        stageMobile.style.display = '';
+        document.body.classList.add('no-scroll');
+      }
+
+      // si estás en grupo, re-aplica layout de cupido
+      if (groupActive) setCupidCallLayout(true);
+
+      if(localStream) attachLocal(localStream);
+      attachRemote();
+    }
+    function isMobile(){ return window.matchMedia('(max-width: 640px)').matches }
+    function initLayoutForDevice(){
+      if(isMobile()){
+        const btnAR=qs('#btn-ar'); if(btnAR) btnAR.style.display='none';
+        setLayout('mobile-fixed');
+      }else{
+        setLayout('split');
+        document.body.classList.remove('ar-1-1','ar-16-9');
+        document.body.classList.add('ar-4-3');
+        const btnAR = document.getElementById('btn-ar');
+        if (btnAR) btnAR.textContent = 'AR: 4:3';
+      }
+    }
+
+    btnStart ?.addEventListener('click', joinQueue);
+    btnNext  ?.addEventListener('click', nextMatch);
+    btnStop  ?.addEventListener('click', stopAll);
+    
+    btnEye?.addEventListener('click', ()=>{
+      if (!IS_ADMIN || !inCall || groupActive) return;
+      recvRenderEnabled = !recvRenderEnabled;
+      btnEye.textContent = recvRenderEnabled ? '👁‍🗨' : '👁';
+      if (!recvRenderEnabled) clearLocalGazeBubble();
+    });
+
+    btnMute?.addEventListener('click', ()=>{
+      micMuted = !micMuted; applyMuteAndCam(); btnMute.textContent = micMuted ? 'Unmute' : 'Mute';
+    });
+    btnCam?.addEventListener('click', ()=>{
+      camOff = !camOff; applyMuteAndCam(); btnCam.textContent = camOff ? 'Encender cam' : 'Apagar cam';
+    });
+   // ===== Admin ENTER => fake skip (solo 1v1) =====
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter') return;
+  if (e.repeat) return;
+
+  // no dispares si estás escribiendo en un input / textarea / etc.
+  const t = e.target;
+  const isTyping = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+  if (isTyping) return;
+
+  // Solo admin, solo SOLO(1v1), solo estando en llamada
+  if (!IS_ADMIN) return;
+  if (groupActive) return;
+  if (serverMode() !== 'solo') return;
+  if (!inCall) return;
+  if (!roomId) return;
+  if (!wsOpen) return;
+
+  // Toggle ON/OFF en server -> broadcast a ambos
+  send({ type: 'fake-skip-toggle' });
+});
+
+    const btnAR = qs('#btn-ar');
+    function setBodyAR(cls, label){
+      document.body.classList.remove('ar-1-1','ar-4-3','ar-16-9');
+      document.body.classList.add(cls);
+      if(btnAR) btnAR.textContent = 'AR: ' + label;
+    }
+    function currentARValue(){
+      if(document.body.classList.contains('ar-4-3'))  return 4/3;
+      if(document.body.classList.contains('ar-16-9')) return 16/9;
+      return 1/1;
+    }
+    function nextARLabel(){
+      const is11  = document.body.classList.contains('ar-1-1');
+      const is43  = document.body.classList.contains('ar-4-3');
+      if(is11)   return ['ar-4-3','4:3'];
+      if(is43)   return ['ar-16-9','16:9'];
+      return ['ar-1-1','1:1'];
+    }
+    async function applyARConstraints(){
+      const track = localStream?.getVideoTracks?.()[0];
+      if(!track) return;
+      try{
+        await track.applyConstraints({
+          aspectRatio: currentARValue(),
+          width:  { ideal: 1280, max: 1920 },
+          height: { ideal: 720,  max: 1080 }
+        });
+      }catch(e1){
+        try{ await track.applyConstraints({ aspectRatio: currentARValue() }); }catch(e2){}
+      }
+    }
+    btnAR?.addEventListener('click', async ()=>{
+      const [cls,label] = nextARLabel();
+      setBodyAR(cls,label);
+      await applyARConstraints();
+    });
+
+    btnBuscarM?.addEventListener('click', ()=>{
+      if(inCall){ nextMatch(); }
+      else if(isQueuing){ stopAll(); }
+      else { joinQueue(); }
+    });
+   btnSalirM?.addEventListener('click', ()=>{
+  if(isQueuing){
+    stopAll();           // si está buscando, es Detener
+  } else {
+    goBackToLanding();   // si no está buscando, es Salir
+  }
+});
+btnBuscarM?.addEventListener('click', ()=> showMobileDock());
+btnSalirM?.addEventListener('click', ()=> showMobileDock());
+
+
+    btnSalirChat?.addEventListener('click', ()=>{ goBackToLanding(); });
+
+    gearBtn?.addEventListener('click', ()=>{ gearSheet.classList.toggle('show'); });
+    swMute?.addEventListener('change', (e)=>{ micMuted = !!e.target.checked; applyMuteAndCam(); });
+
+    let remoteContainM = false, lastTap=0;
+    function addDoubleTap(el, cb){
+      el.addEventListener('touchend', (e)=>{
+        const now = Date.now();
+        if(now - lastTap < 300){ cb(e); }
+        lastTap = now;
+      }, {passive:true});
+    }
+    addDoubleTap(document.getElementById('pane-remote'), ()=>{
+      remoteContainM = !remoteContainM;
+      remoteVideoM.classList.toggle('contain', remoteContainM);
+    });
+
+    qs('#remoteTile')?.addEventListener('dblclick', ()=>{
+      document.body.classList.toggle('remote-portrait');
+      applyZoom('remote');
+    });
+
+    function tuneSender(){
+      const sender = pc?.getSenders?.().find(s=>s.track && s.track.kind==='video');
+      const vTrack = localStream?.getVideoTracks?.()[0];
+      if(!sender || !vTrack) return;
+      try { vTrack.contentHint = 'motion'; } catch {}
+      try {
+        const p = sender.getParameters();
+        p.encodings = p.encodings || [{}];
+        p.encodings[0].maxBitrate = isMobile() ? 900_000 : 1_800_000;
+        p.degradationPreference = 'maintain-framerate';
+        sender.setParameters(p);
+      } catch {}
+    }
+
+    function setupRemoteRatioWatchers(){
+      if(!remoteVideo) return;
+      const mark = ()=> updateRemoteFitClass();
+      remoteVideo.addEventListener('loadedmetadata', mark);
+      remoteVideo.addEventListener('resize', mark);
+      try{
+        const track = remoteStreamRef?.getVideoTracks?.()[0];
+        const st = track?.getSettings?.();
+        if(st?.width && st?.height){ updateRemoteFitClass(st.width, st.height); }
+      }catch{}
+    }
+    function updateRemoteFitClass(wFromTrack, hFromTrack){
+      let w = wFromTrack || remoteVideo.videoWidth  || remoteVideoM.videoWidth  || 0;
+      let h = hFromTrack || remoteVideo.videoHeight || remoteVideoM.videoHeight || 0;
+      if(!w || !h){ setTimeout(()=>updateRemoteFitClass(), 120); return; }
+      const ar = w / h;
+      const isPortraitRemote = ar < 0.9;
+      if(layoutMode==='split'){
+        if(isPortraitRemote){ document.body.classList.add('remote-portrait'); }
+        else { document.body.classList.remove('remote-portrait'); }
+      }
+    }
+
+    window.addEventListener('beforeunload', ()=>{
+      try{ send({type:'leave'}); }catch{}
+    });
+
+    const btnSwapCam = qs('#btn-swapcam');
+    let mobilePanEnabled = false;
+
+    function startIdlePanIfMobile(){
+      if (mobilePanEnabled && isMobile() && idleNoiseM) {
+        idleNoiseM.classList.add('lr-pan');
+      }
+    }
+    function stopIdlePan(){
+      if (idleNoiseM) idleNoiseM.classList.remove('lr-pan');
+    }
+
+    function showIdleRemote(showIt){
+      if (idleNoiseD) idleNoiseD.classList.toggle('hide', !showIt);
+      if (idleNoiseM) idleNoiseM.classList.toggle('hide', !showIt);
+      if (showIt){
+        if (idleNoiseD){ idleNoiseD.muted = true; safePlay(idleNoiseD); }
+        if (idleNoiseM){ idleNoiseM.muted = true; safePlay(idleNoiseM); }
+        startIdlePanIfMobile();
+        updateGhostHandVisibility();
+      }else{
+        stopIdlePan();
+        setGhostVisible(false);
+      }
+    }
+    function showIdleLocal(showIt){ if(idleLocal) idleLocal.classList.toggle('hide', !showIt); }
+
+    showIdleRemote(true);
+    showIdleRemoteR(true);
+    showIdleLocal(true);
+    if (idleNoiseD) safePlay(idleNoiseD);
+    if (idleNoiseM) safePlay(idleNoiseM);
+    if (idleNoiseD_R) safePlay(idleNoiseD_R);
+
+    async function toggleCameraFacing(){
+      try{
+        const target = (currentFacing === 'user') ? 'environment' : 'user';
+        const stream = await getStream({ facing: target });
+        const newTrack = stream.getVideoTracks()[0];
+        if(localStream){
+          const old = localStream.getVideoTracks()[0]; if(old) old.stop();
+          localStream.removeTrack(old); localStream.addTrack(newTrack);
+
+          const pcsToUpdate = [];
+          if (pc) pcsToUpdate.push(pc);
+          try{ for (const [,gpc] of groupPCs){ if (gpc) pcsToUpdate.push(gpc); } }catch{}
+          for (const p of pcsToUpdate){
+            try{
+              const sender = p?.getSenders?.().find(s=>s.track && s.track.kind==='video');
+              if (sender) await sender.replaceTrack(newTrack);
+            }catch{}
+          }
+        }else{
+          localStream = stream;
+        }
+        currentFacing = target;
+        attachLocal(localStream);
+        applyMuteAndCam();
+      }catch(e){ console.warn('No se pudo cambiar la cámara:', e?.message||e); }
+    }
+    btnSwapCam?.addEventListener('click', toggleCameraFacing);
+
+    function initSwipeGestures(){
+      const el = document.getElementById('pane-remote');
+      if(!el) return;
+      let startX=0, dx=0, active=false;
+      el.addEventListener('touchstart', (e)=>{ active=true; dx=0; startX=e.touches[0].clientX; }, {passive:true});
+      el.addEventListener('touchmove',  (e)=>{ if(!active) return; dx = e.touches[0].clientX - startX; }, {passive:true});
+      el.addEventListener('touchend',   ()=>{
+        if(!active) return; active=false;
+        const TH=80;
+        if(dx >  TH){ if(inCall){ nextMatch(); } else if(isQueuing){ stopAll(); } else { joinQueue(); } }
+        else if(dx < -TH){ stopAll(); }
+      });
+    }
+    initSwipeGestures();
+
+    function applyMuteAndCam(){
+      const a = localStream?.getAudioTracks?.() || [];
+      const v = localStream?.getVideoTracks?.() || [];
+      a.forEach(t=> t.enabled = !micMuted);
+      v.forEach(t=> t.enabled = !camOff);
+      if(swMute) swMute.checked = micMuted;
+      if(btnMute) btnMute.textContent = micMuted ? 'Unmute' : 'Mute';
+      if(btnCam)  btnCam.textContent  = camOff ? 'Encender cam' : 'Apagar cam';
+    }
+
+    /* ===== Auth ===== */
+    auth.onAuthStateChanged(async (u)=>{
+      // Si Kristoff ya está “logueado” sin Firebase, no lo pises
+      if (currentUser?.email && String(currentUser.email).toLowerCase() === KRISTOFF_EMAIL.toLowerCase()) return;
+
+      // Si estás como invitado, no lo pises
+      if (isGuest) return;
+
+      currentUser = u || null;
+
+      if(!u){
+        // si se desloguea Google => vuelve a landing
+        show('landing');
+        youBadge.classList.add('hidden');
+        setIdleUI();
+        mobilePanEnabled = false;
+        stopIdlePan();
+        setGhostVisible(false);
+        return;
+      }
+
+      youBadge.classList.remove('hidden');
+      const n = inpNombre.value || localStorage.getItem('ttv_name') || u.displayName || '—';
+      const a = inpEdad.value   || localStorage.getItem('ttv_age')  || '—';
+      const g = chosenGender || localStorage.getItem('ttv_gender') || '—';
+      youBadge.textContent = `Tú: ${n} (${a}) · ${g}`;
+
+      // IMPORTANTE: tras login, SIEMPRE te manda a pantalla de modo
+      userMode = null;
+      show('mode');
+      updateModePillUI();
+    });
+
+    // ===== ADMIN BADGE =====
+    const ADMIN_EMAILS_CLIENT = new Set([
+      'fajardomiguelangel50@gmail.com',
+      'marquisdesade3141@gmail.com',
+      'christophergomez6903@gmail.com',
+    ]);
+
+    let IS_ADMIN = false;
+    const adminBadgeEl = document.getElementById('adminBadge');
+
+    function applyAdminBadgeUI() {
+      if (!adminBadgeEl) return;
+      adminBadgeEl.classList.toggle('admin-on',  !!IS_ADMIN);
+      adminBadgeEl.classList.toggle('admin-off', !IS_ADMIN);
+      const icon = adminBadgeEl.querySelector('.badge-icon');
+      const text = adminBadgeEl.querySelector('.badge-text');
+      if (IS_ADMIN) {
+        icon.textContent = '👑';
+        text.textContent = 'Admin';
+        adminBadgeEl.style.cursor = 'pointer';
+        adminBadgeEl.title = 'Panel de admin';
+      } else {
+        icon.textContent = '🔒';
+        text.textContent = 'Admin';
+        adminBadgeEl.style.cursor = 'not-allowed';
+        adminBadgeEl.title = 'No disponible';
+      }
+      if (btnEye) btnEye.classList.toggle('hidden', !IS_ADMIN);
+    }
+
+    adminBadgeEl?.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (!IS_ADMIN) {
+        alert('Disponible pronto');
+        return;
+      }
+      console.log('Acceso admin');
+    });
+
+    applyAdminBadgeUI();
+
+    auth.onAuthStateChanged((u) => {
+  // Si estás logueado como Kristoff “manual”, no lo pises
+  if (currentUser?.email && String(currentUser.email).toLowerCase() === KRISTOFF_EMAIL.toLowerCase()) {
+    IS_ADMIN = true;
+    applyAdminBadgeUI();
+    return;
+  }
+
+  IS_ADMIN = !!(u?.email && ADMIN_EMAILS_CLIENT.has(String(u.email).toLowerCase()));
+  applyAdminBadgeUI();
+});
+
+    // ===== Kristoff UI =====
+    const btnKristoff = qs('#btn-kristoff');
+    const kClose = document.getElementById('kristoffClose');
+    const kEnter = document.getElementById('kristoffEnter');
+    const kPass  = document.getElementById('kristoffPass');
+    const kErr   = document.getElementById('kristoffErr');
+    const kStepPass = document.getElementById('kristoffStepPass');
+    const kStepMode = document.getElementById('kristoffStepMode');
+    const kHostCupid = document.getElementById('kristoffHostCupid');
+    const kSolo = document.getElementById('kristoffSolo');
+
+    function openKristoff(){
+      if(!chosenGender){ alert('Elige tu género primero'); return; }
+      kErr?.classList.add('hidden');
+      kPass.value = '';
+      kStepPass?.classList.remove('hidden');
+      kStepMode?.classList.add('hidden');
+      openModal('kristoffModal');
+      setTimeout(()=> kPass?.focus?.(), 120);
+    }
+    btnKristoff?.addEventListener('click', openKristoff);
+    kClose?.addEventListener('click', ()=> closeModal('kristoffModal'));
+
+    function unlockKristoff(){
+      const ok = (kPass.value || '') === KRISTOFF_PASSWORD;
+      if(!ok){ kErr?.classList.remove('hidden'); return; }
+      kErr?.classList.add('hidden');
+      kStepPass?.classList.add('hidden');
+      kStepMode?.classList.remove('hidden');
+    }
+    kEnter?.addEventListener('click', unlockKristoff);
+    kPass?.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); unlockKristoff(); } });
+
+    function kristoffLoginBase(){
+      window.KRISTOFF_EMAIL = KRISTOFF_EMAIL;
+      IS_ADMIN = true;
+      applyAdminBadgeUI();
+
+      currentUser = { displayName: 'Kristoff', email: KRISTOFF_EMAIL };
+      isGuest = false;
+
+      localStorage.setItem('ttv_gender', chosenGender);
+      closeModal('kristoffModal');
+
+      youBadge.classList.remove('hidden');
+      const n = 'Kristoff';
+      const a = inpEdad.value || localStorage.getItem('ttv_age') || '—';
+      youBadge.textContent = `Tú: ${n} (${a}) · ${chosenGender||'—'}`;
+
+      // Kristoff entra directo a chat (ya eligió modo)
+      show('chat');
+      initLayoutForDevice();
+      updateModePillUI();
+
+      mobilePanEnabled = true;
+      startIdlePanIfMobile();
+
+      ensureMedia(true).catch(()=>{});
+      setIdleUI();
+      updateGhostHandVisibility();
+    }
+
+    kSolo?.addEventListener('click', ()=>{
+      userMode = 'solo';
+      kristoffLoginBase();
+    });
+
+    kHostCupid?.addEventListener('click', ()=>{
+      userMode = 'cupid-host';
+      kristoffLoginBase();
+    });
+
+    // Google: login -> pantalla modo
+    btnGoogle?.addEventListener('click', async ()=>{
+      if(!chosenGender){ alert('Elige tu género primero'); return; }
+      try{
+        const provider=new firebase.auth.GoogleAuthProvider();
+        await auth.signInWithPopup(provider);
+        localStorage.setItem('ttv_gender', chosenGender);
+      }catch(e){
+        try{
+          const provider=new firebase.auth.GoogleAuthProvider();
+          await auth.signInWithRedirect(provider);
+        }catch(e2){ alert('Error Google: '+(e2?.message||e?.message)); }
+      }
+    });
+
+    // Invitado: directo a pantalla modo
+    btnGuest?.addEventListener('click', ()=>{
+      if(!chosenGender){ alert('Elige tu género primero'); return; }
+      const name = inpNombre.value || localStorage.getItem('ttv_name') || 'Invitado';
+      localStorage.setItem('ttv_gender', chosenGender);
+      proceedToModeAfterLoginLikeFlow(name);
+    });
+
+    /* ===== Floating Back + Mode Pill behavior ===== */
+    const btnBackFloat = document.getElementById('btn-back-float');
+    const modePill = document.getElementById('modePill');
+    const pillSolo = document.getElementById('pillSolo');
+    const pillCupid = document.getElementById('pillCupid');
+    let uiPulseTimer = null;
+
+    function isInChat(){ return pages?.chat?.classList?.contains('visible'); }
+
+    function updateModePillUI(){
+      const m = (userMode === 'cupid' || userMode === 'cupid-host') ? 'cupid' : 'solo';
+      pillSolo?.classList.toggle('active', m === 'solo');
+      pillCupid?.classList.toggle('active', m === 'cupid');
+      const showIt = isInChat();
+      modePill?.classList.toggle('show', showIt);
+    }
+
+    function showBackFloatTemporarily(){
+      if (!isInChat()) return;
+      btnBackFloat?.classList.add('show');
+      updateModePillUI();
+      if (uiPulseTimer) clearTimeout(uiPulseTimer);
+      uiPulseTimer = setTimeout(()=>{
+        btnBackFloat?.classList.remove('show');
+      }, 2600);
+    }
+
+    function goBackToLanding(){
+      stopAll();
+      document.querySelector('.mobile-dock')?.classList.remove('show');
+      if (groupActive) cleanupGroup({ keepLocal:false });
+      cleanupPeer({ keepLocal:false, closeWsToo:true });
+
+      localStorage.removeItem('ttv_guest');
+      isGuest = false;
+      currentUser = null;
+
+      try{ if (auth.currentUser) auth.signOut(); }catch{}
+
+      userMode = null;
+      updateModePillUI();
+
+      show('landing');
+      mobilePanEnabled = false;
+      stopIdlePan();
+      setGhostVisible(false);
+
+      showIdleRemote(true);
+      showIdleRemoteR(true);
+      showIdleLocal(true);
+
+      setIdleUI();
+
+      btnBackFloat?.classList.remove('show');
+      modePill?.classList.remove('show');
+    }
+
+    btnBackFloat?.addEventListener('click', (e)=>{
+      e.preventDefault();
+      goBackToLanding();
+    });
+
+    document.addEventListener('pointerdown', ()=>{
+      if (!isInChat()) return;
+      if (document.getElementById('kristoffModal')?.classList?.contains('hidden') === false) return;
+      showBackFloatTemporarily();
+       showMobileDock();
+    }, { passive:true });
+
+    async function setModeAndRequeue(nextMode){
+      nextMode = (nextMode === 'cupid') ? 'cupid' : 'solo';
+
+      const normalized =
+        (nextMode === 'cupid')
+          ? (isKristoffUser() ? 'cupid-host' : 'cupid')
+          : 'solo';
+
+      if (normalized === userMode) { updateModePillUI(); return; }
+
+      userMode = normalized;
+      updateModePillUI();
+
+      try{ stopAll(); }catch{}
+
+      setTimeout(()=>{
+        if (!isInChat()) return;
+        joinQueue();
+      }, 200);
+    }
+
+    pillSolo?.addEventListener('click', ()=> setModeAndRequeue('solo'));
+    pillCupid?.addEventListener('click', ()=> setModeAndRequeue('cupid'));
+
+    const __origShow = show;
+    show = function(k){
+      __origShow(k);
+      updateModePillUI();
+      if (k === 'chat') showBackFloatTemporarily();
+    };
+  </script>
+  
+</body>
+</html>

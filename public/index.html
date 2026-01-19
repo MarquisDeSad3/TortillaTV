@@ -1159,31 +1159,94 @@ function showMobileDock(ms = 2600){
 
       if (showIt) setGhostVisible(false); else updateGhostHandVisibility();
     }
-   // ===== FAKE SKIP (visual-only) =====
+   
 let FAKE_SKIP_ON = false;
+
+let _selfOvD = null; // PC sobre localTile
+let _selfOvM = null; // móvil sobre pane-local
+
+function _ensureSelfOverlay(){
+  // PC (local tile)
+  if (!_selfOvD){
+    const host = document.getElementById('localTile');
+    if (host){
+      _selfOvD = document.createElement('div');
+      _selfOvD.className = 'overlay';
+      _selfOvD.innerHTML = `
+        <div class="card px-5 py-4 flex items-center gap-3 bg-white">
+          <span class="font-semibold">Buscando tortilleras…</span>
+          <div class="flex"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+        </div>
+      `;
+      host.appendChild(_selfOvD);
+    }
+  }
+
+  if (!_selfOvM){
+    const hostM = document.getElementById('pane-local');
+    if (hostM){
+      _selfOvM = document.createElement('div');
+      _selfOvM.className = 'overlay';
+      _selfOvM.innerHTML = `
+        <div class="card px-5 py-4 flex items-center gap-3 bg-white">
+          <span class="font-semibold">Buscando tortilleras…</span>
+          <div class="flex"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+        </div>
+      `;
+      hostM.appendChild(_selfOvM);
+    }
+  }
+}
+
+function _showSelfOverlay(on){
+  _ensureSelfOverlay();
+  if (_selfOvD) _selfOvD.classList.toggle('show', !!on);
+  if (_selfOvM) _selfOvM.classList.toggle('show', !!on);
+}
+
 
 function applyFakeSkipUI(on){
   FAKE_SKIP_ON = !!on;
 
-  // Overlay normal de búsqueda (texto + emojis)
+ 
+  const amKristoff = IS_ADMIN && isKristoffUser();
+
+  if (amKristoff){
+   
+    _showSelfOverlay(FAKE_SKIP_ON);
+
+    
+    overlayShow(false);
+
+    if (remoteStreamRef) showIdleRemote(false);
+    document.getElementById('remoteVideo')?.classList.remove('hide');
+    document.getElementById('remoteVideoM')?.classList.remove('hide');
+
+    // 4) status opcional
+    if (FAKE_SKIP_ON) setStatus('Fake Skip…');
+    else {
+      if (inCall) setStatus('Conectado');
+      else if (isQueuing) setStatus('En cola…');
+      else setStatus('Listo');
+    }
+    return;
+  }
+
+  -
+
   overlayShow(FAKE_SKIP_ON);
 
-   
   if (FAKE_SKIP_ON) {
-  showIdleRemote(true);
-} else {
-  // si NO hay stream remoto todavía, deja el idle encendido (evita negro)
-  if (remoteStreamRef) showIdleRemote(false);
-}
+    showIdleRemote(true);
+  } else {
+    if (remoteStreamRef) showIdleRemote(false);
+  }
 
-
-  // Oculta SOLO el video remoto (NO se corta WebRTC)
   const vD = document.getElementById('remoteVideo');
   const vM = document.getElementById('remoteVideoM');
   if (vD) vD.classList.toggle('hide', FAKE_SKIP_ON);
   if (vM) vM.classList.toggle('hide', FAKE_SKIP_ON);
 
-  // Texto de estado (confirmación visual)
   if (FAKE_SKIP_ON) {
     setStatus('Buscando tortilleras…');
   } else {
@@ -1192,7 +1255,6 @@ function applyFakeSkipUI(on){
     else setStatus('Listo');
   }
 }
-
 
     const peerLabel = qs('#peerLabel');
     const youBadge  = qs('#you-badge');

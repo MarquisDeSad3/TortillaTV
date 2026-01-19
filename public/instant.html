@@ -1159,9 +1159,9 @@ function showMobileDock(ms = 2600){
 
       if (showIt) setGhostVisible(false); else updateGhostHandVisibility();
     }
-   // ===== FAKE SKIP (visual-only) =====
+   
 let FAKE_SKIP_ON = false;
-// ---- overlay sobre SELF (local) solo para Kristoff ----
+
 let _selfOvD = null; // PC sobre localTile
 let _selfOvM = null; // móvil sobre pane-local
 
@@ -1182,7 +1182,6 @@ function _ensureSelfOverlay(){
     }
   }
 
-  // Móvil (pane local)
   if (!_selfOvM){
     const hostM = document.getElementById('pane-local');
     if (hostM){
@@ -1209,19 +1208,16 @@ function _showSelfOverlay(on){
 function applyFakeSkipUI(on){
   FAKE_SKIP_ON = !!on;
 
-  // Si soy Kristoff (admin real), FakeSkip debe ir en MI SELF, y yo debo seguir viendo el remoto.
+ 
   const amKristoff = IS_ADMIN && isKristoffUser();
 
   if (amKristoff){
-    // 1) overlay encima de mi SELF
+   
     _showSelfOverlay(FAKE_SKIP_ON);
 
-    // 2) asegúrate de NO poner overlay sobre remoto (porque si no, no ves reacciones)
+    
     overlayShow(false);
 
-    // 3) NO muestres noise ni ocultes remoteVideo
-    //    (o sea, no tocar showIdleRemote ni .hide en remote)
-    //    pero por si algo lo dejó activado antes:
     if (remoteStreamRef) showIdleRemote(false);
     document.getElementById('remoteVideo')?.classList.remove('hide');
     document.getElementById('remoteVideoM')?.classList.remove('hide');
@@ -1236,7 +1232,7 @@ function applyFakeSkipUI(on){
     return;
   }
 
-  // ---- usuarios normales (la pareja): comportamiento actual ----
+  -
 
   overlayShow(FAKE_SKIP_ON);
 
