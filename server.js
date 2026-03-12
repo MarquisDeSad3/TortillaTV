@@ -38,6 +38,10 @@ const queues = {
   cupid: [],
 };
 const cupidSelections = new Map();
+const sessionIndex = new Map();
+const reconnectTimers = new Map();
+
+const GROUP_RECONNECT_GRACE_MS = 15_000;
 
 let soloMatchScheduled = false;
 
@@ -114,7 +118,7 @@ function serializeUser(client) {
 }
 
 function isAdminCupidDashboard(client) {
-  return !!client && !!client.isAdmin && client.matchMode === 'cupid-host';
+  return !!client && !!client.isAdmin && client.matchMode === 'cupid-host' && client.state === 'idle';
 }
 
 function getCupidSelection(adminId) {
@@ -240,6 +244,96 @@ function broadcastCupidAdminStates() {
   for (const [id, client] of clients.entries()) {
     if (isAdminCupidDashboard(client)) sendCupidAdminState(id);
   }
+}
+
+function clearReconnectTimer(id) {
+  const timer = reconnectTimers.get(id);
+  if (timer) {
+    clearTimeout(timer);
+    reconnectTimers.delete(id);
+  }
+}
+
+function buildGroupPayload(room) {
+  if (!room) return null;
+  const host = getClient(room.hostId);
+  const left = getClient(room.leftId);
+  const right = getClient(room.rightId);
+  return {
+    roomId: room.roomId,
+    hostId: room.hostId,
+    peers: [
+      { ...serializeUser(host), role: 'host' },
+      { ...serializeUser(left), role: 'user' },
+      { ...serializeUser(right), role: 'user' },
+    ],
+  };
+}
+
+function sendGroupResume(client) {
+  if (!client?.groupRoomId) return;
+  const room = groupRooms.get(client.groupRoomId);
+  if (!room) return;
+  const payload = buildGroupPayload(room);
+  if (!payload) return;
+  safeSend(client.ws, { type: 'group-resume', resumed: true, ...payload });
+}
+
+function notifyGroupPeerReconnected(roomId, peerId) {
+  const room = groupRooms.get(roomId);
+  if (!room) return;
+
+  for (const id of [room.hostId, room.leftId, room.rightId]) {
+    if (id === peerId) continue;
+    const client = getClient(id);
+    if (!client?.ws) continue;
+    safeSend(client.ws, { type: 'group-peer-reconnected', roomId, peerId });
+  }
+}
+
+function attachSessionToConnection(sessionKey, tempClientId, ws) {
+  const tempClient = getClient(tempClientId);
+  if (!tempClient) return null;
+
+  const existingId = sessionIndex.get(sessionKey);
+  if (!existingId || existingId === tempClientId) {
+    if (tempClient.sessionKey && sessionIndex.get(tempClient.sessionKey) === tempClientId) {
+      sessionIndex.delete(tempClient.sessionKey);
+    }
+    tempClient.sessionKey = sessionKey;
+    sessionIndex.set(sessionKey, tempClientId);
+    return tempClient;
+  }
+
+  const existing = getClient(existingId);
+  if (!existing) {
+    sessionIndex.delete(sessionKey);
+    tempClient.sessionKey = sessionKey;
+    sessionIndex.set(sessionKey, tempClientId);
+    return tempClient;
+  }
+
+  clearReconnectTimer(existingId);
+
+  if (existing.ws && existing.ws !== ws) {
+    try { existing.ws.close(); } catch {}
+  }
+
+  existing.ws = ws;
+  existing.isAlive = true;
+  existing.sessionKey = sessionKey;
+
+  if (existing.groupRoomId) existing.state = 'in-group';
+  else if (existing.roomId) existing.state = 'in-room';
+  else if (existing.inQueue) existing.state = 'waiting';
+  else existing.state = existing.matchMode === 'cupid-host' ? 'idle' : (existing.state || 'idle');
+
+  clients.delete(tempClientId);
+  sessionIndex.set(sessionKey, existingId);
+
+  safeSend(existing.ws, { type: 'welcome', id: existing.id, isAdmin: existing.isAdmin, isPro: existing.isPro, resumed: true });
+
+  return existing;
 }
 
 function scheduleSoloMatcher() {
@@ -410,12 +504,17 @@ function createGroupRoom(hostId, leftId, rightId) {
   if (left.matchMode !== 'cupid' || right.matchMode !== 'cupid') return false;
   if (leftId === rightId) return false;
 
+  clearReconnectTimer(hostId);
+  clearReconnectTimer(leftId);
+  clearReconnectTimer(rightId);
+
   removeFromQueues(leftId);
   removeFromQueues(rightId);
   clearCupidSelection(hostId);
 
   const roomId = uuid();
-  groupRooms.set(roomId, { roomId, hostId, leftId, rightId });
+  const room = { roomId, hostId, leftId, rightId };
+  groupRooms.set(roomId, room);
 
   for (const client of [host, left, right]) {
     client.groupRoomId = roomId;
@@ -424,15 +523,11 @@ function createGroupRoom(hostId, leftId, rightId) {
     client.inQueue = false;
   }
 
-  const peers = [
-    { ...serializeUser(host), role: 'host' },
-    { ...serializeUser(left), role: 'user' },
-    { ...serializeUser(right), role: 'user' },
-  ];
+  const payload = buildGroupPayload(room);
 
-  safeSend(host.ws, { type: 'group-matched', roomId, hostId, peers });
-  safeSend(left.ws, { type: 'group-matched', roomId, hostId, peers });
-  safeSend(right.ws, { type: 'group-matched', roomId, hostId, peers });
+  safeSend(host.ws, { type: 'group-matched', ...payload });
+  safeSend(left.ws, { type: 'group-matched', ...payload });
+  safeSend(right.ws, { type: 'group-matched', ...payload });
 
   broadcastCupidAdminStates();
   console.log('[CUPID MATCH]', hostId, '<->', leftId, '<->', rightId, '->', roomId);
@@ -445,6 +540,10 @@ function teardownGroupRoom(roomId, reason = 'group-teardown', leaverId = null) {
   groupRooms.delete(roomId);
 
   const ids = [room.hostId, room.leftId, room.rightId];
+  for (const id of ids) {
+    clearReconnectTimer(id);
+  }
+
   for (const id of ids) {
     if (id === leaverId) continue;
     const client = getClient(id);
@@ -556,6 +655,7 @@ function makeClient(id, ws) {
   return {
     id,
     ws,
+    sessionKey: null,
     name: null,
     email: null,
     gender: null,
@@ -584,9 +684,11 @@ function resetClientToIdle(client) {
   client.joinTs = 0;
 }
 
-function handleDisconnect(id, reason = 'disconnect') {
+function finalizeDisconnect(id, reason = 'disconnect') {
   const client = getClient(id);
   if (!client) return;
+
+  clearReconnectTimer(id);
 
   const wasCupidRelated = client.matchMode === 'cupid' || client.matchMode === 'cupid-host' || client.groupRoomId || queues.cupid.includes(id) || !!reservedByAdmin(id);
   removeFromQueues(id);
@@ -599,21 +701,52 @@ function handleDisconnect(id, reason = 'disconnect') {
     teardownSoloRoom(client.roomId, reason, id);
   }
 
+  if (client.sessionKey && sessionIndex.get(client.sessionKey) === id) {
+    sessionIndex.delete(client.sessionKey);
+  }
+
   clients.delete(id);
   if (selectionsChanged || wasCupidRelated) broadcastCupidAdminStates();
 }
 
-wss.on('connection', (ws) => {
-  const id = uuid();
-  const client = makeClient(id, ws);
-  clients.set(id, client);
-  console.log('[WS] connected:', id);
+function handleDisconnect(id, reason = 'disconnect') {
+  const client = getClient(id);
+  if (!client) return;
 
-  safeSend(ws, { type: 'welcome', id, isAdmin: false, isPro: false });
+  client.ws = null;
+  client.isAlive = false;
+
+  if (client.groupRoomId) {
+    if (!reconnectTimers.has(id)) {
+      client.state = 'reconnecting';
+      const expectedRoomId = client.groupRoomId;
+      reconnectTimers.set(id, setTimeout(() => {
+        reconnectTimers.delete(id);
+        const current = getClient(id);
+        if (!current) return;
+        if (current.ws) return;
+        if (current.groupRoomId !== expectedRoomId) return;
+        finalizeDisconnect(id, reason);
+      }, GROUP_RECONNECT_GRACE_MS));
+    }
+    return;
+  }
+
+  finalizeDisconnect(id, reason);
+}
+
+wss.on('connection', (ws) => {
+  const initialId = uuid();
+  let socketClientId = initialId;
+  const client = makeClient(initialId, ws);
+  clients.set(initialId, client);
+  console.log('[WS] connected:', initialId);
+
+  safeSend(ws, { type: 'welcome', id: initialId, isAdmin: false, isPro: false });
 
   ws.on('pong', () => {
-    const current = getClient(id);
-    if (current) current.isAlive = true;
+    const current = getClient(socketClientId);
+    if (current && current.ws === ws) current.isAlive = true;
   });
 
   ws.on('message', (raw) => {
@@ -624,22 +757,40 @@ wss.on('connection', (ws) => {
       return;
     }
 
-    const me = getClient(id);
-    if (!me) return;
+    let me = getClient(socketClientId);
+    if (!me || me.ws !== ws) return;
 
     switch (msg.type) {
       case 'identify': {
+        const sessionKey = String(msg.sessionKey || '').trim();
+        if (sessionKey) {
+          const attached = attachSessionToConnection(sessionKey, socketClientId, ws);
+          if (attached) {
+            socketClientId = attached.id;
+            me = attached;
+          }
+        }
+
         const email = String(msg.email || '').trim().toLowerCase();
         me.name = msg.displayName || me.name || '—';
         me.email = email || '';
         me.isAdmin = ADMIN_EMAILS.has(email);
         me.isPro = me.isAdmin;
+        me.isAlive = true;
+
         safeSend(me.ws, { type: 'role', isAdmin: me.isAdmin, isPro: me.isPro });
-        if (isAdminCupidDashboard(me)) sendCupidAdminState(me.id);
+
+        if (me.groupRoomId) {
+          sendGroupResume(me);
+          notifyGroupPeerReconnected(me.groupRoomId, me.id);
+        } else if (isAdminCupidDashboard(me)) {
+          sendCupidAdminState(me.id);
+        }
         break;
       }
 
       case 'find': {
+        const id = me.id;
         const now = nowMs();
         if (now - me.lastFindTs < REQUEUE_COOLDOWN_MS) break;
         me.lastFindTs = now;
@@ -648,6 +799,7 @@ wss.on('connection', (ws) => {
         me.gender = msg.gender || me.gender || 'Hombre';
         me.age = msg.age || me.age || '—';
 
+        clearReconnectTimer(id);
         if (me.groupRoomId) teardownGroupRoom(me.groupRoomId, 'requeue', id);
         if (me.roomId) teardownSoloRoom(me.roomId, 'requeue', id);
         removeFromQueues(id);
@@ -680,11 +832,13 @@ wss.on('connection', (ws) => {
       }
 
       case 'cupid-admin-open': {
+        const id = me.id;
         if (!me.isAdmin) break;
         me.name = msg.displayName || me.name || 'Kristoff';
         me.gender = msg.gender || me.gender || 'Hombre';
         me.age = msg.age || me.age || '—';
 
+        clearReconnectTimer(id);
         if (me.groupRoomId) teardownGroupRoom(me.groupRoomId, 'admin-refresh', id);
         if (me.roomId) teardownSoloRoom(me.roomId, 'admin-refresh', id);
 
@@ -699,7 +853,7 @@ wss.on('connection', (ws) => {
 
       case 'cupid-clear-all': {
         if (!me.isAdmin) break;
-        const changed = clearCupidSelection(id);
+        const changed = clearCupidSelection(me.id);
         if (changed) broadcastCupidAdminStates();
         break;
       }
@@ -707,12 +861,13 @@ wss.on('connection', (ws) => {
       case 'cupid-clear-slot': {
         if (!me.isAdmin) break;
         const slot = msg.slot === 'right' ? 'right' : 'left';
-        const changed = clearCupidSelection(id, slot);
+        const changed = clearCupidSelection(me.id, slot);
         if (changed) broadcastCupidAdminStates();
         break;
       }
 
       case 'cupid-select-slot': {
+        const id = me.id;
         if (!me.isAdmin || me.matchMode !== 'cupid-host') {
           safeSend(me.ws, { type: 'cupid-error', message: 'No eres el administrador de Cupido.' });
           break;
@@ -759,19 +914,19 @@ wss.on('connection', (ws) => {
       case 'offer':
       case 'answer':
       case 'ice': {
-        relaySoloSignal(id, msg);
+        relaySoloSignal(me.id, msg);
         break;
       }
 
       case 'group-offer':
       case 'group-answer':
       case 'group-ice': {
-        relayGroupSignal(id, msg);
+        relayGroupSignal(me.id, msg);
         break;
       }
 
       case 'group-close': {
-        relayGroupSignal(id, { ...msg, type: 'group-close' });
+        relayGroupSignal(me.id, { ...msg, type: 'group-close' });
         break;
       }
 
@@ -784,13 +939,15 @@ wss.on('connection', (ws) => {
         const room = soloRooms.get(me.roomId);
         if (!room) break;
         const nextOn = !(room.fakeSkip?.on);
-        room.fakeSkip = { on: nextOn, actorId: id };
-        broadcastFakeSkip(me.roomId, nextOn, id);
+        room.fakeSkip = { on: nextOn, actorId: me.id };
+        broadcastFakeSkip(me.roomId, nextOn, me.id);
         break;
       }
 
       case 'leave': {
+        const id = me.id;
         const wasCupidRelated = me.matchMode === 'cupid' || me.matchMode === 'cupid-host' || me.groupRoomId || queues.cupid.includes(id) || !!reservedByAdmin(id);
+        clearReconnectTimer(id);
         removeFromQueues(id);
         const changed = dropUserFromSelections(id) || clearCupidSelection(id);
 
@@ -816,13 +973,17 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('close', () => {
-    console.log('[WS] closed:', id);
-    handleDisconnect(id, 'disconnect');
+    const current = getClient(socketClientId);
+    if (current && current.ws !== ws) return;
+    console.log('[WS] closed:', socketClientId);
+    handleDisconnect(socketClientId, 'disconnect');
   });
 });
 
 const keepAlive = setInterval(() => {
   for (const [id, client] of clients.entries()) {
+    if (!client.ws) continue;
+
     if (!client.isAlive) {
       try { client.ws.terminate(); } catch {}
       console.log('[WS] terminated dead client:', id);

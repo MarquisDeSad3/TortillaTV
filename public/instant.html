@@ -1159,94 +1159,31 @@ function showMobileDock(ms = 2600){
 
       if (showIt) setGhostVisible(false); else updateGhostHandVisibility();
     }
-   
+   // ===== FAKE SKIP (visual-only) =====
 let FAKE_SKIP_ON = false;
-
-let _selfOvD = null; // PC sobre localTile
-let _selfOvM = null; // móvil sobre pane-local
-
-function _ensureSelfOverlay(){
-  // PC (local tile)
-  if (!_selfOvD){
-    const host = document.getElementById('localTile');
-    if (host){
-      _selfOvD = document.createElement('div');
-      _selfOvD.className = 'overlay';
-      _selfOvD.innerHTML = `
-        <div class="card px-5 py-4 flex items-center gap-3 bg-white">
-          <span class="font-semibold">Buscando tortilleras…</span>
-          <div class="flex"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
-        </div>
-      `;
-      host.appendChild(_selfOvD);
-    }
-  }
-
-  if (!_selfOvM){
-    const hostM = document.getElementById('pane-local');
-    if (hostM){
-      _selfOvM = document.createElement('div');
-      _selfOvM.className = 'overlay';
-      _selfOvM.innerHTML = `
-        <div class="card px-5 py-4 flex items-center gap-3 bg-white">
-          <span class="font-semibold">Buscando tortilleras…</span>
-          <div class="flex"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
-        </div>
-      `;
-      hostM.appendChild(_selfOvM);
-    }
-  }
-}
-
-function _showSelfOverlay(on){
-  _ensureSelfOverlay();
-  if (_selfOvD) _selfOvD.classList.toggle('show', !!on);
-  if (_selfOvM) _selfOvM.classList.toggle('show', !!on);
-}
-
 
 function applyFakeSkipUI(on){
   FAKE_SKIP_ON = !!on;
 
- 
-  const amKristoff = IS_ADMIN && isKristoffUser();
-
-  if (amKristoff){
-   
-    _showSelfOverlay(FAKE_SKIP_ON);
-
-    
-    overlayShow(false);
-
-    if (remoteStreamRef) showIdleRemote(false);
-    document.getElementById('remoteVideo')?.classList.remove('hide');
-    document.getElementById('remoteVideoM')?.classList.remove('hide');
-
-    // 4) status opcional
-    if (FAKE_SKIP_ON) setStatus('Fake Skip…');
-    else {
-      if (inCall) setStatus('Conectado');
-      else if (isQueuing) setStatus('En cola…');
-      else setStatus('Listo');
-    }
-    return;
-  }
-
-  -
-
+  // Overlay normal de búsqueda (texto + emojis)
   overlayShow(FAKE_SKIP_ON);
 
+   
   if (FAKE_SKIP_ON) {
-    showIdleRemote(true);
-  } else {
-    if (remoteStreamRef) showIdleRemote(false);
-  }
+  showIdleRemote(true);
+} else {
+  // si NO hay stream remoto todavía, deja el idle encendido (evita negro)
+  if (remoteStreamRef) showIdleRemote(false);
+}
 
+
+  // Oculta SOLO el video remoto (NO se corta WebRTC)
   const vD = document.getElementById('remoteVideo');
   const vM = document.getElementById('remoteVideoM');
   if (vD) vD.classList.toggle('hide', FAKE_SKIP_ON);
   if (vM) vM.classList.toggle('hide', FAKE_SKIP_ON);
 
+  // Texto de estado (confirmación visual)
   if (FAKE_SKIP_ON) {
     setStatus('Buscando tortilleras…');
   } else {
@@ -1255,6 +1192,7 @@ function applyFakeSkipUI(on){
     else setStatus('Listo');
   }
 }
+
 
     const peerLabel = qs('#peerLabel');
     const youBadge  = qs('#you-badge');
@@ -3195,5 +3133,623 @@ btnSalirM?.addEventListener('click', ()=> showMobileDock());
     };
   </script>
   
+
+  <style id="cupid-admin-patch-style">
+    .cupid-picker{
+      position:absolute;
+      inset:0;
+      z-index:24;
+      overflow:auto;
+      padding:14px;
+      background:linear-gradient(180deg, rgba(15,23,42,.62), rgba(15,23,42,.82));
+      color:#fff;
+      scrollbar-width:thin;
+    }
+    .cupid-picker.hidden{ display:none !important; }
+    .cupid-picker__header{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      margin-bottom:12px;
+    }
+    .cupid-picker__title{
+      font-weight:900;
+      font-size:1rem;
+      letter-spacing:.2px;
+    }
+    .cupid-picker__hint{
+      font-size:.78rem;
+      opacity:.82;
+    }
+    .cupid-picker__list{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      padding-bottom:8px;
+    }
+    .cupid-card{
+      border-radius:18px;
+      padding:12px 12px 10px;
+      background:rgba(255,255,255,.1);
+      border:1px solid rgba(255,255,255,.14);
+      box-shadow:0 10px 22px rgba(0,0,0,.18);
+      backdrop-filter:blur(10px);
+    }
+    .cupid-card--selected{
+      background:rgba(255,255,255,.16);
+      border-color:rgba(255,255,255,.22);
+    }
+    .cupid-card__name{
+      font-weight:900;
+      font-size:1rem;
+      line-height:1.1;
+      margin-bottom:4px;
+    }
+    .cupid-card__meta{
+      font-size:.8rem;
+      opacity:.88;
+      line-height:1.35;
+      word-break:break-word;
+    }
+    .cupid-card__actions{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      margin-top:10px;
+    }
+    .cupid-btn{
+      appearance:none;
+      border:none;
+      border-radius:999px;
+      padding:.62rem .95rem;
+      font-weight:900;
+      font-size:.82rem;
+      letter-spacing:.2px;
+      cursor:pointer;
+      transition:transform .08s ease, opacity .12s ease, background .12s ease;
+    }
+    .cupid-btn:active{ transform:translateY(1px); }
+    .cupid-btn--primary{ background:#fff; color:#111; }
+    .cupid-btn--ghost{ background:rgba(255,255,255,.12); color:#fff; border:1px solid rgba(255,255,255,.14); }
+    .cupid-btn--danger{ background:rgba(239,68,68,.94); color:#fff; }
+    .cupid-empty{
+      min-height:100%;
+      display:flex;
+      flex-direction:column;
+      justify-content:center;
+      text-align:center;
+      gap:12px;
+      color:#fff;
+      opacity:.95;
+    }
+    .cupid-empty__big{
+      font-size:1.05rem;
+      font-weight:900;
+      line-height:1.2;
+    }
+    .cupid-empty__small{
+      font-size:.85rem;
+      opacity:.82;
+      max-width:24rem;
+      margin:0 auto;
+    }
+    .cupid-slot-pill{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      border-radius:999px;
+      padding:.42rem .72rem;
+      background:rgba(255,255,255,.12);
+      border:1px solid rgba(255,255,255,.18);
+      font-size:.76rem;
+      font-weight:800;
+    }
+    .cupid-selected-banner{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:10px;
+      margin-bottom:10px;
+      font-size:.8rem;
+      font-weight:800;
+      opacity:.92;
+    }
+    .cupid-selected-banner .dotx{
+      width:8px;
+      height:8px;
+      border-radius:999px;
+      background:#22c55e;
+      box-shadow:0 0 12px rgba(34,197,94,.75);
+    }
+    #pane-remote .cupid-picker,
+    #pane-local .cupid-picker{
+      padding-top:calc(env(safe-area-inset-top,0) + 16px);
+    }
+  </style>
+  <script id="cupid-admin-patch">
+  (() => {
+    const htmlEscape = (value) => String(value ?? '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
+
+    const $ = (sel, root = document) => root.querySelector(sel);
+
+    function ensureCupidAdminPanels(){
+      if (!$('#cupidPickerLeft')) {
+        $('#remoteTile')?.insertAdjacentHTML('beforeend', '<div id="cupidPickerLeft" class="cupid-picker hidden"></div>');
+      }
+      if (!$('#cupidPickerRight')) {
+        $('#remoteTileR')?.insertAdjacentHTML('beforeend', '<div id="cupidPickerRight" class="cupid-picker hidden"></div>');
+      }
+      if (!$('#cupidPickerLeftM')) {
+        $('#pane-remote')?.insertAdjacentHTML('beforeend', '<div id="cupidPickerLeftM" class="cupid-picker hidden"></div>');
+      }
+      if (!$('#cupidPickerRightM')) {
+        $('#pane-local')?.insertAdjacentHTML('beforeend', '<div id="cupidPickerRightM" class="cupid-picker hidden"></div>');
+      }
+    }
+
+    ensureCupidAdminPanels();
+
+    const cupidAdminState = {
+      queue: [],
+      selected: { left: null, right: null },
+      timer: null,
+    };
+
+    function isCupidHostAdminMode(){
+      try { return !!IS_ADMIN && serverMode() === 'cupid-host'; }
+      catch { return false; }
+    }
+
+    function cupidDisplayName(){
+      return (
+        inpNombre?.value ||
+        localStorage.getItem('ttv_name') ||
+        auth?.currentUser?.displayName ||
+        currentUser?.displayName ||
+        (isKristoffUser?.() ? 'Kristoff' : '—')
+      );
+    }
+
+    function cupidGender(){
+      return chosenGender || localStorage.getItem('ttv_gender') || 'Hombre';
+    }
+
+    function cupidAge(){
+      return inpEdad?.value || localStorage.getItem('ttv_age') || '—';
+    }
+
+    function fmtWait(user){
+      const joinedAt = Number(user?.joinedAt || 0);
+      if (!joinedAt) return '';
+      const secs = Math.max(0, Math.floor((Date.now() - joinedAt) / 1000));
+      const min = Math.floor(secs / 60);
+      const rem = secs % 60;
+      return min > 0 ? `${min}m ${String(rem).padStart(2, '0')}s` : `${rem}s`;
+    }
+
+    function userMetaLines(user){
+      const parts = [];
+      if (user?.email) parts.push(user.email);
+      if (user?.gender) parts.push(user.gender);
+      if (user?.age && user.age !== '—') parts.push(`${user.age} años`);
+      const waited = fmtWait(user);
+      if (waited) parts.push(`espera ${waited}`);
+      return parts.filter(Boolean).join(' · ');
+    }
+
+    function cupidFilteredQueue(){
+      const leftId = cupidAdminState.selected.left?.id || null;
+      const rightId = cupidAdminState.selected.right?.id || null;
+      return (cupidAdminState.queue || []).filter((user) => {
+        if (!user?.id) return false;
+        if (user.id === leftId || user.id === rightId) return false;
+        return true;
+      });
+    }
+
+    function buildPickerHTML(slot){
+      const selected = cupidAdminState.selected[slot];
+      const queue = cupidFilteredQueue();
+      const slotLabel = slot === 'left' ? 'Izquierda' : 'Derecha';
+
+      if (selected) {
+        return `
+          <div class="cupid-selected-banner"><span class="dotx"></span><span>${slotLabel} reservado</span></div>
+          <div class="cupid-card cupid-card--selected">
+            <div class="cupid-card__name">${htmlEscape(selected.name || '—')}</div>
+            <div class="cupid-card__meta">${htmlEscape(userMetaLines(selected) || 'Participante listo')}</div>
+            <div class="cupid-card__actions">
+              <button class="cupid-btn cupid-btn--danger" data-cupid-clear-slot="${slot}">Quitar</button>
+            </div>
+          </div>
+          <div class="cupid-empty" style="min-height:auto; padding-top:14px;">
+            <div class="cupid-empty__small">Cuando reserves a la otra persona, el trío arrancará solo.</div>
+          </div>
+        `;
+      }
+
+      if (!queue.length) {
+        return `
+          <div class="cupid-empty">
+            <div class="cupid-empty__big">${slotLabel} vacío</div>
+            <div class="cupid-empty__small">Todavía no hay nadie disponible en la cola Cupido.</div>
+          </div>
+        `;
+      }
+
+      const cards = queue.map((user) => `
+        <div class="cupid-card">
+          <div class="cupid-card__name">${htmlEscape(user.name || '—')}</div>
+          <div class="cupid-card__meta">${htmlEscape(userMetaLines(user) || 'Sin datos')}</div>
+          <div class="cupid-card__actions">
+            <button class="cupid-btn cupid-btn--primary" data-cupid-slot="${slot}" data-cupid-id="${htmlEscape(user.id)}">Seleccionar ${slotLabel.toLowerCase()}</button>
+          </div>
+        </div>
+      `).join('');
+
+      return `
+        <div class="cupid-picker__list">${cards}</div>
+      `;
+    }
+
+    function bindCupidPickerActions(root){
+      if (!root) return;
+      root.querySelectorAll('[data-cupid-slot]').forEach((btn) => {
+        btn.onclick = () => {
+          const slot = btn.getAttribute('data-cupid-slot');
+          const targetId = btn.getAttribute('data-cupid-id');
+          if (!slot || !targetId) return;
+          try {
+            send({ type: 'cupid-select-slot', slot, targetId, autoStart: true });
+            setStatus(`Reservando ${slot === 'left' ? 'izquierda' : 'derecha'}…`);
+          } catch {}
+        };
+      });
+
+      root.querySelectorAll('[data-cupid-clear-slot]').forEach((btn) => {
+        btn.onclick = () => {
+          const slot = btn.getAttribute('data-cupid-clear-slot');
+          if (!slot) return;
+          try { send({ type: 'cupid-clear-slot', slot }); } catch {}
+        };
+      });
+    }
+
+    function renderCupidAdminPickers(){
+      ensureCupidAdminPanels();
+      const show = isCupidHostAdminMode() && isInChat() && !groupActive;
+      const targets = [
+        ['#cupidPickerLeft', 'left'],
+        ['#cupidPickerRight', 'right'],
+        ['#cupidPickerLeftM', 'left'],
+        ['#cupidPickerRightM', 'right'],
+      ];
+
+      for (const [selector, slot] of targets) {
+        const el = $(selector);
+        if (!el) continue;
+        el.classList.toggle('hidden', !show);
+        if (!show) { el.innerHTML = ''; continue; }
+        const slotLabel = slot === 'left' ? 'Izquierda' : 'Derecha';
+        const hint = slot === 'left'
+          ? 'Elige quién va al panel izquierdo.'
+          : 'Elige quién va al panel derecho.';
+        el.innerHTML = `
+          <div class="cupid-picker__header">
+            <div>
+              <div class="cupid-picker__title">Panel ${slotLabel}</div>
+              <div class="cupid-picker__hint">${hint}</div>
+            </div>
+            <span class="cupid-slot-pill">${slotLabel}</span>
+          </div>
+          ${buildPickerHTML(slot)}
+        `;
+        bindCupidPickerActions(el);
+      }
+    }
+
+    function clearCupidAdminLocalState(){
+      cupidAdminState.queue = [];
+      cupidAdminState.selected = { left: null, right: null };
+      renderCupidAdminPickers();
+    }
+
+    function syncCupidAdminSelfPreview(){
+      if (!isCupidHostAdminMode() || !localStream) return;
+
+      if (isMobile()) {
+        if (cupidSelfVideoM) {
+          cupidSelfVideoM.srcObject = localStream;
+          cupidSelfVideoM.muted = true;
+          safePlay(cupidSelfVideoM);
+        }
+        if (localVideoM) {
+          try { localVideoM.pause?.(); } catch {}
+          try { localVideoM.srcObject = null; } catch {}
+          localVideoM.classList.add('hide');
+        }
+        document.getElementById('overlayM_R')?.classList.remove('show');
+      } else {
+        if (pipVideo) {
+          pipVideo.srcObject = localStream;
+          pipVideo.muted = true;
+          safePlay(pipVideo);
+        }
+      }
+    }
+
+    function updateCupidAdminLayout(){
+      const hostMode = isCupidHostAdminMode();
+
+      if (isMobile()) {
+        const showTrioShell = hostMode || groupActive;
+        if (cupidMini) cupidMini.style.display = showTrioShell ? '' : 'none';
+        remoteVideo2M?.classList.toggle('hide', !showTrioShell);
+        localVideoM?.classList.toggle('hide', showTrioShell);
+        if (hostMode) syncCupidAdminSelfPreview();
+        if (!hostMode && !groupActive) {
+          try { cupidSelfVideoM.srcObject = null; } catch {}
+        }
+      } else {
+        if (hostMode) {
+          if (remoteTileR) remoteTileR.style.display = '';
+          if (localTile) localTile.style.display = 'none';
+          setPipVisible(true);
+          syncCupidAdminSelfPreview();
+        } else if (!groupActive) {
+          if (remoteTileR) remoteTileR.style.display = 'none';
+          if (localTile) localTile.style.display = '';
+          setPipVisible(false);
+        } else {
+          // participantes en grupo y resto del comportamiento normal
+          try { remoteTileR && (remoteTileR.style.display = (isGroupHost?.() ? '' : 'none')); } catch {}
+        }
+      }
+
+      if (hostMode) {
+        showIdleRemote(true);
+        showIdleRemoteR(true);
+        overlayShow(false);
+      }
+
+      renderCupidAdminPickers();
+    }
+
+    function applyCupidAdminStateFromServer(data){
+      cupidAdminState.queue = Array.isArray(data?.queue) ? data.queue : [];
+      cupidAdminState.selected = {
+        left: data?.selected?.left || null,
+        right: data?.selected?.right || null,
+      };
+      setStatus(groupActive ? 'Sala Cupido · Conectando…' : 'Panel Cupido · selecciona izquierda y derecha');
+      overlayShow(false);
+      updateCupidAdminLayout();
+      setIdleUI();
+    }
+
+    function hookCupidWs(){
+      if (!ws || ws.__cupidAdminHooked) return;
+      ws.__cupidAdminHooked = true;
+      ws.addEventListener('message', (evt) => {
+        let data;
+        try { data = JSON.parse(evt.data); } catch { return; }
+
+        if (data.type === 'cupid-admin-state') {
+          applyCupidAdminStateFromServer(data);
+        }
+        if (data.type === 'cupid-error') {
+          setStatus(data.message || 'Error en Cupido');
+          updateCupidAdminLayout();
+        }
+      });
+    }
+
+    const origConnectWS = connectWS;
+    connectWS = async function(...args){
+      const out = await origConnectWS.apply(this, args);
+      hookCupidWs();
+      return out;
+    };
+
+    const origEnsureMedia = ensureMedia;
+    ensureMedia = async function(...args){
+      const stream = await origEnsureMedia.apply(this, args);
+      syncCupidAdminSelfPreview();
+      updateCupidAdminLayout();
+      return stream;
+    };
+
+    const origSetCupidCallLayout = setCupidCallLayout;
+    setCupidCallLayout = function(active){
+      if (!isCupidHostAdminMode()) {
+        const out = origSetCupidCallLayout.apply(this, arguments);
+        updateCupidAdminLayout();
+        return out;
+      }
+      updateCupidAdminLayout();
+      return undefined;
+    };
+
+    const origCleanupGroup = cleanupGroup;
+    cleanupGroup = function(...args){
+      const out = origCleanupGroup.apply(this, args);
+      updateCupidAdminLayout();
+      return out;
+    };
+
+    const origCleanupPeer = cleanupPeer;
+    cleanupPeer = function(...args){
+      const out = origCleanupPeer.apply(this, args);
+      updateCupidAdminLayout();
+      return out;
+    };
+
+    const origStartGroupCall = startGroupCall;
+    startGroupCall = async function(...args){
+      const out = await origStartGroupCall.apply(this, args);
+      updateCupidAdminLayout();
+      return out;
+    };
+
+    const origHandleCallEnded = handleCallEnded;
+    handleCallEnded = function(...args){
+      const out = origHandleCallEnded.apply(this, args);
+      updateCupidAdminLayout();
+      return out;
+    };
+
+    const origSetIdleUI = setIdleUI;
+    setIdleUI = function(){
+      if (!isCupidHostAdminMode()) return origSetIdleUI.apply(this, arguments);
+
+      if (btnStart) {
+        btnStart.disabled = false;
+        btnStart.textContent = 'Actualizar cola Cupido';
+      }
+      if (btnNext) {
+        btnNext.disabled = true;
+        btnNext.textContent = 'Siguiente';
+      }
+      if (btnStop) {
+        btnStop.disabled = !groupActive;
+        btnStop.textContent = groupActive ? 'Terminar trío' : 'Detener';
+      }
+      if (btnMute) btnMute.disabled = !localStream;
+      if (btnCam) btnCam.disabled = !localStream;
+      if (btnBuscarM) {
+        btnBuscarM.disabled = false;
+        btnBuscarM.textContent = groupActive ? 'Terminar trío' : 'Actualizar cola';
+      }
+      if (btnSalirM) btnSalirM.textContent = 'Salir';
+      showMobileDock();
+    };
+
+    const origSetSearchingUI = setSearchingUI;
+    setSearchingUI = function(){
+      if (!isCupidHostAdminMode()) return origSetSearchingUI.apply(this, arguments);
+      setIdleUI();
+      setStatus(groupActive ? 'Sala Cupido · Conectando…' : 'Panel Cupido · selecciona izquierda y derecha');
+    };
+
+    const origEnableControls = enableControls;
+    enableControls = function(){
+      if (!isCupidHostAdminMode()) return origEnableControls.apply(this, arguments);
+      setIdleUI();
+    };
+
+    async function openCupidAdminPanel(forceRefresh = false){
+      if (!isCupidHostAdminMode()) return;
+      await connectWS();
+      await ensureMedia(true).catch(() => {});
+
+      isQueuing = false;
+      autoCycle = false;
+      userHardStop = false;
+      overlayShow(false);
+      setStatus('Panel Cupido · selecciona izquierda y derecha');
+      showIdleRemote(true);
+      showIdleRemoteR(true);
+      updateCupidAdminLayout();
+
+      send({
+        type: 'cupid-admin-open',
+        displayName: cupidDisplayName(),
+        gender: cupidGender(),
+        age: cupidAge(),
+        forceRefresh: !!forceRefresh,
+      });
+    }
+
+    const origJoinQueue = joinQueue;
+    joinQueue = async function(){
+      if (!isCupidHostAdminMode()) return origJoinQueue.apply(this, arguments);
+      return openCupidAdminPanel(true);
+    };
+
+    const origFindNext = findNext;
+    findNext = function(){
+      if (!isCupidHostAdminMode()) return origFindNext.apply(this, arguments);
+      return openCupidAdminPanel(true);
+    };
+
+    const origNextMatch = nextMatch;
+    nextMatch = async function(){
+      if (!isCupidHostAdminMode()) return origNextMatch.apply(this, arguments);
+      stopAll();
+      setTimeout(() => { if (isInChat()) openCupidAdminPanel(true); }, 120);
+    };
+
+    const origStopAll = stopAll;
+    stopAll = function(){
+      if (!isCupidHostAdminMode()) return origStopAll.apply(this, arguments);
+
+      try { send({ type: 'cupid-clear-all' }); } catch {}
+      if (groupActive) {
+        try { send({ type: 'leave' }); } catch {}
+      }
+      userHardStop = true;
+      autoCycle = false;
+      isQueuing = false;
+      if (groupActive) cleanupGroup({ keepLocal: true });
+      cleanupPeer({ keepLocal: true, closeWsToo: false });
+      overlayShow(false);
+      clearCupidAdminLocalState();
+      setStatus('Panel Cupido detenido');
+      setIdleUI();
+      updateCupidAdminLayout();
+    };
+
+    // rebind direct listeners que quedaron pegados a la versión vieja
+    try {
+      btnStart?.removeEventListener('click', origJoinQueue);
+      btnStart?.addEventListener('click', () => joinQueue());
+    } catch {}
+    try {
+      btnNext?.removeEventListener('click', origNextMatch);
+      btnNext?.addEventListener('click', () => nextMatch());
+    } catch {}
+    try {
+      btnStop?.removeEventListener('click', origStopAll);
+      btnStop?.addEventListener('click', () => stopAll());
+    } catch {}
+
+    const prevShow = show;
+    show = function(k){
+      const out = prevShow.apply(this, arguments);
+      setTimeout(() => {
+        updateCupidAdminLayout();
+        if (k === 'chat' && isCupidHostAdminMode()) {
+          openCupidAdminPanel(true);
+        }
+      }, 90);
+      return out;
+    };
+
+    adminBadgeEl?.addEventListener('click', (e) => {
+      if (!IS_ADMIN) return;
+      if (!isInChat()) return;
+      if (!isCupidHostAdminMode()) return;
+      e.preventDefault();
+      openCupidAdminPanel(true);
+    });
+
+    if (!cupidAdminState.timer) {
+      cupidAdminState.timer = setInterval(() => {
+        if (isCupidHostAdminMode() && isInChat() && !groupActive) {
+          renderCupidAdminPickers();
+        }
+      }, 1000);
+    }
+
+    updateCupidAdminLayout();
+  })();
+  </script>
+
 </body>
 </html>
