@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -1502,6 +1503,140 @@ function applyFakeSkipUI(on){
       }
     ];
 
+    const GROUP_FORCE_RELAY = true;
+    const SOLO_RECOVERY_GRACE_MS = 4500;
+    const SOLO_RECOVERY_MAX_RESTARTS = 3;
+    const SOLO_RECOVERY_STALE_MS = 16000;
+    const GROUP_RECOVERY_GRACE_MS = 3200;
+    const GROUP_RECOVERY_MAX_RESTARTS = 4;
+    const GROUP_RECOVERY_STALE_MS = 18000;
+
+    let soloPeerId = null;
+
+    function isCupidSession(){
+      const mode = serverMode();
+      return mode === 'cupid' || mode === 'cupid-host' || groupActive;
+    }
+    function getVideoCapturePreset(){
+      if (isCupidSession()){
+        return isMobile()
+          ? { width:{ideal:640, max:960}, height:{ideal:480, max:640}, frameRate:{ideal:24, max:24} }
+          : { width:{ideal:960, max:1280}, height:{ideal:540, max:720}, frameRate:{ideal:24, max:24} };
+      }
+      return isMobile()
+        ? { width:{ideal:720, max:1280}, height:{ideal:720, max:1280}, frameRate:{ideal:24, max:30} }
+        : { width:{ideal:1280, max:1920}, height:{ideal:720, max:1080}, frameRate:{ideal:30, max:30} };
+    }
+    function buildMediaConstraints({ facing = 'user', includeFacing = true } = {}){
+      const video = { ...getVideoCapturePreset() };
+      if (includeFacing) video.facingMode = { ideal: facing };
+      return {
+        video,
+        audio: {
+          echoCancellation:true,
+          noiseSuppression:true,
+          autoGainControl:true,
+        }
+      };
+    }
+    async function applyActiveVideoProfile(){
+      const track = localStream?.getVideoTracks?.()[0];
+      if(!track) return;
+      const profile = getVideoCapturePreset();
+      try{
+        await track.applyConstraints(profile);
+      }catch(e){
+        try{
+          await track.applyConstraints({
+            width: profile.width,
+            height: profile.height,
+            frameRate: profile.frameRate,
+          });
+        }catch{}
+      }
+    }
+    function getRTCConfig({ group = false, peerId = null } = {}){
+      const forceRelay = !!group
+        && GROUP_FORCE_RELAY
+        && !!groupHostId
+        && !isGroupHost()
+        && !!peerId
+        && peerId !== groupHostId;
+      return {
+        iceServers,
+        bundlePolicy: 'max-bundle',
+        rtcpMuxPolicy: 'require',
+        iceCandidatePoolSize: group ? 6 : 2,
+        iceTransportPolicy: forceRelay ? 'relay' : 'all',
+      };
+    }
+    function getSenderProfile({ group = false, peerId = null } = {}){
+      if (!group){
+        return {
+          maxBitrate: isMobile() ? 900_000 : 1_800_000,
+          maxFramerate: isMobile() ? 24 : 30,
+          scaleResolutionDownBy: 1,
+          degradationPreference: 'maintain-framerate',
+        };
+      }
+      const toHost = !!groupHostId && peerId === groupHostId;
+      return {
+        maxBitrate: isMobile() ? (toHost ? 420_000 : 360_000) : (toHost ? 700_000 : 550_000),
+        maxFramerate: 24,
+        scaleResolutionDownBy: isMobile() ? 1.35 : 1.15,
+        degradationPreference: 'balanced',
+      };
+    }
+    async function tuneConnectionSenders(conn, { group = false, peerId = null } = {}){
+      const videoTrack = localStream?.getVideoTracks?.()[0];
+      if (videoTrack){
+        try{ videoTrack.contentHint = group ? 'motion' : 'motion'; }catch{}
+      }
+      const senders = conn?.getSenders?.() || [];
+      for (const sender of senders){
+        if (sender?.track?.kind !== 'video') continue;
+        try{
+          const params = sender.getParameters?.() || {};
+          params.encodings = params.encodings?.length ? params.encodings : [{}];
+          const profile = getSenderProfile({ group, peerId });
+          Object.assign(params.encodings[0], {
+            maxBitrate: profile.maxBitrate,
+            maxFramerate: profile.maxFramerate,
+            scaleResolutionDownBy: profile.scaleResolutionDownBy,
+          });
+          params.degradationPreference = profile.degradationPreference;
+          await sender.setParameters(params);
+        }catch{}
+      }
+    }
+    function makeConnMeta(kind, peerId = null){
+      return {
+        kind,
+        peerId,
+        restartTimer: null,
+        staleTimer: null,
+        restartAttempts: 0,
+        restarting: false,
+        intentionalClose: false,
+      };
+    }
+    function clearConnTimers(meta, { resetAttempts = false } = {}){
+      if (!meta) return;
+      if (meta.restartTimer){ clearTimeout(meta.restartTimer); meta.restartTimer = null; }
+      if (meta.staleTimer){ clearTimeout(meta.staleTimer); meta.staleTimer = null; }
+      if (resetAttempts) meta.restartAttempts = 0;
+      meta.restarting = false;
+    }
+    function markConnStable(meta){
+      clearConnTimers(meta, { resetAttempts:true });
+    }
+    function connLooksHealthy(conn){
+      if (!conn) return false;
+      const st = conn.connectionState;
+      const iceSt = conn.iceConnectionState;
+      return st === 'connected' || iceSt === 'connected' || iceSt === 'completed';
+    }
+
     /* ===== ZOOM STATE (PC) ===== */
     const zoomState = { local: 1, remote: 1 };
     const ZOOM_MAX = 4;
@@ -1721,8 +1856,15 @@ function enableCupidMiniDrag(){
           const vOk = !!v && v.readyState === 'live';
           const aOk = !!a && a.readyState === 'live';
           if (vOk && aOk){
+            await applyActiveVideoProfile().catch(()=>{});
             attachLocal(localStream, autoPlay);
             applyMuteAndCam();
+            if (pc) await tuneConnectionSenders(pc, { group:false });
+            try{
+              for (const [pid,gpc] of groupPCs){
+                if (gpc) await tuneConnectionSenders(gpc, { group:true, peerId:pid });
+              }
+            }catch{}
             return localStream;
           }
         }
@@ -1745,23 +1887,33 @@ function enableCupidMiniDrag(){
           if (newA) localStream.addTrack(newA);
 
           const pcsToUpdate = [];
-          if (pc) pcsToUpdate.push(pc);
+          if (pc) pcsToUpdate.push({ conn:pc, group:false, peerId:null });
           try{
-            for (const [,gpc] of groupPCs){ if (gpc) pcsToUpdate.push(gpc); }
+            for (const [pid,gpc] of groupPCs){
+              if (gpc) pcsToUpdate.push({ conn:gpc, group:true, peerId:pid });
+            }
           }catch{}
-          for (const p of pcsToUpdate){
+          for (const item of pcsToUpdate){
             try{
-              const senders = p?.getSenders?.() || [];
+              const senders = item.conn?.getSenders?.() || [];
               const sV = senders.find(s=>s.track && s.track.kind==='video');
               const sA = senders.find(s=>s.track && s.track.kind==='audio');
               if (sV && newV) await sV.replaceTrack(newV);
               if (sA && newA) await sA.replaceTrack(newA);
+              await tuneConnectionSenders(item.conn, { group:item.group, peerId:item.peerId });
             }catch{}
           }
         }
 
+        await applyActiveVideoProfile().catch(()=>{});
         attachLocal(localStream, autoPlay);
         applyMuteAndCam();
+        if (pc) await tuneConnectionSenders(pc, { group:false });
+        try{
+          for (const [pid,gpc] of groupPCs){
+            if (gpc) await tuneConnectionSenders(gpc, { group:true, peerId:pid });
+          }
+        }catch{}
         return localStream;
       }catch(e){
         alert("Permite cámara y micrófono para continuar.\n" + (e?.message||e));
@@ -1835,8 +1987,161 @@ function enableCupidMiniDrag(){
       };
     }
 
+    function clearSoloRecovery(resetAttempts = false){
+      if (!pc?.__ttv) return;
+      clearConnTimers(pc.__ttv, { resetAttempts });
+    }
+    function noteSoloStable(){
+      if (!pc) return;
+      markConnStable(pc.__ttv);
+      inCall = true;
+      setStatus('Conectado');
+      overlayShow(false);
+      enableControls();
+      startSendingGazeAuto();
+    }
+    function scheduleSoloRecovery(reason = 'transport'){
+      const activePc = pc;
+      if (!activePc || activePc.signalingState === 'closed') return;
+      const meta = activePc.__ttv || (activePc.__ttv = makeConnMeta('solo', soloPeerId));
+      if (meta.intentionalClose || connLooksHealthy(activePc)) return;
+
+      if (!meta.staleTimer){
+        meta.staleTimer = setTimeout(()=>{
+          if (pc !== activePc || connLooksHealthy(activePc)) return;
+          try{ send({ type:'leave' }); }catch{}
+          handleCallEnded('conn:stale');
+        }, SOLO_RECOVERY_STALE_MS);
+      }
+      if (meta.restartTimer || meta.restarting) return;
+
+      setStatus('Reconectando llamada…');
+      const delay = reason === 'failed' ? 500 : SOLO_RECOVERY_GRACE_MS;
+      meta.restartTimer = setTimeout(()=> restartSoloIce(activePc), delay);
+    }
+    async function restartSoloIce(targetPc = pc){
+      if (!targetPc || targetPc !== pc || targetPc.signalingState === 'closed') return;
+      const meta = targetPc.__ttv || (targetPc.__ttv = makeConnMeta('solo', soloPeerId));
+      meta.restartTimer = null;
+
+      if (meta.intentionalClose || connLooksHealthy(targetPc)){
+        noteSoloStable();
+        return;
+      }
+      if (meta.restartAttempts >= SOLO_RECOVERY_MAX_RESTARTS) return;
+      if (!wsOpen || !roomId){
+        if (!meta.staleTimer){
+          meta.staleTimer = setTimeout(()=>{
+            if (pc === targetPc && !connLooksHealthy(targetPc)){
+              try{ send({ type:'leave' }); }catch{}
+              handleCallEnded('conn:signal-lost');
+            }
+          }, SOLO_RECOVERY_STALE_MS);
+        }
+        return;
+      }
+
+      meta.restartAttempts += 1;
+      setStatus(`Reconectando llamada… (${meta.restartAttempts}/${SOLO_RECOVERY_MAX_RESTARTS})`);
+
+      if (!soloPeerId || !shouldInitiateTo(soloPeerId)){
+        meta.restartTimer = setTimeout(()=> restartSoloIce(targetPc), SOLO_RECOVERY_GRACE_MS);
+        return;
+      }
+
+      try{
+        meta.restarting = true;
+        const offer = await targetPc.createOffer({ iceRestart:true });
+        if (targetPc !== pc || targetPc.signalingState === 'closed') return;
+        await targetPc.setLocalDescription(offer);
+        send({ type:'offer', sdp: offer });
+      }catch(e){
+        console.warn('solo ice restart error', e);
+      }finally{
+        meta.restarting = false;
+        if (targetPc === pc && !connLooksHealthy(targetPc) && !meta.restartTimer && meta.restartAttempts < SOLO_RECOVERY_MAX_RESTARTS){
+          meta.restartTimer = setTimeout(()=> restartSoloIce(targetPc), SOLO_RECOVERY_GRACE_MS);
+        }
+      }
+    }
+    function clearGroupPeerRecovery(peerId, resetAttempts = false){
+      const gpc = groupPCs.get(peerId);
+      if (!gpc?.__ttv) return;
+      clearConnTimers(gpc.__ttv, { resetAttempts });
+    }
+    function noteGroupPeerStable(peerId){
+      const gpc = groupPCs.get(peerId);
+      if (!gpc) return;
+      markConnStable(gpc.__ttv);
+      groupConnected.add(peerId);
+      inCall = true;
+      setStatus('Conectado (Cupido)');
+      overlayShow(false);
+      enableControls();
+    }
+    function scheduleGroupRecovery(peerId, reason = 'transport'){
+      const gpc = groupPCs.get(peerId);
+      if (!gpc || gpc.signalingState === 'closed') return;
+      const meta = gpc.__ttv || (gpc.__ttv = makeConnMeta('group', peerId));
+      if (meta.intentionalClose || connLooksHealthy(gpc)) return;
+
+      if (!meta.staleTimer){
+        meta.staleTimer = setTimeout(()=>{
+          if (!groupPCs.has(peerId) || connLooksHealthy(gpc)) return;
+          console.warn('[GROUP] recovery timeout:', peerId);
+          try{ send({ type:'leave' }); }catch{}
+          handleCallEnded('group-link-timeout');
+        }, GROUP_RECOVERY_STALE_MS);
+      }
+      if (meta.restartTimer || meta.restarting) return;
+
+      setStatus('Reestabilizando sala de tres…');
+      const delay = reason === 'failed' ? 500 : GROUP_RECOVERY_GRACE_MS;
+      meta.restartTimer = setTimeout(()=> restartGroupPeer(peerId), delay);
+    }
+    async function restartGroupPeer(peerId){
+      const gpc = groupPCs.get(peerId);
+      if (!gpc || gpc.signalingState === 'closed') return;
+      const meta = gpc.__ttv || (gpc.__ttv = makeConnMeta('group', peerId));
+      meta.restartTimer = null;
+
+      if (meta.intentionalClose || connLooksHealthy(gpc)){
+        noteGroupPeerStable(peerId);
+        return;
+      }
+      if (meta.restartAttempts >= GROUP_RECOVERY_MAX_RESTARTS) return;
+
+      meta.restartAttempts += 1;
+      setStatus(`Reestabilizando sala… (${meta.restartAttempts}/${GROUP_RECOVERY_MAX_RESTARTS})`);
+
+      if (!wsOpen || !groupRoomId){
+        meta.restartTimer = setTimeout(()=> restartGroupPeer(peerId), GROUP_RECOVERY_GRACE_MS);
+        return;
+      }
+      if (!shouldInitiateTo(peerId)){
+        meta.restartTimer = setTimeout(()=> restartGroupPeer(peerId), GROUP_RECOVERY_GRACE_MS);
+        return;
+      }
+
+      try{
+        meta.restarting = true;
+        const offer = await gpc.createOffer({ iceRestart:true });
+        if (!groupPCs.has(peerId) || gpc.signalingState === 'closed') return;
+        await gpc.setLocalDescription(offer);
+        send({ type:'group-offer', to: peerId, sdp: offer });
+      }catch(e){
+        console.warn('[GROUP] ice restart error:', peerId, e);
+      }finally{
+        meta.restarting = false;
+        if (groupPCs.has(peerId) && !connLooksHealthy(gpc) && !meta.restartTimer && meta.restartAttempts < GROUP_RECOVERY_MAX_RESTARTS){
+          meta.restartTimer = setTimeout(()=> restartGroupPeer(peerId), GROUP_RECOVERY_GRACE_MS);
+        }
+      }
+    }
+
     function makePC(){
-      pc = new RTCPeerConnection({iceServers});
+      pc = new RTCPeerConnection(getRTCConfig({ group:false }));
+      pc.__ttv = makeConnMeta('solo', soloPeerId);
 
       if (role === 'offer') {
         const ch = pc.createDataChannel('gaze');
@@ -1847,16 +2152,25 @@ function enableCupidMiniDrag(){
       };
 
       pc.onicecandidate = (e)=>{ if(e.candidate) send({type:'ice', candidate:e.candidate}); };
-      pc.ontrack = (e)=>{ remoteStreamRef = e.streams[0]; attachRemote(); setupRemoteRatioWatchers(); };
+      pc.ontrack = (e)=>{
+        remoteStreamRef = e.streams[0];
+        attachRemote();
+        setupRemoteRatioWatchers();
+        e.track?.addEventListener?.('ended', ()=> scheduleSoloRecovery('track-ended'));
+        e.track?.addEventListener?.('mute', ()=> { if (!connLooksHealthy(pc)) scheduleSoloRecovery('track-mute'); });
+      };
+      pc.oniceconnectionstatechange = ()=>{
+        const st = pc.iceConnectionState;
+        if(st === 'connected' || st === 'completed') noteSoloStable();
+        if(st === 'failed' || st === 'disconnected') scheduleSoloRecovery(st);
+      };
       pc.onconnectionstatechange = ()=> {
         const st = pc.connectionState;
-        if(st==='connected'){
-          inCall = true; setStatus('Conectado'); overlayShow(false); enableControls();
-          startSendingGazeAuto();
-        }
-        if(st==='disconnected' || st==='failed'){ handleCallEnded('conn:'+st); }
-        if(st==='closed'){ setStatus('Cerrado'); }
+        if(st === 'connected') noteSoloStable();
+        if(st === 'disconnected' || st === 'failed') scheduleSoloRecovery(st);
+        if(st === 'closed'){ setStatus('Cerrado'); }
       };
+      tuneConnectionSenders(pc, { group:false }).catch(()=>{});
       return pc;
     }
 
@@ -1994,6 +2308,7 @@ function enableCupidMiniDrag(){
           if(data.type==='matched'){
             if (serverMode() !== 'solo') return;
             roomId=data.roomId; role=data.role;
+            soloPeerId = data.peer?.id || null;
             setStatus('Pareja encontrada · Conectando…');
             overlayShow(true);
             if(data.peer && data.peer.name){
@@ -2004,17 +2319,19 @@ function enableCupidMiniDrag(){
           }
 
           if(data.type==='offer'){
-            if (serverMode() !== 'solo') return;
+            if (serverMode() !== 'solo' || !pc) return;
+            if (pc.__ttv?.restartTimer){ clearTimeout(pc.__ttv.restartTimer); pc.__ttv.restartTimer = null; }
             await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
             const answer = await pc.createAnswer(); await pc.setLocalDescription(answer);
             send({type:'answer', sdp:answer});
           }
           if(data.type==='answer'){
-            if (serverMode() !== 'solo') return;
+            if (serverMode() !== 'solo' || !pc) return;
+            if (pc.__ttv?.restartTimer){ clearTimeout(pc.__ttv.restartTimer); pc.__ttv.restartTimer = null; }
             await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
           }
           if(data.type==='ice'){
-            if (serverMode() !== 'solo') return;
+            if (serverMode() !== 'solo' || !pc) return;
             try{ await pc.addIceCandidate(data.candidate); }catch(e){}
           }
           if(data.type==='peer-left'){
@@ -2057,7 +2374,7 @@ if (data.type === 'fake-skip') {
 
       makePC();
       localStream.getTracks().forEach(t=>pc.addTrack(t, localStream));
-      tuneSender();
+      await tuneConnectionSenders(pc, { group:false }).catch(()=>{});
 
       if(role==='offer'){
         const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
@@ -2066,7 +2383,17 @@ if (data.type === 'fake-skip') {
     }
 
     function cleanupPeer({ keepLocal = true, closeWsToo = false } = {}){
-      if(pc){ try{pc.close()}catch{}; pc=null; }
+      if(pc){
+        try{
+          if (pc.__ttv) {
+            pc.__ttv.intentionalClose = true;
+            clearSoloRecovery(false);
+          }
+          pc.close();
+        }catch{}
+        pc=null;
+      }
+      soloPeerId = null;
       if(!keepLocal && localStream){
         localStream.getTracks().forEach(t=>t.stop());
         localStream=null;
@@ -2140,13 +2467,20 @@ if (data.type === 'fake-skip') {
   showMobileDock();
 }
     function cleanupGroup({ keepLocal = true } = {}){
-      for (const [,gpc] of groupPCs){
-        try{ gpc.close(); }catch{}
+      for (const [pid,gpc] of groupPCs){
+        try{
+          if (gpc?.__ttv){
+            gpc.__ttv.intentionalClose = true;
+            clearGroupPeerRecovery(pid, false);
+          }
+          gpc.close();
+        }catch{}
       }
       groupPCs.clear();
       groupStreams.clear();
       groupSlotByPeer.clear();
       groupConnected.clear();
+      pendingGroupIce.clear();
 
       groupActive = false;
       groupPeers = [];
@@ -2398,7 +2732,8 @@ async function flushGroupIce(peerId){
     }
 
     function createGroupPC(peerId){
-      const gpc = new RTCPeerConnection({iceServers});
+      const gpc = new RTCPeerConnection(getRTCConfig({ group:true, peerId }));
+      gpc.__ttv = makeConnMeta('group', peerId);
 
       gpc.onicecandidate = (e)=>{
         if(e.candidate) send({ type:'group-ice', to: peerId, candidate: e.candidate });
@@ -2407,58 +2742,25 @@ async function flushGroupIce(peerId){
       gpc.ontrack = (e)=>{
         const s = e.streams?.[0];
         if (s) attachGroupStream(peerId, s);
+        e.track?.addEventListener?.('ended', ()=> scheduleGroupRecovery(peerId, 'track-ended'));
+        e.track?.addEventListener?.('mute', ()=> { if (!connLooksHealthy(gpc)) scheduleGroupRecovery(peerId, 'track-mute'); });
       };
 
+      gpc.oniceconnectionstatechange = ()=>{
+        const st = gpc.iceConnectionState;
+        if(st === 'connected' || st === 'completed') noteGroupPeerStable(peerId);
+        if(st === 'failed' || st === 'disconnected') scheduleGroupRecovery(peerId, st);
+      };
       gpc.onconnectionstatechange = ()=>{
         const st = gpc.connectionState;
-        if(st === 'connected'){
-          groupConnected.add(peerId);
-          inCall = true;
-          setStatus('Conectado (Cupido)');
-          overlayShow(false);
-          enableControls();
+        if(st === 'connected') noteGroupPeerStable(peerId);
+        if(st === 'failed' || st === 'disconnected'){
+          console.warn('[GROUP] peer link degraded:', peerId, st);
+          scheduleGroupRecovery(peerId, st);
         }
-       if(st === 'failed' || st === 'disconnected'){
-  console.warn('[GROUP] peer link lost:', peerId, st);
-
-  // Cierra solo ese PC
-  try{ gpc.close(); }catch{}
-  groupPCs.delete(peerId);
-  groupStreams.delete(peerId);
-  groupConnected.delete(peerId);
-
-  // limpia video correspondiente
-  if(isMobile()){
-    if(peerId === groupHostId){
-      try{ remoteVideoM.srcObject = null; }catch{}
-    } else {
-      try{ remoteVideo2M.srcObject = null; }catch{}
-    }
-  } else {
-    if(isGroupHost()){
-      const slot = groupSlotByPeer.get(peerId);
-      if(slot === 'left'){
-        try{ remoteVideo.srcObject = null; }catch{}
-      } else {
-        try{ remoteVideoR.srcObject = null; }catch{}
-      }
-    } else {
-      if(peerId === groupHostId){
-        try{ pipVideo.srcObject = null; }catch{}
-      } else {
-        try{ remoteVideo.srcObject = null; }catch{}
-      }
-    }
-  }
-
-  // si se fueron todos, entonces sí cierra el grupo
-  if(groupPCs.size === 0){
-    handleCallEnded('group-empty');
-  }
-}
-
       };
 
+      tuneConnectionSenders(gpc, { group:true, peerId }).catch(()=>{});
       return gpc;
     }
 
@@ -2468,12 +2770,14 @@ async function flushGroupIce(peerId){
       recvRenderEnabled = false;
       clearLocalGazeBubble();
 
-      try{ if(pc){ pc.close(); } }catch{}
+      try{ if(pc){ if(pc.__ttv){ pc.__ttv.intentionalClose = true; clearSoloRecovery(false); } pc.close(); } }catch{}
       pc = null;
       remoteStreamRef = null;
 
       groupActive = true;
       groupConnected.clear();
+      pendingGroupIce.clear();
+      soloPeerId = null;
       groupRoomId = data.roomId;
       roomId = groupRoomId;
 
@@ -2503,6 +2807,7 @@ async function flushGroupIce(peerId){
         const gpc = createGroupPC(pid);
         groupPCs.set(pid, gpc);
         localStream.getTracks().forEach(t=> gpc.addTrack(t, localStream));
+        await tuneConnectionSenders(gpc, { group:true, peerId:pid }).catch(()=>{});
       }
 
       // offers deterministas
@@ -2527,8 +2832,10 @@ async function flushGroupIce(peerId){
         gpc = createGroupPC(from);
         groupPCs.set(from, gpc);
         localStream.getTracks().forEach(t=> gpc.addTrack(t, localStream));
+        await tuneConnectionSenders(gpc, { group:true, peerId:from }).catch(()=>{});
       }
 
+      if (gpc.__ttv?.restartTimer){ clearTimeout(gpc.__ttv.restartTimer); gpc.__ttv.restartTimer = null; }
       await gpc.setRemoteDescription(new RTCSessionDescription(data.sdp));
       await flushGroupIce(from);
 
@@ -2541,6 +2848,7 @@ async function flushGroupIce(peerId){
       const from = data.from;
       const gpc = groupPCs.get(from);
       if(!gpc) return;
+      if (gpc.__ttv?.restartTimer){ clearTimeout(gpc.__ttv.restartTimer); gpc.__ttv.restartTimer = null; }
       await gpc.setRemoteDescription(new RTCSessionDescription(data.sdp));
       await flushGroupIce(from);
 
@@ -2724,17 +3032,7 @@ btnSalirM?.addEventListener('click', ()=> showMobileDock());
     });
 
     function tuneSender(){
-      const sender = pc?.getSenders?.().find(s=>s.track && s.track.kind==='video');
-      const vTrack = localStream?.getVideoTracks?.()[0];
-      if(!sender || !vTrack) return;
-      try { vTrack.contentHint = 'motion'; } catch {}
-      try {
-        const p = sender.getParameters();
-        p.encodings = p.encodings || [{}];
-        p.encodings[0].maxBitrate = isMobile() ? 900_000 : 1_800_000;
-        p.degradationPreference = 'maintain-framerate';
-        sender.setParameters(p);
-      } catch {}
+      return tuneConnectionSenders(pc, { group:false }).catch(()=>{});
     }
 
     function setupRemoteRatioWatchers(){
@@ -2808,18 +3106,20 @@ btnSalirM?.addEventListener('click', ()=> showMobileDock());
           localStream.removeTrack(old); localStream.addTrack(newTrack);
 
           const pcsToUpdate = [];
-          if (pc) pcsToUpdate.push(pc);
-          try{ for (const [,gpc] of groupPCs){ if (gpc) pcsToUpdate.push(gpc); } }catch{}
-          for (const p of pcsToUpdate){
+          if (pc) pcsToUpdate.push({ conn:pc, group:false, peerId:null });
+          try{ for (const [pid,gpc] of groupPCs){ if (gpc) pcsToUpdate.push({ conn:gpc, group:true, peerId:pid }); } }catch{}
+          for (const item of pcsToUpdate){
             try{
-              const sender = p?.getSenders?.().find(s=>s.track && s.track.kind==='video');
+              const sender = item.conn?.getSenders?.().find(s=>s.track && s.track.kind==='video');
               if (sender) await sender.replaceTrack(newTrack);
+              await tuneConnectionSenders(item.conn, { group:item.group, peerId:item.peerId });
             }catch{}
           }
         }else{
           localStream = stream;
         }
         currentFacing = target;
+        await applyActiveVideoProfile().catch(()=>{});
         attachLocal(localStream);
         applyMuteAndCam();
       }catch(e){ console.warn('No se pudo cambiar la cámara:', e?.message||e); }
@@ -3512,7 +3812,7 @@ btnSalirM?.addEventListener('click', ()=> showMobileDock());
         }
       }
 
-      if (hostMode) {
+      if (hostMode && !groupActive) {
         showIdleRemote(true);
         showIdleRemoteR(true);
         overlayShow(false);
