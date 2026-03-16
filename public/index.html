@@ -1219,21 +1219,22 @@
     .stage{
       position:relative;
       width:100%;
+      height:calc(100vh - 40px);
     }
     .layout-split{
       display:grid;
       grid-template-columns:1fr 1fr;
-      gap:1rem;
+      gap:0;
     }
     .layout-split .tile{
       position:relative;
-      border-radius:26px;
+      border-radius:0;
       overflow:hidden;
       background:#000;
-      aspect-ratio:var(--box-ar);
-      min-height:300px;
-      border:1px solid rgba(255,255,255,.08);
-      box-shadow:0 20px 44px rgba(0,0,0,.24);
+      aspect-ratio:auto;
+      min-height:50vh;
+      border:none;
+      box-shadow:none;
     }
 
     .tile video{
@@ -1251,8 +1252,8 @@
     video{ background:#000; }
     video.mirror{ transform:scaleX(-1); }
     #stage .tile.local video{ object-fit:cover; }
-    #stage .tile.remote video{ object-fit:contain; background:#000; }
-    body.remote-portrait #stage .tile.remote video{ object-fit:cover; }
+    #stage .tile.remote video{ object-fit:cover; background:#000; }
+    body.remote-portrait #stage .tile.remote video{ object-fit:contain; background:#000; }
 
     .layout-mobile-fixed{
       position:fixed;
@@ -1866,6 +1867,27 @@
       font-weight:800;
       letter-spacing:.5px;
       text-transform:uppercase;
+    }
+
+    /* Mobile: question overlay sits BETWEEN the two panes */
+    .question-overlay-mobile{
+      position:absolute;
+      left:0; right:0;
+      top:50%;
+      transform:translateY(-50%);
+      z-index:90;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      pointer-events:none;
+      opacity:0;
+      transition:opacity .4s ease;
+    }
+    .question-overlay-mobile.show{ opacity:1; }
+    .question-overlay-mobile .question-overlay__card{
+      max-width:88%;
+      padding:16px 24px;
+      box-shadow:0 12px 40px rgba(0,0,0,.5);
     }
 
     /* ===== Kristoff Question Panel ===== */
@@ -2837,15 +2859,16 @@
                 <div class="emoji-layer" aria-hidden="true"></div>
               </div>
 
-              <div class="question-overlay" id="questionOverlayM">
-                <div class="question-overlay__card">
-                  <div class="question-overlay__badge">Pregunta</div>
-                  <div class="question-overlay__text" id="questionTextM"></div>
-                </div>
-              </div>
-
               <div id="swipe-ghost" class="swipe-ghost sm:hidden" aria-hidden="true">
                 <img src="assets/hand.png" alt="hand" class="hand" />
+              </div>
+            </div>
+
+            <!-- Question overlay BETWEEN panes on mobile -->
+            <div class="question-overlay-mobile" id="questionOverlayMobile">
+              <div class="question-overlay__card">
+                <div class="question-overlay__badge">Pregunta</div>
+                <div class="question-overlay__text" id="questionTextMobile"></div>
               </div>
             </div>
 
@@ -2853,13 +2876,6 @@
               <div id="idle-local" class="idle static-noise"><div>Preparando cámara…</div></div>
               <video id="localVideoM" autoplay playsinline muted class="mirror"></video>
               <video id="remoteVideo2M" autoplay playsinline class="hide"></video>
-
-              <div class="question-overlay" id="questionOverlayMR">
-                <div class="question-overlay__card">
-                  <div class="question-overlay__badge">Pregunta</div>
-                  <div class="question-overlay__text" id="questionTextMR"></div>
-                </div>
-              </div>
 
               <div class="gaze-layer" id="gazeLayerLocalM" aria-hidden="true">
                 <div class="gaze-bubble" id="gazeBubbleLocalM"></div>
@@ -3727,7 +3743,7 @@ function connLooksHealthy(conn){
   return st === 'connected' || iceSt === 'connected' || iceSt === 'completed';
 }
 
-/* ===== ZOOM STATE (PC) ===== */
+/* ===== ZOOM STATE ===== */
 const zoomState = { local: 1, remote: 1 };
 const ZOOM_MAX = 4;
 const ZOOM_STEP = 0.15;
@@ -3744,13 +3760,24 @@ function saveLocalZoom(z){
   localStorage.setItem(CAM_ZOOM_KEY, String(z));
 }
 
+function applyZoomToEl(el, z){
+  if (!el) return;
+  const mirror = el.classList.contains('mirror');
+  el.style.transformOrigin = 'center center';
+  el.style.transform = mirror ? `scaleX(-1) scale(${z})` : `scale(${z})`;
+}
+
 function applyZoom(which){
-  const v = (which==='local') ? localVideo : remoteVideo;
-  if(!v) return;
   const z = zoomState[which];
-  const mirror = v.classList.contains('mirror');
-  v.style.transformOrigin = 'center center';
-  v.style.transform = mirror ? `scaleX(-1) scale(${z})` : `scale(${z})`;
+  if (which === 'local') {
+    applyZoomToEl(localVideo, z);
+    applyZoomToEl(qs('#localVideoM'), z);
+  } else {
+    applyZoomToEl(remoteVideo, z);
+    applyZoomToEl(qs('#remoteVideoM'), z);
+    applyZoomToEl(remoteVideoR, z);
+    applyZoomToEl(qs('#remoteVideo2M'), z);
+  }
 }
 
 function changeZoom(which, delta){
@@ -5655,6 +5682,36 @@ show = function(k){
       qp?.classList.toggle('show');
     });
 
+    // Pinch-to-zoom on mobile video panes
+    function addPinchZoom(el, which){
+      if (!el) return;
+      let startDist = 0;
+      let startZoom = 1;
+      el.addEventListener('touchstart', (e) => {
+        if (e.touches.length !== 2) return;
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        startDist = Math.hypot(dx, dy);
+        startZoom = zoomState[which];
+      }, { passive: true });
+      el.addEventListener('touchmove', (e) => {
+        if (e.touches.length !== 2) return;
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        const dist = Math.hypot(dx, dy);
+        if (startDist < 10) return;
+        const scale = dist / startDist;
+        const min = which === 'remote' ? ZOOM_MIN_REMOTE : ZOOM_MIN_LOCAL;
+        zoomState[which] = Math.min(ZOOM_MAX, Math.max(min, Number((startZoom * scale).toFixed(2))));
+        applyZoom(which);
+      }, { passive: true });
+      el.addEventListener('touchend', () => {
+        if (which === 'local') saveLocalZoom(zoomState.local);
+      }, { passive: true });
+    }
+    addPinchZoom(document.getElementById('pane-remote'), 'remote');
+    addPinchZoom(document.getElementById('pane-local'), 'local');
+
     // Initial state
     updateCCState();
   })();
@@ -6261,8 +6318,7 @@ show = function(k){
       const overlays = [
         { el: document.getElementById('questionOverlayD'), txt: document.getElementById('questionTextD') },
         { el: document.getElementById('questionOverlayDR'), txt: document.getElementById('questionTextDR') },
-        { el: document.getElementById('questionOverlayM'), txt: document.getElementById('questionTextM') },
-        { el: document.getElementById('questionOverlayMR'), txt: document.getElementById('questionTextMR') },
+        { el: document.getElementById('questionOverlayMobile'), txt: document.getElementById('questionTextMobile') },
       ];
       for (const o of overlays){
         if (!o.el) continue;
@@ -6272,7 +6328,7 @@ show = function(k){
     }
 
     function hideQuestionOverlay(){
-      const ids = ['questionOverlayD','questionOverlayDR','questionOverlayM','questionOverlayMR'];
+      const ids = ['questionOverlayD','questionOverlayDR','questionOverlayMobile'];
       for (const id of ids){
         document.getElementById(id)?.classList.remove('show');
       }
