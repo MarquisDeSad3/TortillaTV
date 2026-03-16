@@ -1859,6 +1859,193 @@
       box-shadow:0 0 12px rgba(34,197,94,.75);
     }
 
+    /* ===== Question Overlay (participantes) ===== */
+    .question-overlay{
+      position:absolute;
+      inset:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      z-index:80;
+      pointer-events:none;
+      opacity:0;
+      transition:opacity .4s ease;
+    }
+    .question-overlay.show{ opacity:1; }
+    .question-overlay__card{
+      background:rgba(0,0,0,.72);
+      backdrop-filter:blur(12px);
+      border:1px solid rgba(255,255,255,.18);
+      border-radius:20px;
+      padding:24px 32px;
+      max-width:80%;
+      text-align:center;
+      animation:fadeRise .5s ease both;
+    }
+    .question-overlay__text{
+      font-size:clamp(1.1rem, 3vw, 1.6rem);
+      font-weight:800;
+      line-height:1.35;
+      color:#fff;
+      text-shadow:0 2px 8px rgba(0,0,0,.4);
+    }
+    .question-overlay__badge{
+      display:inline-block;
+      margin-bottom:10px;
+      padding:4px 14px;
+      border-radius:999px;
+      background:linear-gradient(135deg, var(--pink), var(--violet));
+      font-size:.72rem;
+      font-weight:800;
+      letter-spacing:.5px;
+      text-transform:uppercase;
+    }
+
+    /* ===== Kristoff Question Panel ===== */
+    #questionPanel{
+      position:fixed;
+      right:14px;
+      top:50%;
+      transform:translateY(-50%);
+      width:min(340px, 88vw);
+      max-height:70vh;
+      background:rgba(12,17,32,.92);
+      backdrop-filter:blur(16px);
+      border:1px solid rgba(255,255,255,.12);
+      border-radius:18px;
+      padding:16px;
+      z-index:200;
+      display:none;
+      overflow-y:auto;
+      box-shadow:0 20px 50px rgba(0,0,0,.45);
+    }
+    #questionPanel.show{ display:block; }
+    .qp-header{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      margin-bottom:12px;
+    }
+    .qp-title{ font-weight:900; font-size:1rem; }
+    .qp-close{
+      width:30px; height:30px;
+      border-radius:50%;
+      border:1px solid rgba(255,255,255,.2);
+      background:rgba(255,255,255,.08);
+      color:#fff;
+      font-weight:900;
+      cursor:pointer;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+    .qp-input-row{
+      display:flex;
+      gap:8px;
+      margin-bottom:12px;
+    }
+    .qp-input-row textarea{
+      flex:1;
+      resize:none;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,.15);
+      background:rgba(255,255,255,.08);
+      color:#fff;
+      padding:10px 12px;
+      font-size:.88rem;
+      font-family:inherit;
+      outline:none;
+      min-height:52px;
+    }
+    .qp-input-row textarea::placeholder{ color:rgba(255,255,255,.4); }
+    .qp-add{
+      padding:0 16px;
+      border-radius:12px;
+      border:none;
+      background:#fff;
+      color:#111;
+      font-weight:800;
+      font-size:.82rem;
+      cursor:pointer;
+      white-space:nowrap;
+    }
+    .qp-list{ display:flex; flex-direction:column; gap:8px; }
+    .qp-item{
+      display:flex;
+      align-items:flex-start;
+      gap:10px;
+      padding:10px 12px;
+      border-radius:12px;
+      background:rgba(255,255,255,.06);
+      border:1px solid rgba(255,255,255,.1);
+    }
+    .qp-item__num{
+      flex-shrink:0;
+      width:26px; height:26px;
+      border-radius:50%;
+      background:rgba(255,255,255,.12);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-weight:900;
+      font-size:.78rem;
+    }
+    .qp-item__text{ flex:1; font-size:.88rem; line-height:1.3; word-break:break-word; }
+    .qp-item__actions{ display:flex; flex-direction:column; gap:4px; flex-shrink:0; }
+    .qp-item__btn{
+      padding:4px 10px;
+      border-radius:8px;
+      border:none;
+      font-size:.72rem;
+      font-weight:800;
+      cursor:pointer;
+    }
+    .qp-item__btn--show{ background:linear-gradient(135deg, var(--pink), var(--violet)); color:#fff; }
+    .qp-item__btn--hide{ background:rgba(239,68,68,.9); color:#fff; }
+    .qp-item__btn--del{ background:rgba(255,255,255,.1); color:rgba(255,255,255,.7); }
+    .qp-active-indicator{
+      display:inline-block;
+      width:8px; height:8px;
+      border-radius:50%;
+      background:#22c55e;
+      box-shadow:0 0 8px rgba(34,197,94,.7);
+      margin-left:6px;
+    }
+    .qp-footer{
+      margin-top:12px;
+      display:flex;
+      gap:8px;
+    }
+    .qp-footer button{
+      flex:1;
+      padding:8px 0;
+      border-radius:10px;
+      border:1px solid rgba(255,255,255,.15);
+      background:rgba(255,255,255,.08);
+      color:#fff;
+      font-weight:800;
+      font-size:.78rem;
+      cursor:pointer;
+    }
+    #btnQuestionToggle{
+      position:fixed;
+      right:14px;
+      bottom:calc(env(safe-area-inset-bottom, 0px) + 160px);
+      width:48px; height:48px;
+      border-radius:50%;
+      border:1px solid rgba(255,255,255,.18);
+      background:linear-gradient(135deg, var(--pink), var(--violet));
+      color:#fff;
+      font-size:1.3rem;
+      font-weight:900;
+      display:none;
+      align-items:center;
+      justify-content:center;
+      cursor:pointer;
+      z-index:199;
+      box-shadow:0 8px 24px rgba(255,95,168,.3);
+    }
+
     @media (max-width: 1024px){
       .landing-shell{
         grid-template-columns:1fr;
@@ -2491,6 +2678,13 @@
                 <div class="emoji-layer" aria-hidden="true"></div>
               </div>
 
+              <div class="question-overlay" id="questionOverlayD">
+                <div class="question-overlay__card">
+                  <div class="question-overlay__badge">Pregunta</div>
+                  <div class="question-overlay__text" id="questionTextD"></div>
+                </div>
+              </div>
+
               <div class="zoom-controls sm:flex hidden" aria-label="Zoom remoto">
                 <button id="fitRemote" class="zoom-btn" title="Ver completo">⤢</button>
                 <button id="zoomOutRemote" class="zoom-btn" title="Alejar">−</button>
@@ -2506,6 +2700,13 @@
                 <div class="card px-5 py-4 flex items-center gap-3 bg-white">
                   <span class="font-semibold">Buscando otra persona…</span>
                   <div class="flex"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+                </div>
+              </div>
+
+              <div class="question-overlay" id="questionOverlayDR">
+                <div class="question-overlay__card">
+                  <div class="question-overlay__badge">Pregunta</div>
+                  <div class="question-overlay__text" id="questionTextDR"></div>
                 </div>
               </div>
 
@@ -2548,6 +2749,13 @@
                 <div class="emoji-layer" aria-hidden="true"></div>
               </div>
 
+              <div class="question-overlay" id="questionOverlayM">
+                <div class="question-overlay__card">
+                  <div class="question-overlay__badge">Pregunta</div>
+                  <div class="question-overlay__text" id="questionTextM"></div>
+                </div>
+              </div>
+
               <div id="swipe-ghost" class="swipe-ghost sm:hidden" aria-hidden="true">
                 <img src="assets/hand.png" alt="hand" class="hand" />
               </div>
@@ -2557,6 +2765,13 @@
               <div id="idle-local" class="idle static-noise"><div>Preparando cámara…</div></div>
               <video id="localVideoM" autoplay playsinline muted class="mirror"></video>
               <video id="remoteVideo2M" autoplay playsinline class="hide"></video>
+
+              <div class="question-overlay" id="questionOverlayMR">
+                <div class="question-overlay__card">
+                  <div class="question-overlay__badge">Pregunta</div>
+                  <div class="question-overlay__text" id="questionTextMR"></div>
+                </div>
+              </div>
 
               <div class="gaze-layer" id="gazeLayerLocalM" aria-hidden="true">
                 <div class="gaze-bubble" id="gazeBubbleLocalM"></div>
@@ -2600,6 +2815,24 @@
   <div id="modePill" class="mode-pill" role="toolbar" aria-label="Modo">
     <button id="pillSolo" type="button">Solo</button>
     <button id="pillCupid" type="button">Cupido</button>
+  </div>
+
+  <!-- Kristoff Question Panel -->
+  <button id="btnQuestionToggle" title="Preguntas">?</button>
+  <div id="questionPanel">
+    <div class="qp-header">
+      <span class="qp-title">Preguntas</span>
+      <button class="qp-close" id="qpClose">✕</button>
+    </div>
+    <div class="qp-input-row">
+      <textarea id="qpInput" placeholder="Escribe una pregunta..." rows="2"></textarea>
+      <button class="qp-add" id="qpAdd">Agregar</button>
+    </div>
+    <div class="qp-list" id="qpList"></div>
+    <div class="qp-footer">
+      <button id="qpHideAll">Quitar de pantalla</button>
+      <button id="qpClearAll">Limpiar todo</button>
+    </div>
   </div>
 
   <div id="kristoffModal" class="fixed inset-0 z-[2100] hidden">
@@ -3239,13 +3472,13 @@ const iceServers = [
   }
 ];
 
-const GROUP_FORCE_RELAY = true;
+const GROUP_FORCE_RELAY = false;
 const SOLO_RECOVERY_GRACE_MS = 4500;
 const SOLO_RECOVERY_MAX_RESTARTS = 3;
 const SOLO_RECOVERY_STALE_MS = 16000;
-const GROUP_RECOVERY_GRACE_MS = 3200;
-const GROUP_RECOVERY_MAX_RESTARTS = 4;
-const GROUP_RECOVERY_STALE_MS = 18000;
+const GROUP_RECOVERY_GRACE_MS = 2000;
+const GROUP_RECOVERY_MAX_RESTARTS = 6;
+const GROUP_RECOVERY_STALE_MS = 25000;
 
 let soloPeerId = null;
 
@@ -3306,7 +3539,7 @@ function getRTCConfig({ group = false, peerId = null } = {}){
     iceServers,
     bundlePolicy: 'max-bundle',
     rtcpMuxPolicy: 'require',
-    iceCandidatePoolSize: group ? 6 : 2,
+    iceCandidatePoolSize: group ? 3 : 2,
     iceTransportPolicy: forceRelay ? 'relay' : 'all',
   };
 }
@@ -3322,9 +3555,9 @@ function getSenderProfile({ group = false, peerId = null } = {}){
   }
   const toHost = !!groupHostId && peerId === groupHostId;
   return {
-    maxBitrate: isMobile() ? (toHost ? 420_000 : 360_000) : (toHost ? 700_000 : 550_000),
+    maxBitrate: isMobile() ? (toHost ? 420_000 : 360_000) : (toHost ? 850_000 : 650_000),
     maxFramerate: 24,
-    scaleResolutionDownBy: isMobile() ? 1.35 : 1.15,
+    scaleResolutionDownBy: isMobile() ? 1.35 : 1.0,
     degradationPreference: 'balanced',
   };
 }
@@ -3832,9 +4065,24 @@ function scheduleGroupRecovery(peerId, reason = 'transport'){
   if (!meta.staleTimer){
     meta.staleTimer = setTimeout(()=>{
       if (!groupPCs.has(peerId) || connLooksHealthy(gpc)) return;
-      console.warn('[GROUP] recovery timeout:', peerId);
-      try{ send({ type:'leave' }); }catch{}
-      handleCallEnded('group-link-timeout');
+      console.warn('[GROUP] recovery timeout for peer:', peerId);
+      const otherPeers = groupPeers.filter(p => p !== peerId);
+      const allPeersDown = otherPeers.every(p => {
+        const opc = groupPCs.get(p);
+        return !opc || !connLooksHealthy(opc);
+      });
+      if (allPeersDown) {
+        try{ send({ type:'leave' }); }catch{}
+        handleCallEnded('group-link-timeout');
+      } else {
+        try {
+          const deadPc = groupPCs.get(peerId);
+          if (deadPc) { deadPc.__ttv && (deadPc.__ttv.intentionalClose = true); deadPc.close(); }
+          groupPCs.delete(peerId);
+          groupConnected.delete(peerId);
+        } catch {}
+        setStatus('Un participante se desconecto');
+      }
     }, GROUP_RECOVERY_STALE_MS);
   }
   if (meta.restartTimer || meta.restarting) return;
@@ -4543,15 +4791,14 @@ async function startGroupCall(data){
     await tuneConnectionSenders(gpc, { group:true, peerId:pid }).catch(()=>{});
   }
 
-  for (const pid of groupPeers){
-    if (!shouldInitiateTo(pid)) continue;
+  await Promise.all(groupPeers.filter(pid => shouldInitiateTo(pid)).map(async (pid) => {
     const gpc = groupPCs.get(pid);
     try{
       const offer = await gpc.createOffer();
       await gpc.setLocalDescription(offer);
       send({ type:'group-offer', to: pid, sdp: offer });
     }catch(e){ console.warn('group offer error', pid, e); }
-  }
+  }));
 }
 
 async function onGroupOffer(data){
@@ -5636,6 +5883,177 @@ show = function(k){
         }
       }, 1000);
     }
+
+    // ===== QUESTION SYSTEM (Kristoff -> participants) =====
+    const qPanel = document.getElementById('questionPanel');
+    const qToggle = document.getElementById('btnQuestionToggle');
+    const qInput = document.getElementById('qpInput');
+    const qAdd = document.getElementById('qpAdd');
+    const qList = document.getElementById('qpList');
+    const qClose = document.getElementById('qpClose');
+    const qHideAll = document.getElementById('qpHideAll');
+    const qClearAll = document.getElementById('qpClearAll');
+
+    const questionBank = [];
+    let activeQuestionIdx = -1;
+
+    function showQuestionToggle(visible){
+      if (qToggle) qToggle.style.display = visible ? 'flex' : 'none';
+    }
+
+    function renderQuestionList(){
+      if (!qList) return;
+      if (!questionBank.length){
+        qList.innerHTML = '<div style="text-align:center;opacity:.5;padding:16px;font-size:.85rem;">Sin preguntas. Escribe una arriba.</div>';
+        return;
+      }
+      qList.innerHTML = questionBank.map((q, i) => {
+        const isActive = (i === activeQuestionIdx);
+        return `
+          <div class="qp-item" style="${isActive ? 'border-color:var(--pink);' : ''}">
+            <div class="qp-item__num">${i + 1}${isActive ? '<span class="qp-active-indicator"></span>' : ''}</div>
+            <div class="qp-item__text">${htmlEscape(q)}</div>
+            <div class="qp-item__actions">
+              ${isActive
+                ? `<button class="qp-item__btn qp-item__btn--hide" data-q-hide="${i}">Ocultar</button>`
+                : `<button class="qp-item__btn qp-item__btn--show" data-q-show="${i}">Mostrar</button>`
+              }
+              <button class="qp-item__btn qp-item__btn--del" data-q-del="${i}">X</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      qList.querySelectorAll('[data-q-show]').forEach(btn => {
+        btn.onclick = () => {
+          const idx = parseInt(btn.getAttribute('data-q-show'));
+          sendQuestion('show', questionBank[idx]);
+          activeQuestionIdx = idx;
+          renderQuestionList();
+        };
+      });
+      qList.querySelectorAll('[data-q-hide]').forEach(btn => {
+        btn.onclick = () => {
+          sendQuestion('hide', '');
+          activeQuestionIdx = -1;
+          renderQuestionList();
+        };
+      });
+      qList.querySelectorAll('[data-q-del]').forEach(btn => {
+        btn.onclick = () => {
+          const idx = parseInt(btn.getAttribute('data-q-del'));
+          if (idx === activeQuestionIdx){
+            sendQuestion('hide', '');
+            activeQuestionIdx = -1;
+          } else if (idx < activeQuestionIdx){
+            activeQuestionIdx--;
+          }
+          questionBank.splice(idx, 1);
+          renderQuestionList();
+        };
+      });
+    }
+
+    function sendQuestion(action, text){
+      try {
+        send({ type: 'group-question', action, text: text || '' });
+      } catch {}
+    }
+
+    if (qAdd) qAdd.onclick = () => {
+      const val = (qInput?.value || '').trim();
+      if (!val) return;
+      questionBank.push(val);
+      qInput.value = '';
+      renderQuestionList();
+    };
+
+    if (qClose) qClose.onclick = () => {
+      qPanel?.classList.remove('show');
+    };
+
+    if (qToggle) qToggle.onclick = () => {
+      qPanel?.classList.toggle('show');
+      renderQuestionList();
+    };
+
+    if (qHideAll) qHideAll.onclick = () => {
+      sendQuestion('hide', '');
+      activeQuestionIdx = -1;
+      renderQuestionList();
+    };
+
+    if (qClearAll) qClearAll.onclick = () => {
+      sendQuestion('hide', '');
+      activeQuestionIdx = -1;
+      questionBank.length = 0;
+      renderQuestionList();
+    };
+
+    // Show/hide the question toggle based on admin + group active state
+    const origUpdateCupidAdminLayout2 = updateCupidAdminLayout;
+    updateCupidAdminLayout = function(){
+      origUpdateCupidAdminLayout2();
+      showQuestionToggle(isCupidHostAdminMode() && groupActive);
+      if (!groupActive){
+        qPanel?.classList.remove('show');
+        activeQuestionIdx = -1;
+      }
+    };
+
+    // Listen for incoming group-question messages (for NON-host participants)
+    function showQuestionOverlay(text){
+      const overlays = [
+        { el: document.getElementById('questionOverlayD'), txt: document.getElementById('questionTextD') },
+        { el: document.getElementById('questionOverlayDR'), txt: document.getElementById('questionTextDR') },
+        { el: document.getElementById('questionOverlayM'), txt: document.getElementById('questionTextM') },
+        { el: document.getElementById('questionOverlayMR'), txt: document.getElementById('questionTextMR') },
+      ];
+      for (const o of overlays){
+        if (!o.el) continue;
+        if (o.txt) o.txt.textContent = text;
+        o.el.classList.add('show');
+      }
+    }
+
+    function hideQuestionOverlay(){
+      const ids = ['questionOverlayD','questionOverlayDR','questionOverlayM','questionOverlayMR'];
+      for (const id of ids){
+        document.getElementById(id)?.classList.remove('show');
+      }
+    }
+
+    function hookQuestionWs(){
+      if (!ws || ws.__questionHooked) return;
+      ws.__questionHooked = true;
+      ws.addEventListener('message', (evt) => {
+        let data;
+        try { data = JSON.parse(evt.data); } catch { return; }
+        if (data.type !== 'group-question') return;
+        if (data.action === 'show' && data.text) {
+          showQuestionOverlay(data.text);
+        } else {
+          hideQuestionOverlay();
+        }
+      });
+    }
+
+    const origConnectWS2 = connectWS;
+    connectWS = async function(...args){
+      const out = await origConnectWS2.apply(this, args);
+      hookQuestionWs();
+      return out;
+    };
+
+    // Clean up overlays when call ends
+    const origHandleCallEnded2 = handleCallEnded;
+    handleCallEnded = function(...args){
+      hideQuestionOverlay();
+      activeQuestionIdx = -1;
+      showQuestionToggle(false);
+      qPanel?.classList.remove('show');
+      return origHandleCallEnded2.apply(this, args);
+    };
 
     updateCupidAdminLayout();
   })();

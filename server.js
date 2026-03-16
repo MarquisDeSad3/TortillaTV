@@ -802,6 +802,21 @@ wss.on('connection', (ws) => {
         break;
       }
 
+      case 'group-question': {
+        if (!me.isAdmin || !me.groupRoomId) break;
+        const room = groupRooms.get(me.groupRoomId);
+        if (!room || room.hostId !== id) break;
+        const action = msg.action === 'hide' ? 'hide' : 'show';
+        const text = clampText(msg.text, 500);
+        const payload = { type: 'group-question', action, text };
+        for (const peerId of [room.leftId, room.rightId]) {
+          if (peerId === id) continue;
+          const peer = getClient(peerId);
+          if (peer) safeSend(peer.ws, payload);
+        }
+        break;
+      }
+
       case 'clearRecent': {
         break;
       }
