@@ -1187,18 +1187,7 @@
     #modeScreenBack:hover{ transform:translateY(-1px); background:rgba(255,255,255,.10); }
 
     .topbar{
-      position:sticky;
-      top:clamp(10px, 2vw, 18px);
-      z-index:90;
-      padding:1rem;
-      margin-bottom:1rem;
-      border-radius:24px;
-      background:
-        linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.05)),
-        rgba(7,11,20,.56);
-      border:1px solid rgba(255,255,255,.12);
-      box-shadow:0 16px 42px rgba(3,9,24,.20);
-      backdrop-filter:blur(16px);
+      display:none !important;
     }
     .topbar .btn{
       min-height:46px;
@@ -1394,29 +1383,7 @@
     .gaze-bubble.show{ opacity:1; }
 
     .mobile-dock{
-      position:fixed;
-      left:14px;
-      right:14px;
-      bottom:calc(env(safe-area-inset-bottom,0) + 12px);
-      z-index:200;
-      display:grid;
-      grid-template-columns:1fr 1fr;
-      gap:12px;
-      padding:10px;
-      border-radius:24px;
-      background:rgba(10,15,30,.42);
-      backdrop-filter:blur(18px);
-      border:1px solid rgba(255,255,255,.12);
-      box-shadow:0 18px 40px rgba(0,0,0,.32);
-      opacity:0;
-      pointer-events:none;
-      transform:translateY(10px);
-      transition:opacity .22s ease, transform .22s ease;
-    }
-    .mobile-dock.show{
-      opacity:1;
-      pointer-events:auto;
-      transform:translateY(0);
+      display:none !important;
     }
     .dock-btn{
       min-height:56px;
@@ -2028,23 +1995,144 @@
       cursor:pointer;
     }
     #btnQuestionToggle{
+      display:none !important;
+    }
+
+    /* ===== NEW: Call Controls Bar (FaceTime style) ===== */
+    .call-controls{
       position:fixed;
-      right:14px;
-      bottom:calc(env(safe-area-inset-bottom, 0px) + 160px);
-      width:48px; height:48px;
-      border-radius:50%;
-      border:1px solid rgba(255,255,255,.18);
-      background:linear-gradient(135deg, var(--pink), var(--violet));
-      color:#fff;
-      font-size:1.3rem;
-      font-weight:900;
+      bottom:calc(env(safe-area-inset-bottom, 0px) + 20px);
+      left:50%;
+      transform:translateX(-50%);
+      z-index:210;
       display:none;
+      align-items:center;
+      gap:14px;
+      padding:12px 20px;
+      border-radius:999px;
+      background:rgba(10,15,30,.62);
+      backdrop-filter:blur(22px);
+      border:1px solid rgba(255,255,255,.12);
+      box-shadow:0 20px 50px rgba(0,0,0,.38), inset 0 0 0 1px rgba(255,255,255,.05);
+    }
+    .call-controls.show{
+      display:flex;
+    }
+    .ctrl-btn{
+      width:52px;
+      height:52px;
+      border-radius:50%;
+      border:none;
+      display:flex;
       align-items:center;
       justify-content:center;
       cursor:pointer;
-      z-index:199;
-      box-shadow:0 8px 24px rgba(255,95,168,.3);
+      font-size:1.25rem;
+      transition:transform .1s ease, background .18s ease, box-shadow .18s ease;
+      position:relative;
+      flex-shrink:0;
     }
+    .ctrl-btn:active{ transform:scale(.92); }
+    .ctrl-btn:disabled{ opacity:.35; pointer-events:none; }
+    .ctrl-btn svg{ width:24px; height:24px; fill:currentColor; }
+
+    .ctrl-btn--mic,
+    .ctrl-btn--cam{
+      background:rgba(255,255,255,.12);
+      color:#fff;
+      border:1px solid rgba(255,255,255,.16);
+    }
+    .ctrl-btn--mic:hover,
+    .ctrl-btn--cam:hover{
+      background:rgba(255,255,255,.2);
+    }
+    .ctrl-btn--mic.off,
+    .ctrl-btn--cam.off{
+      background:rgba(239,68,68,.85);
+      border-color:rgba(239,68,68,.5);
+      color:#fff;
+      box-shadow:0 4px 16px rgba(239,68,68,.3);
+    }
+
+    .ctrl-btn--action{
+      width:60px;
+      height:60px;
+      font-size:.82rem;
+      font-weight:900;
+      letter-spacing:.02em;
+      background:linear-gradient(135deg, rgba(255,255,255,.95), rgba(230,240,255,.92));
+      color:#111;
+      box-shadow:0 6px 20px rgba(255,255,255,.18);
+    }
+    .ctrl-btn--action:hover{
+      box-shadow:0 8px 28px rgba(255,255,255,.26);
+    }
+    .ctrl-btn--action.searching{
+      background:linear-gradient(135deg, #fbbf24, #f59e0b);
+      color:#fff;
+      animation:pulseGlow 2s ease-in-out infinite;
+    }
+
+    .ctrl-btn--end{
+      width:52px;
+      height:52px;
+      background:rgba(239,68,68,.9);
+      color:#fff;
+      box-shadow:0 6px 18px rgba(239,68,68,.28);
+    }
+    .ctrl-btn--end:hover{
+      background:rgba(239,68,68,1);
+      box-shadow:0 8px 24px rgba(239,68,68,.4);
+    }
+
+    .ctrl-btn--question{
+      width:48px;
+      height:48px;
+      background:linear-gradient(135deg, var(--pink), var(--violet));
+      color:#fff;
+      font-size:1.1rem;
+      font-weight:900;
+      box-shadow:0 4px 16px rgba(255,95,168,.28);
+      display:none;
+    }
+    .ctrl-btn--question.show{
+      display:flex;
+    }
+    .ctrl-btn--question:hover{
+      box-shadow:0 6px 22px rgba(255,95,168,.4);
+    }
+
+    .ctrl-label{
+      position:absolute;
+      bottom:-18px;
+      left:50%;
+      transform:translateX(-50%);
+      font-size:.62rem;
+      font-weight:700;
+      white-space:nowrap;
+      opacity:.7;
+      pointer-events:none;
+    }
+
+    /* Status bar above controls */
+    .call-status{
+      position:fixed;
+      bottom:calc(env(safe-area-inset-bottom, 0px) + 100px);
+      left:50%;
+      transform:translateX(-50%);
+      z-index:209;
+      padding:6px 18px;
+      border-radius:999px;
+      background:rgba(10,15,30,.55);
+      backdrop-filter:blur(12px);
+      border:1px solid rgba(255,255,255,.1);
+      font-size:.78rem;
+      font-weight:700;
+      color:rgba(255,255,255,.85);
+      white-space:nowrap;
+      display:none;
+    }
+    .call-status.show{ display:block; }
 
     @media (max-width: 1024px){
       .landing-shell{
@@ -2817,8 +2905,31 @@
     <button id="pillCupid" type="button">Cupido</button>
   </div>
 
+  <!-- Call Controls Bar (FaceTime style) -->
+  <div id="callControls" class="call-controls">
+    <button id="cc-mic" class="ctrl-btn ctrl-btn--mic" title="Microfono">
+      <svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
+      <span class="ctrl-label">Mic</span>
+    </button>
+    <button id="cc-cam" class="ctrl-btn ctrl-btn--cam" title="Camara">
+      <svg viewBox="0 0 24 24"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
+      <span class="ctrl-label">Cam</span>
+    </button>
+    <button id="cc-action" class="ctrl-btn ctrl-btn--action" title="Buscar">
+      <svg id="cc-action-icon" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+      <span id="cc-action-label" class="ctrl-label">Buscar</span>
+    </button>
+    <button id="cc-question" class="ctrl-btn ctrl-btn--question" title="Preguntas">?</button>
+    <button id="cc-end" class="ctrl-btn ctrl-btn--end" title="Terminar" style="display:none;">
+      <svg viewBox="0 0 24 24"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.956.956 0 010-1.36C3.36 8.68 7.46 7 12 7s8.64 1.68 11.71 4.72c.18.18.29.44.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.1-.7-.28-.79-.73-1.68-1.36-2.66-1.85a.991.991 0 01-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/></svg>
+      <span class="ctrl-label">Fin</span>
+    </button>
+  </div>
+
+  <!-- Status pill -->
+  <div id="callStatus" class="call-status"></div>
+
   <!-- Kristoff Question Panel -->
-  <button id="btnQuestionToggle" title="Preguntas">?</button>
   <div id="questionPanel">
     <div class="qp-header">
       <span class="qp-title">Preguntas</span>
@@ -5408,6 +5519,147 @@ show = function(k){
 
   </script>
 
+  <script id="call-controls-patch">
+  (() => {
+    const cc = document.getElementById('callControls');
+    const ccMic = document.getElementById('cc-mic');
+    const ccCam = document.getElementById('cc-cam');
+    const ccAction = document.getElementById('cc-action');
+    const ccActionLabel = document.getElementById('cc-action-label');
+    const ccActionIcon = document.getElementById('cc-action-icon');
+    const ccEnd = document.getElementById('cc-end');
+    const ccQuestion = document.getElementById('cc-question');
+    const callStatusEl = document.getElementById('callStatus');
+
+    const iconSearch = '<path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>';
+    const iconNext = '<path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>';
+    const iconStop = '<rect x="6" y="6" width="12" height="12" rx="2"/>';
+
+    function showCC(visible) {
+      if (cc) cc.classList.toggle('show', !!visible);
+    }
+
+    function showCallStatus(text) {
+      if (!callStatusEl) return;
+      if (text) {
+        callStatusEl.textContent = text;
+        callStatusEl.classList.add('show');
+      } else {
+        callStatusEl.classList.remove('show');
+      }
+    }
+
+    // Override setStatus to also update call-status pill
+    const origSetStatus = setStatus;
+    setStatus = function(t) {
+      origSetStatus(t);
+      showCallStatus(t);
+    };
+
+    // Override show() to show/hide controls bar when in chat
+    const prevShowForCC = show;
+    show = function(k) {
+      prevShowForCC(k);
+      showCC(k === 'chat');
+      if (k !== 'chat') showCallStatus('');
+    };
+
+    window.updateCCState = updateCCState;
+    function updateCCState() {
+      // Mic button
+      if (ccMic) ccMic.classList.toggle('off', micMuted);
+      // Cam button
+      if (ccCam) ccCam.classList.toggle('off', camOff);
+
+      // Action button state
+      if (ccAction && ccActionIcon && ccActionLabel) {
+        if (inCall) {
+          ccActionIcon.innerHTML = iconNext;
+          ccActionLabel.textContent = 'Siguiente';
+          ccAction.classList.remove('searching');
+          ccAction.disabled = false;
+        } else if (isQueuing) {
+          ccActionIcon.innerHTML = iconStop;
+          ccActionLabel.textContent = 'Detener';
+          ccAction.classList.add('searching');
+          ccAction.disabled = false;
+        } else {
+          ccActionIcon.innerHTML = iconSearch;
+          ccActionLabel.textContent = 'Buscar';
+          ccAction.classList.remove('searching');
+          ccAction.disabled = false;
+        }
+      }
+
+      // End button visibility
+      if (ccEnd) ccEnd.style.display = (inCall || isQueuing) ? 'flex' : 'none';
+
+      // Disable mic/cam when no stream
+      if (ccMic) ccMic.disabled = !localStream;
+      if (ccCam) ccCam.disabled = !localStream;
+    }
+
+    // Override enableControls
+    const origEnableControls = enableControls;
+    enableControls = function() {
+      origEnableControls();
+      updateCCState();
+    };
+
+    // Override setSearchingUI
+    const origSetSearchingUI = setSearchingUI;
+    setSearchingUI = function() {
+      origSetSearchingUI();
+      updateCCState();
+    };
+
+    // Override setIdleUI
+    const origSetIdleUI = setIdleUI;
+    setIdleUI = function() {
+      origSetIdleUI();
+      updateCCState();
+    };
+
+    // Override applyMuteAndCam
+    const origApplyMuteAndCam = applyMuteAndCam;
+    applyMuteAndCam = function() {
+      origApplyMuteAndCam();
+      if (ccMic) ccMic.classList.toggle('off', micMuted);
+      if (ccCam) ccCam.classList.toggle('off', camOff);
+    };
+
+    // Wire up button events
+    ccMic?.addEventListener('click', () => {
+      micMuted = !micMuted;
+      applyMuteAndCam();
+    });
+
+    ccCam?.addEventListener('click', () => {
+      camOff = !camOff;
+      applyMuteAndCam();
+    });
+
+    ccAction?.addEventListener('click', () => {
+      if (inCall) { nextMatch(); }
+      else if (isQueuing) { stopAll(); }
+      else { joinQueue(); }
+    });
+
+    ccEnd?.addEventListener('click', () => {
+      stopAll();
+    });
+
+    // Question button opens panel
+    ccQuestion?.addEventListener('click', () => {
+      const qp = document.getElementById('questionPanel');
+      qp?.classList.toggle('show');
+    });
+
+    // Initial state
+    updateCCState();
+  })();
+  </script>
+
   <script id="cupid-admin-patch">
   (() => {
     const htmlEscape = (value) => String(value ?? '')
@@ -5766,6 +6018,7 @@ show = function(k){
       }
       if (btnSalirM) btnSalirM.textContent = 'Salir';
       showMobileDock();
+      if (window.updateCCState) window.updateCCState();
     };
 
     const origSetSearchingUI = setSearchingUI;
@@ -5899,6 +6152,8 @@ show = function(k){
 
     function showQuestionToggle(visible){
       if (qToggle) qToggle.style.display = visible ? 'flex' : 'none';
+      const ccQ = document.getElementById('cc-question');
+      if (ccQ) ccQ.classList.toggle('show', !!visible);
     }
 
     function renderQuestionList(){
