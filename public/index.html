@@ -1224,14 +1224,17 @@
       display:grid;
       grid-template-columns:1fr 1fr;
       gap:1rem;
+      height:calc(100vh - 2rem);
+      padding:1rem;
+      box-sizing:border-box;
+      align-items:stretch;
     }
     .layout-split .tile{
       position:relative;
       border-radius:26px;
       overflow:hidden;
       background:#000;
-      aspect-ratio:var(--box-ar);
-      min-height:300px;
+      min-height:0;
       border:1px solid rgba(255,255,255,.08);
       box-shadow:0 20px 44px rgba(0,0,0,.24);
     }
@@ -1251,7 +1254,7 @@
     video{ background:#000; }
     video.mirror{ transform:scaleX(-1); }
     #stage .tile.local video{ object-fit:cover; }
-    #stage .tile.remote video{ object-fit:contain; background:#000; }
+    #stage .tile.remote video{ object-fit:cover; background:#000; }
     body.remote-portrait #stage .tile.remote video{ object-fit:cover; }
 
     .layout-mobile-fixed{
@@ -1677,8 +1680,8 @@
     }
 
     #videoShell{ position:relative; }
-    body:not(.chat-open) .mobile-dock{ display:none !important; }
-    body.chat-open .mobile-dock{ display:grid !important; }
+    /* mobile-dock replaced by .call-controls */
+    .mobile-dock{ display:none !important; }
 
     #cupidMini{
       touch-action:none;
@@ -1889,6 +1892,198 @@
       box-shadow:0 12px 40px rgba(0,0,0,.5);
     }
 
+    /* ===== QUIZ BAR ===== */
+    .quiz-bar{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:16px;
+      padding:16px 24px;
+      background:rgba(0,0,0,.78);
+      backdrop-filter:blur(16px);
+      -webkit-backdrop-filter:blur(16px);
+      border:1px solid rgba(255,255,255,.14);
+      border-radius:18px;
+      margin-top:12px;
+      z-index:80;
+      flex-wrap:wrap;
+    }
+    .quiz-bar__badge{
+      display:inline-block;
+      padding:4px 14px;
+      border-radius:999px;
+      background:linear-gradient(135deg, var(--pink), var(--violet));
+      font-size:.72rem;
+      font-weight:800;
+      letter-spacing:.5px;
+      text-transform:uppercase;
+      color:#fff;
+      flex-shrink:0;
+    }
+    .quiz-bar__text{
+      font-size:clamp(1rem, 2.5vw, 1.4rem);
+      font-weight:800;
+      color:#fff;
+      text-shadow:0 2px 8px rgba(0,0,0,.4);
+      flex:1;
+      text-align:center;
+      min-width:0;
+    }
+    .quiz-bar__timer{
+      font-family:'Courier New', monospace;
+      font-weight:900;
+      font-size:1.6rem;
+      color:#fff;
+      min-width:48px;
+      text-align:center;
+      display:none;
+      flex-shrink:0;
+    }
+    .quiz-bar__timer.active{ display:block; }
+    .quiz-bar__timer.urgent{ color:#ef4444; animation:pulseGlow .5s ease-in-out infinite; }
+    .quiz-bar__buzz{
+      padding:10px 28px;
+      border-radius:14px;
+      border:none;
+      background:#ef4444;
+      color:#fff;
+      font-weight:900;
+      font-size:1rem;
+      cursor:pointer;
+      text-transform:uppercase;
+      letter-spacing:.04em;
+      box-shadow:0 4px 16px rgba(239,68,68,.4);
+      transition:transform .1s, box-shadow .2s;
+      flex-shrink:0;
+    }
+    .quiz-bar__buzz:hover{ box-shadow:0 6px 22px rgba(239,68,68,.55); }
+    .quiz-bar__buzz:active{ transform:scale(.95); }
+    .quiz-bar__buzz:disabled{ opacity:.4; cursor:default; animation:none; }
+    .quiz-bar__judge{
+      display:flex;
+      gap:10px;
+      flex-shrink:0;
+    }
+    .quiz-judge-btn{
+      padding:8px 18px;
+      border-radius:12px;
+      border:none;
+      font-weight:800;
+      font-size:.85rem;
+      cursor:pointer;
+      transition:transform .1s, box-shadow .2s;
+      letter-spacing:.02em;
+    }
+    .quiz-judge-btn:active{ transform:scale(.93); }
+    .quiz-judge-btn--correct{ background:#22c55e; color:#fff; box-shadow:0 4px 12px rgba(34,197,94,.3); }
+    .quiz-judge-btn--pass{ background:#f6c36a; color:#111; box-shadow:0 4px 12px rgba(246,195,106,.3); }
+    .quiz-judge-btn--wrong{ background:#ef4444; color:#fff; box-shadow:0 4px 12px rgba(239,68,68,.3); }
+
+    /* Quiz score counters */
+    .quiz-score{
+      position:absolute;
+      top:12px;
+      z-index:85;
+      padding:6px 14px;
+      border-radius:10px;
+      background:rgba(0,0,0,.72);
+      backdrop-filter:blur(8px);
+      border:1px solid rgba(255,255,255,.15);
+      font-weight:900;
+      font-size:1.1rem;
+      color:#fff;
+      font-family:'Courier New', monospace;
+      display:none;
+    }
+    .quiz-score.show{ display:block; }
+    #scoreLeft{ left:12px; }
+    #scoreRight{ right:12px; }
+    #scoreMobileLeft{ left:8px; }
+    #scoreMobileRight{ right:8px; }
+
+    /* Blur effect for muted contestant */
+    .tile.quiz-blurred video:not(.idle-video){ filter:blur(6px) brightness(.7); transition:filter .4s ease; }
+    .pane.quiz-blurred video:not(.idle-video){ filter:blur(6px) brightness(.7); transition:filter .4s ease; }
+
+    /* Quiz bar mobile */
+    .quiz-bar--mobile{
+      position:absolute;
+      left:8px; right:8px;
+      top:50%;
+      transform:translateY(-50%);
+      z-index:90;
+      margin-top:0;
+      padding:12px 16px;
+      gap:10px;
+    }
+    .quiz-bar--mobile .quiz-bar__text{ font-size:clamp(.9rem, 3vw, 1.1rem); }
+    .quiz-bar--mobile .quiz-bar__timer{ font-size:1.2rem; }
+    .quiz-bar--mobile .quiz-bar__buzz{ padding:8px 20px; font-size:.9rem; }
+    .quiz-bar--mobile .quiz-judge-btn{ padding:6px 14px; font-size:.78rem; }
+
+    /* Quiz result flash */
+    .quiz-result-flash{
+      position:fixed;
+      top:50%;
+      left:50%;
+      transform:translate(-50%,-50%) scale(0);
+      z-index:300;
+      padding:20px 40px;
+      border-radius:20px;
+      font-weight:900;
+      font-size:1.6rem;
+      color:#fff;
+      pointer-events:none;
+      animation:quizFlash .8s ease-out forwards;
+    }
+    .quiz-result-flash--correct{ background:rgba(34,197,94,.9); }
+    .quiz-result-flash--wrong{ background:rgba(239,68,68,.9); }
+    .quiz-result-flash--timeout{ background:rgba(100,100,100,.9); }
+    @keyframes quizFlash{
+      0%{ transform:translate(-50%,-50%) scale(0); opacity:1; }
+      40%{ transform:translate(-50%,-50%) scale(1.1); opacity:1; }
+      100%{ transform:translate(-50%,-50%) scale(1); opacity:0; }
+    }
+
+    /* Quiz bar entrance animation */
+    @keyframes quizBarSlideUp{
+      0%{ transform:translateY(30px); opacity:0; }
+      100%{ transform:translateY(0); opacity:1; }
+    }
+    .quiz-bar{ animation:quizBarSlideUp .35s ease-out; }
+
+    /* Score +5 floating animation */
+    .quiz-score-plus{
+      position:absolute;
+      z-index:90;
+      font-weight:900;
+      font-size:1.4rem;
+      color:#22c55e;
+      text-shadow:0 2px 8px rgba(0,0,0,.5);
+      pointer-events:none;
+      animation:scoreFloat .9s ease-out forwards;
+    }
+    @keyframes scoreFloat{
+      0%{ transform:translateY(0) scale(1); opacity:1; }
+      100%{ transform:translateY(-50px) scale(1.3); opacity:0; }
+    }
+
+    /* Quiz score pop animation on update */
+    .quiz-score.pop{
+      animation:scorePop .3s ease-out;
+    }
+    @keyframes scorePop{
+      0%{ transform:scale(1); }
+      50%{ transform:scale(1.35); }
+      100%{ transform:scale(1); }
+    }
+
+    @media (max-width:600px){
+      .quiz-bar{ padding:10px 14px; gap:8px; }
+      .quiz-score{ font-size:.9rem; padding:4px 10px; }
+      .quiz-score-plus{ font-size:1.1rem; }
+    }
+
     /* ===== Kristoff Question Panel ===== */
     #questionPanel{
       position:fixed;
@@ -2022,17 +2217,18 @@
     /* ===== NEW: Call Controls Bar (FaceTime style) ===== */
     .call-controls{
       position:fixed;
-      bottom:calc(env(safe-area-inset-bottom, 0px) + 20px);
+      bottom:calc(env(safe-area-inset-bottom, 0px) + 24px);
       left:50%;
       transform:translateX(-50%);
       z-index:210;
       display:none;
       align-items:center;
-      gap:14px;
-      padding:12px 20px;
+      gap:16px;
+      padding:14px 24px;
       border-radius:999px;
-      background:rgba(10,15,30,.62);
-      backdrop-filter:blur(22px);
+      background:rgba(10,15,30,.65);
+      backdrop-filter:blur(24px);
+      -webkit-backdrop-filter:blur(24px);
       border:1px solid rgba(255,255,255,.12);
       box-shadow:0 20px 50px rgba(0,0,0,.38), inset 0 0 0 1px rgba(255,255,255,.05);
     }
@@ -2049,13 +2245,21 @@
       justify-content:center;
       cursor:pointer;
       font-size:1.25rem;
-      transition:transform .1s ease, background .18s ease, box-shadow .18s ease;
+      transition:transform .12s ease, background .18s ease, box-shadow .18s ease;
       position:relative;
       flex-shrink:0;
     }
-    .ctrl-btn:active{ transform:scale(.92); }
+    .ctrl-btn:active{ transform:scale(.9); }
     .ctrl-btn:disabled{ opacity:.35; pointer-events:none; }
     .ctrl-btn svg{ width:24px; height:24px; fill:currentColor; }
+    .ctrl-label{ display:none; }
+    @media (max-width:600px){
+      .call-controls{ gap:12px; padding:10px 16px; }
+      .ctrl-btn{ width:46px; height:46px; }
+      .ctrl-btn svg{ width:20px; height:20px; }
+      .ctrl-btn--action{ width:52px !important; height:52px !important; }
+      .ctrl-btn--action svg{ width:22px; height:22px; }
+    }
 
     .ctrl-btn--mic,
     .ctrl-btn--cam{
@@ -2123,17 +2327,7 @@
       box-shadow:0 6px 22px rgba(255,95,168,.4);
     }
 
-    .ctrl-label{
-      position:absolute;
-      bottom:-18px;
-      left:50%;
-      transform:translateX(-50%);
-      font-size:.62rem;
-      font-weight:700;
-      white-space:nowrap;
-      opacity:.7;
-      pointer-events:none;
-    }
+    /* Labels hidden — icon-only FaceTime style */
 
     /* Status bar above controls */
     .call-status{
@@ -2154,6 +2348,9 @@
       display:none;
     }
     .call-status.show{ display:block; }
+    @media (max-width:600px){
+      .call-status{ bottom:calc(env(safe-area-inset-bottom, 0px) + 88px); font-size:.72rem; }
+    }
 
     @media (max-width: 1024px){
       .landing-shell{
@@ -2776,6 +2973,7 @@
         <div id="videoShell" class="full-bleed">
           <div id="stage" class="stage layout-split">
             <div class="tile remote" id="remoteTile">
+              <div class="quiz-score" id="scoreLeft">0</div>
               <video id="idleNoiseD" class="idle-video" src="./assets/noise.mp4" muted playsinline autoplay loop preload="auto"></video>
               <video id="remoteVideo" autoplay playsinline></video>
 
@@ -2787,12 +2985,7 @@
                 <div class="emoji-layer" aria-hidden="true"></div>
               </div>
 
-              <div class="question-overlay" id="questionOverlayD">
-                <div class="question-overlay__card">
-                  <div class="question-overlay__badge">Pregunta</div>
-                  <div class="question-overlay__text" id="questionTextD"></div>
-                </div>
-              </div>
+              <div class="question-overlay" id="questionOverlayD" style="display:none !important;"></div>
 
               <div class="zoom-controls sm:flex hidden" aria-label="Zoom remoto">
                 <button id="fitRemote" class="zoom-btn" title="Ver completo">⤢</button>
@@ -2802,6 +2995,7 @@
             </div>
 
             <div class="tile remote" id="remoteTileR" style="display:none">
+              <div class="quiz-score" id="scoreRight">0</div>
               <video id="idleNoiseD_R" class="idle-video" src="./assets/noise.mp4" muted playsinline autoplay loop preload="auto"></video>
               <video id="remoteVideoR" autoplay playsinline></video>
 
@@ -2812,12 +3006,7 @@
                 </div>
               </div>
 
-              <div class="question-overlay" id="questionOverlayDR">
-                <div class="question-overlay__card">
-                  <div class="question-overlay__badge">Pregunta</div>
-                  <div class="question-overlay__text" id="questionTextDR"></div>
-                </div>
-              </div>
+              <div class="question-overlay" id="questionOverlayDR" style="display:none !important;"></div>
 
               <div class="zoom-controls sm:flex hidden" aria-label="Zoom remoto derecho">
                 <button id="fitRemoteR" class="zoom-btn" title="Ver completo">⤢</button>
@@ -2841,12 +3030,26 @@
             </div>
           </div>
 
+          <!-- Quiz Bar (desktop) — below stage, between contestant tiles -->
+          <div id="quizBar" class="quiz-bar" style="display:none;">
+            <span class="quiz-bar__badge">Pregunta</span>
+            <span class="quiz-bar__text" id="quizBarText"></span>
+            <div class="quiz-bar__timer" id="quizBarTimer">30</div>
+            <button class="quiz-bar__buzz" id="quizBuzzBtn" style="display:none;">Responder</button>
+            <div class="quiz-bar__judge" id="quizJudgeBar" style="display:none;">
+              <button class="quiz-judge-btn quiz-judge-btn--correct" id="quizCorrectBtn">Correcto</button>
+              <button class="quiz-judge-btn quiz-judge-btn--pass" id="quizPassBtn">Pasar</button>
+              <button class="quiz-judge-btn quiz-judge-btn--wrong" id="quizWrongBtn">Erroneo</button>
+            </div>
+          </div>
+
           <div id="pip" style="display:none; position:absolute; left:50%; top:50%; transform:translate(-50%, -50%); width:clamp(180px, 24vw, 340px); aspect-ratio:4/3; z-index:120; border-radius:14px; overflow:hidden; box-shadow:0 12px 26px rgba(0,0,0,.28); border:1px solid rgba(255,255,255,.45); background:#000; pointer-events:none;">
             <video id="pipVideo" autoplay playsinline style="width:100%;height:100%;object-fit:cover;"></video>
           </div>
 
           <div id="stageMobile" class="layout-mobile-fixed" style="display:none;">
             <div class="pane" id="pane-remote">
+              <div class="quiz-score" id="scoreMobileLeft" style="top:8px;left:8px;">0</div>
               <video id="idleNoiseM" class="idle-video" src="./assets/noise.mp4" muted playsinline autoplay loop preload="auto"></video>
               <video id="remoteVideoM" autoplay playsinline></video>
 
@@ -2863,15 +3066,29 @@
               </div>
             </div>
 
-            <!-- Question overlay BETWEEN panes on mobile -->
-            <div class="question-overlay-mobile" id="questionOverlayMobile">
+            <!-- Old question overlay (hidden, kept for compat) -->
+            <div class="question-overlay-mobile" id="questionOverlayMobile" style="display:none !important;">
               <div class="question-overlay__card">
                 <div class="question-overlay__badge">Pregunta</div>
                 <div class="question-overlay__text" id="questionTextMobile"></div>
               </div>
             </div>
 
+            <!-- Quiz Bar (mobile) — between panes -->
+            <div id="quizBarMobile" class="quiz-bar quiz-bar--mobile" style="display:none;">
+              <span class="quiz-bar__badge">Pregunta</span>
+              <span class="quiz-bar__text" id="quizBarTextM"></span>
+              <div class="quiz-bar__timer" id="quizBarTimerM">30</div>
+              <button class="quiz-bar__buzz" id="quizBuzzBtnM" style="display:none;">Responder</button>
+              <div class="quiz-bar__judge" id="quizJudgeBarM" style="display:none;">
+                <button class="quiz-judge-btn quiz-judge-btn--correct" id="quizCorrectBtnM">Correcto</button>
+                <button class="quiz-judge-btn quiz-judge-btn--pass" id="quizPassBtnM">Pasar</button>
+                <button class="quiz-judge-btn quiz-judge-btn--wrong" id="quizWrongBtnM">Erroneo</button>
+              </div>
+            </div>
+
             <div class="pane" id="pane-local">
+              <div class="quiz-score" id="scoreMobileRight" style="top:8px;right:8px;">0</div>
               <div id="idle-local" class="idle static-noise"><div>Preparando cámara…</div></div>
               <video id="localVideoM" autoplay playsinline muted class="mirror"></video>
               <video id="remoteVideo2M" autoplay playsinline class="hide"></video>
@@ -3863,6 +4080,24 @@ function enableCupidMiniDrag(){
   if(!cupidMini) return;
   if(!isMobile()) return;
 
+  function clampMiniToViewport() {
+    const r = cupidMini.getBoundingClientRect();
+    const pad = 10;
+    const maxX = window.innerWidth - r.width - pad;
+    const maxY = window.innerHeight - r.height - pad;
+    const minY = pad + 52;
+    let x = r.left, y = r.top, changed = false;
+    if (x < pad) { x = pad; changed = true; }
+    if (x > maxX) { x = maxX; changed = true; }
+    if (y < minY) { y = minY; changed = true; }
+    if (y > maxY) { y = maxY; changed = true; }
+    if (changed) {
+      cupidMini.style.left = x + 'px';
+      cupidMini.style.top = y + 'px';
+      cupidMini.style.bottom = 'auto';
+    }
+  }
+
   try{
     const saved = JSON.parse(localStorage.getItem('ttv_cupidMini_pos') || 'null');
     if(saved && typeof saved.x === 'number' && typeof saved.y === 'number'){
@@ -3871,6 +4106,13 @@ function enableCupidMiniDrag(){
       cupidMini.style.bottom = 'auto';
     }
   }catch{}
+
+  // Re-clamp on viewport resize / rotation
+  window.addEventListener('resize', () => {
+    if (cupidMini.style.display !== 'none') clampMiniToViewport();
+  });
+  // Clamp after initial layout
+  requestAnimationFrame(() => clampMiniToViewport());
 
   let dragging = false;
   let startX=0, startY=0, baseLeft=0, baseTop=0;
@@ -4421,7 +4663,32 @@ function connectWS(){
     };
 
     ws.onerror = (e)=>{ console.error("WS error", e); reject(e); };
-    ws.onclose = ()=>{ wsOpen=false; };
+    ws.onclose = ()=>{
+      wsOpen=false;
+      // Auto-reconnect with exponential backoff
+      if (window.__wsAutoReconnect !== false && !window.__wsReconnecting) {
+        window.__wsReconnecting = true;
+        let delay = 1000;
+        const maxDelay = 16000;
+        const tryReconnect = async () => {
+          if (wsOpen) { window.__wsReconnecting = false; return; }
+          console.log('[WS] Auto-reconnecting in', delay, 'ms…');
+          setStatus('Reconectando…');
+          await new Promise(r => setTimeout(r, delay));
+          if (wsOpen) { window.__wsReconnecting = false; return; }
+          try {
+            await connectWS();
+            window.__wsReconnecting = false;
+            setStatus('Reconectado');
+            setTimeout(() => { if (!inCall && !isQueuing) setStatus(''); }, 2000);
+          } catch {
+            delay = Math.min(delay * 2, maxDelay);
+            tryReconnect();
+          }
+        };
+        tryReconnect();
+      }
+    };
 
     ws.onmessage = async (msg)=>{
       const data = JSON.parse(msg.data);
@@ -5912,7 +6179,9 @@ show = function(k){
 
       if (isMobile()) {
         if (cupidSelfVideoM) {
-          cupidSelfVideoM.srcObject = localStream;
+          if (cupidSelfVideoM.srcObject !== localStream) {
+            cupidSelfVideoM.srcObject = localStream;
+          }
           cupidSelfVideoM.muted = true;
           safePlay(cupidSelfVideoM);
         }
@@ -5924,7 +6193,9 @@ show = function(k){
         document.getElementById('overlayM_R')?.classList.remove('show');
       } else {
         if (pipVideo) {
-          pipVideo.srcObject = localStream;
+          if (pipVideo.srcObject !== localStream) {
+            pipVideo.srcObject = localStream;
+          }
           pipVideo.muted = true;
           safePlay(pipVideo);
         }
@@ -6238,7 +6509,12 @@ show = function(k){
       qList.querySelectorAll('[data-q-show]').forEach(btn => {
         btn.onclick = () => {
           const idx = parseInt(btn.getAttribute('data-q-show'));
-          sendQuestion('show', questionBank[idx]);
+          // Use quiz system instead of old group-question
+          if (window.quizSendShow) {
+            window.quizSendShow(questionBank[idx]);
+          } else {
+            sendQuestion('show', questionBank[idx]);
+          }
           activeQuestionIdx = idx;
           renderQuestionList();
         };
@@ -6348,12 +6624,15 @@ show = function(k){
       });
     }
 
-    const origConnectWS2 = connectWS;
-    connectWS = async function(...args){
-      const out = await origConnectWS2.apply(this, args);
-      hookQuestionWs();
-      return out;
-    };
+    /* hookQuestionWs is called from the existing connectWS wrap (cupid-admin-patch) */
+    (function(){
+      const prevConnectWS = connectWS;
+      connectWS = async function(...args){
+        const out = await prevConnectWS.apply(this, args);
+        hookQuestionWs();
+        return out;
+      };
+    })();
 
     // Clean up overlays when call ends
     const origHandleCallEnded2 = handleCallEnded;
@@ -6366,6 +6645,495 @@ show = function(k){
     };
 
     updateCupidAdminLayout();
+  })();
+  </script>
+
+  <script id="sound-and-notifications">
+  (() => {
+    /* ===== SOUND EFFECTS (Web Audio API) ===== */
+    let audioCtx = null;
+    function getAudioCtx() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      return audioCtx;
+    }
+
+    function playTone(freq, duration, type = 'sine', volume = 0.3) {
+      try {
+        const ctx = getAudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, ctx.currentTime);
+        gain.gain.setValueAtTime(volume, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + duration);
+      } catch {}
+    }
+
+    // Match found — ascending two-tone chime
+    window.sfxMatch = function() {
+      playTone(523, 0.15, 'sine', 0.25);
+      setTimeout(() => playTone(784, 0.3, 'sine', 0.25), 120);
+    };
+
+    // Disconnect — descending tone
+    window.sfxDisconnect = function() {
+      playTone(440, 0.15, 'sine', 0.2);
+      setTimeout(() => playTone(330, 0.3, 'sine', 0.2), 100);
+    };
+
+    // Quiz question appears — soft bell
+    window.sfxQuestion = function() {
+      playTone(880, 0.08, 'sine', 0.2);
+      setTimeout(() => playTone(1100, 0.2, 'triangle', 0.15), 60);
+    };
+
+    // Buzz in — short punchy tone
+    window.sfxBuzz = function() {
+      playTone(600, 0.06, 'square', 0.18);
+      setTimeout(() => playTone(800, 0.12, 'square', 0.15), 50);
+    };
+
+    // Correct answer — happy ascending triple
+    window.sfxCorrect = function() {
+      playTone(523, 0.1, 'sine', 0.2);
+      setTimeout(() => playTone(659, 0.1, 'sine', 0.2), 80);
+      setTimeout(() => playTone(784, 0.25, 'sine', 0.2), 160);
+    };
+
+    // Wrong answer — low buzz
+    window.sfxWrong = function() {
+      playTone(200, 0.3, 'sawtooth', 0.12);
+    };
+
+    // Timer warning (< 5s) — tick
+    window.sfxTick = function() {
+      playTone(1000, 0.04, 'sine', 0.1);
+    };
+
+    // Searching pulse — subtle bloop
+    window.sfxSearching = function() {
+      playTone(440, 0.08, 'sine', 0.08);
+    };
+
+    /* ===== BROWSER NOTIFICATIONS ===== */
+    let notifPermission = Notification?.permission || 'default';
+
+    // Request permission on first user interaction
+    function requestNotifPermission() {
+      if (!('Notification' in window)) return;
+      if (notifPermission === 'default') {
+        Notification.requestPermission().then(p => { notifPermission = p; });
+      }
+    }
+    // Ask on first click anywhere
+    document.addEventListener('click', requestNotifPermission, { once: true });
+
+    window.showNotification = function(title, body) {
+      if (!('Notification' in window) || notifPermission !== 'granted') return;
+      if (document.visibilityState === 'visible') return; // only when tab not focused
+      try {
+        const n = new Notification(title, { body, icon: './assets/logo.png', tag: 'tortilla-match' });
+        n.onclick = () => { window.focus(); n.close(); };
+        setTimeout(() => n.close(), 6000);
+      } catch {}
+    };
+
+    /* ===== HOOK INTO EXISTING EVENTS ===== */
+
+    // Match found (solo)
+    const origSetStatusForSfx = setStatus;
+    setStatus = function(t) {
+      origSetStatusForSfx(t);
+      if (typeof t === 'string') {
+        if (t.includes('encontrada') || t.includes('Conectado (Cupido)')) {
+          window.sfxMatch?.();
+          window.showNotification?.('TortillaTV', 'Match encontrado!');
+        }
+      }
+    };
+
+    // Disconnect sound
+    (function() {
+      const prevHCE = handleCallEnded;
+      handleCallEnded = function(...args) {
+        window.sfxDisconnect?.();
+        return prevHCE.apply(this, args);
+      };
+    })();
+
+  })();
+  </script>
+
+  <script id="quiz-system-patch">
+  (() => {
+    /* ===== QUIZ SYSTEM CLIENT ===== */
+
+    let quizState = 'idle'; // idle | shown | buzzed
+    let quizBuzzedBy = null;
+    let quizTimerInterval = null;
+    let quizTimerEndMs = 0;
+    let quizScores = { left: 0, right: 0 };
+    let quizMutedByQuiz = false; // track if we muted audio due to quiz
+
+    // DOM refs — desktop
+    const quizBar = document.getElementById('quizBar');
+    const quizBarText = document.getElementById('quizBarText');
+    const quizBarTimer = document.getElementById('quizBarTimer');
+    const quizBuzzBtn = document.getElementById('quizBuzzBtn');
+    const quizJudgeBar = document.getElementById('quizJudgeBar');
+    const quizCorrectBtn = document.getElementById('quizCorrectBtn');
+    const quizPassBtn = document.getElementById('quizPassBtn');
+    const quizWrongBtn = document.getElementById('quizWrongBtn');
+
+    // DOM refs — mobile
+    const quizBarM = document.getElementById('quizBarMobile');
+    const quizBarTextM = document.getElementById('quizBarTextM');
+    const quizBarTimerM = document.getElementById('quizBarTimerM');
+    const quizBuzzBtnM = document.getElementById('quizBuzzBtnM');
+    const quizJudgeBarM = document.getElementById('quizJudgeBarM');
+    const quizCorrectBtnM = document.getElementById('quizCorrectBtnM');
+    const quizPassBtnM = document.getElementById('quizPassBtnM');
+    const quizWrongBtnM = document.getElementById('quizWrongBtnM');
+
+    // Score DOM
+    const scoreLeftEl = document.getElementById('scoreLeft');
+    const scoreRightEl = document.getElementById('scoreRight');
+    const scoreMLeftEl = document.getElementById('scoreMobileLeft');
+    const scoreMRightEl = document.getElementById('scoreMobileRight');
+
+    // Tile refs for blur
+    const remoteTile = document.getElementById('remoteTile');
+    const remoteTileR = document.getElementById('remoteTileR');
+    const paneRemote = document.getElementById('pane-remote');
+    const paneLocal = document.getElementById('pane-local');
+
+    let prevScores = { left: 0, right: 0 };
+
+    function showScorePlus(scoreEl) {
+      if (!scoreEl || !scoreEl.parentElement) return;
+      // Pop animation on score counter
+      scoreEl.classList.remove('pop');
+      void scoreEl.offsetWidth;
+      scoreEl.classList.add('pop');
+      // Floating +5
+      const plus = document.createElement('div');
+      plus.className = 'quiz-score-plus';
+      plus.textContent = '+5';
+      plus.style.left = scoreEl.offsetLeft + 'px';
+      plus.style.top = (scoreEl.offsetTop - 10) + 'px';
+      scoreEl.parentElement.appendChild(plus);
+      setTimeout(() => plus.remove(), 1000);
+    }
+
+    function updateScoreDisplay() {
+      const l = quizScores.left, r = quizScores.right;
+
+      // Detect which side scored
+      if (l > prevScores.left) {
+        showScorePlus(scoreLeftEl);
+        showScorePlus(scoreMLeftEl);
+      }
+      if (r > prevScores.right) {
+        showScorePlus(scoreRightEl);
+        showScorePlus(scoreMRightEl);
+      }
+      prevScores = { left: l, right: r };
+
+      if (scoreLeftEl) scoreLeftEl.textContent = l;
+      if (scoreRightEl) scoreRightEl.textContent = r;
+      if (scoreMLeftEl) scoreMLeftEl.textContent = l;
+      if (scoreMRightEl) scoreMRightEl.textContent = r;
+
+      // Show score elements when scores > 0
+      const showScores = l > 0 || r > 0;
+      [scoreLeftEl, scoreRightEl, scoreMLeftEl, scoreMRightEl].forEach(el => {
+        if (el) el.classList.toggle('show', showScores);
+      });
+    }
+
+    function showQuizBar(text) {
+      // Desktop
+      if (quizBar) { quizBar.style.display = 'flex'; }
+      if (quizBarText) quizBarText.textContent = text;
+      // Mobile
+      if (quizBarM) { quizBarM.style.display = 'flex'; }
+      if (quizBarTextM) quizBarTextM.textContent = text;
+    }
+
+    function hideQuizBar() {
+      if (quizBar) quizBar.style.display = 'none';
+      if (quizBarM) quizBarM.style.display = 'none';
+    }
+
+    function showBuzzButton(show) {
+      if (quizBuzzBtn) { quizBuzzBtn.style.display = show ? 'inline-block' : 'none'; quizBuzzBtn.disabled = false; }
+      if (quizBuzzBtnM) { quizBuzzBtnM.style.display = show ? 'inline-block' : 'none'; quizBuzzBtnM.disabled = false; }
+    }
+
+    function showJudgeButtons(show) {
+      if (quizJudgeBar) quizJudgeBar.style.display = show ? 'flex' : 'none';
+      if (quizJudgeBarM) quizJudgeBarM.style.display = show ? 'flex' : 'none';
+    }
+
+    function startTimerDisplay(remainingMs) {
+      clearInterval(quizTimerInterval);
+      quizTimerEndMs = Date.now() + remainingMs;
+      const timerEls = [quizBarTimer, quizBarTimerM];
+      timerEls.forEach(el => { if (el) { el.classList.add('active'); el.classList.remove('urgent'); } });
+
+      let lastTickSec = -1;
+      quizTimerInterval = setInterval(() => {
+        const remain = Math.max(0, Math.ceil((quizTimerEndMs - Date.now()) / 1000));
+        timerEls.forEach(el => {
+          if (!el) return;
+          el.textContent = remain;
+          el.classList.toggle('urgent', remain <= 5);
+        });
+        // Tick sound every second when < 6s
+        if (remain <= 5 && remain > 0 && remain !== lastTickSec) {
+          lastTickSec = remain;
+          window.sfxTick?.();
+        }
+        if (remain <= 0) clearInterval(quizTimerInterval);
+      }, 100);
+    }
+
+    function stopTimerDisplay() {
+      clearInterval(quizTimerInterval);
+      [quizBarTimer, quizBarTimerM].forEach(el => {
+        if (!el) return;
+        el.classList.remove('active', 'urgent');
+        el.textContent = '30';
+      });
+    }
+
+    function applyBlur(buzzedBy) {
+      // Determine which slot the buzzer occupies
+      // Host view: groupSlotByPeer maps peerId -> 'left'|'right'
+      // Contestant view: groupSlotByPeer maps peerId -> 'host'|'other'
+
+      clearBlur();
+
+      if (typeof isGroupHost === 'function' && isGroupHost()) {
+        // Host: blur the tile of the OTHER contestant (not the buzzer)
+        const buzzerSlot = groupSlotByPeer?.get(buzzedBy);
+        if (buzzerSlot === 'left') {
+          // Buzzer is left, blur right
+          remoteTileR?.classList.add('quiz-blurred');
+        } else if (buzzerSlot === 'right') {
+          // Buzzer is right, blur left
+          remoteTile?.classList.add('quiz-blurred');
+        }
+      } else {
+        // Contestant view
+        if (buzzedBy === myId) {
+          // I buzzed — blur nothing on my side (I'm answering)
+        } else {
+          // The other contestant buzzed — I am muted/blurred
+          // Blur my own pane or the remote view
+          // On mobile: we are in pane-local or pane-remote depending on layout
+          // Simplest: mute my audio and add subtle blur indicator
+          if (typeof localStream !== 'undefined' && localStream) {
+            const audioTrack = localStream.getAudioTracks()[0];
+            if (audioTrack) {
+              audioTrack.enabled = false;
+              quizMutedByQuiz = true;
+            }
+          }
+        }
+      }
+    }
+
+    function clearBlur() {
+      remoteTile?.classList.remove('quiz-blurred');
+      remoteTileR?.classList.remove('quiz-blurred');
+      paneRemote?.classList.remove('quiz-blurred');
+      paneLocal?.classList.remove('quiz-blurred');
+
+      // Restore audio if we muted it
+      if (quizMutedByQuiz && typeof localStream !== 'undefined' && localStream) {
+        const audioTrack = localStream.getAudioTracks()[0];
+        if (audioTrack && !micMuted) {
+          audioTrack.enabled = true;
+        }
+        quizMutedByQuiz = false;
+      }
+    }
+
+    function showResultFlash(result) {
+      const flash = document.createElement('div');
+      flash.className = 'quiz-result-flash quiz-result-flash--' + result;
+      const labels = { correct: 'Correcto! +5', wrong: 'Erroneo', timeout: 'Tiempo!' };
+      flash.textContent = labels[result] || result;
+      document.body.appendChild(flash);
+      setTimeout(() => flash.remove(), 900);
+    }
+
+    /* ===== Quiz WS Handlers ===== */
+
+    function onQuizShow(text) {
+      quizState = 'shown';
+      showQuizBar(text);
+      stopTimerDisplay();
+      window.sfxQuestion?.();
+
+      if (typeof isGroupHost === 'function' && isGroupHost()) {
+        // Host: wait for buzz, no buttons yet
+        showBuzzButton(false);
+        showJudgeButtons(false);
+      } else {
+        // Contestant: show Responder button
+        showBuzzButton(true);
+        showJudgeButtons(false);
+      }
+    }
+
+    function onQuizBuzzed(buzzedBy, remainingMs) {
+      quizState = 'buzzed';
+      quizBuzzedBy = buzzedBy;
+      window.sfxBuzz?.();
+
+      // Hide buzz button for everyone
+      showBuzzButton(false);
+
+      // Start timer
+      startTimerDisplay(remainingMs);
+
+      if (typeof isGroupHost === 'function' && isGroupHost()) {
+        // Host: show judge buttons
+        showJudgeButtons(true);
+      }
+
+      // Apply blur to the non-buzzer
+      applyBlur(buzzedBy);
+    }
+
+    function onQuizPassed(newBuzzedBy, remainingMs) {
+      quizBuzzedBy = newBuzzedBy;
+
+      // Swap blur
+      applyBlur(newBuzzedBy);
+
+      // Reset timer
+      startTimerDisplay(remainingMs);
+    }
+
+    function onQuizResolved(result, scorer, scores) {
+      quizState = 'idle';
+      quizBuzzedBy = null;
+
+      // Update scores
+      if (scores) {
+        quizScores = { left: scores.left || 0, right: scores.right || 0 };
+        updateScoreDisplay();
+      }
+
+      // Clean up UI
+      hideQuizBar();
+      stopTimerDisplay();
+      showBuzzButton(false);
+      showJudgeButtons(false);
+      clearBlur();
+
+      // Sound + flash result
+      if (result === 'correct') window.sfxCorrect?.();
+      else if (result === 'wrong' || result === 'timeout') window.sfxWrong?.();
+      showResultFlash(result);
+    }
+
+    /* ===== Hook WS ===== */
+
+    function hookQuizSystemWs() {
+      if (!ws || ws.__quizSystemHooked) return;
+      ws.__quizSystemHooked = true;
+      ws.addEventListener('message', (evt) => {
+        let data;
+        try { data = JSON.parse(evt.data); } catch { return; }
+
+        switch (data.type) {
+          case 'quiz-show':
+            onQuizShow(data.text);
+            break;
+          case 'quiz-buzzed':
+            onQuizBuzzed(data.buzzedBy, data.remainingMs || 30000);
+            break;
+          case 'quiz-resolved':
+            onQuizResolved(data.result, data.scorer, data.scores);
+            break;
+          case 'quiz-passed':
+            onQuizPassed(data.newBuzzedBy, data.remainingMs || 30000);
+            break;
+        }
+      });
+    }
+
+    // Hook into connectWS chain
+    (function() {
+      const prevConnectWSQuiz = connectWS;
+      connectWS = async function(...args) {
+        const out = await prevConnectWSQuiz.apply(this, args);
+        hookQuizSystemWs();
+        return out;
+      };
+    })();
+
+    /* ===== Button Event Handlers ===== */
+
+    function sendQuizMsg(type) {
+      if (typeof send === 'function') send({ type });
+    }
+
+    // Buzz buttons
+    quizBuzzBtn?.addEventListener('click', () => {
+      if (quizState !== 'shown') return;
+      sendQuizMsg('quiz-buzz');
+      if (quizBuzzBtn) quizBuzzBtn.disabled = true;
+      if (quizBuzzBtnM) quizBuzzBtnM.disabled = true;
+    });
+    quizBuzzBtnM?.addEventListener('click', () => {
+      if (quizState !== 'shown') return;
+      sendQuizMsg('quiz-buzz');
+      if (quizBuzzBtn) quizBuzzBtn.disabled = true;
+      if (quizBuzzBtnM) quizBuzzBtnM.disabled = true;
+    });
+
+    // Judge buttons — desktop
+    quizCorrectBtn?.addEventListener('click', () => sendQuizMsg('quiz-correct'));
+    quizPassBtn?.addEventListener('click', () => sendQuizMsg('quiz-pass'));
+    quizWrongBtn?.addEventListener('click', () => sendQuizMsg('quiz-wrong'));
+
+    // Judge buttons — mobile
+    quizCorrectBtnM?.addEventListener('click', () => sendQuizMsg('quiz-correct'));
+    quizPassBtnM?.addEventListener('click', () => sendQuizMsg('quiz-pass'));
+    quizWrongBtnM?.addEventListener('click', () => sendQuizMsg('quiz-wrong'));
+
+    /* ===== Cleanup on call end ===== */
+    (function() {
+      const prevHandleCallEndedQuiz = handleCallEnded;
+      handleCallEnded = function(...args) {
+        // Reset quiz state
+        quizState = 'idle';
+        quizBuzzedBy = null;
+        quizScores = { left: 0, right: 0 };
+        quizMutedByQuiz = false;
+        hideQuizBar();
+        stopTimerDisplay();
+        showBuzzButton(false);
+        showJudgeButtons(false);
+        clearBlur();
+        updateScoreDisplay();
+        return prevHandleCallEndedQuiz.apply(this, args);
+      };
+    })();
+
+    // Expose for other scripts
+    window.quizSendShow = function(text) {
+      if (typeof send === 'function') send({ type: 'quiz-show', text });
+    };
   })();
   </script>
 
